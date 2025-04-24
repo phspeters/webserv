@@ -1,14 +1,12 @@
-#ifndef REQUEST_HPP
-#define REQUEST_HPP
+#ifndef HTTP_REQUEST_HPP
+#define HTTP_REQUEST_HPP
 
-#include <map>
-#include <string>
-#include <vector>
+#include "webserv.hpp"
 
 // Represents a parsed HTTP Request.
 // An instance of this is typically created during the parsing phase
 // and pointed to by Connection::request_data.
-class Request {
+class HttpRequest {
    public:
     //--------------------------------------
     // Request Data Members
@@ -31,13 +29,13 @@ class Request {
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    Request() : parse_error(false) {
+    HttpRequest() : parse_error(false) {
         // Initialize strings, maps, vectors to empty states automatically
     }
 
     // Default destructor is likely sufficient as std containers manage their
     // own memory
-    ~Request() {}
+    ~HttpRequest() {}
 
     //--------------------------------------
     // Helper Methods (optional declarations)
@@ -59,8 +57,8 @@ class Request {
 
    private:
     // Prevent copying if requests are managed by pointer in Connection
-    Request(const Request&);
-    Request& operator=(const Request&);
+    HttpRequest(const HttpRequest&);
+    HttpRequest& operator=(const HttpRequest&);
 
 };  // class Request
 

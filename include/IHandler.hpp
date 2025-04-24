@@ -1,15 +1,17 @@
 #ifndef HANDLER_HPP
 #define HANDLER_HPP
 
+#include "webserv.hpp"
+
 // Forward declaration
 class Connection;
 
 // Abstract base class for all request handlers.
-class Handler {
+class IHandler {
    public:
     // Virtual destructor is essential for classes intended for polymorphic
     // deletion
-    virtual ~Handler() {}
+    virtual ~IHandler() {}
 
     // Main method to handle a request associated with a connection.
     // The handler is responsible for:

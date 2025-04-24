@@ -1,7 +1,7 @@
 #ifndef ROUTER_HPP
 #define ROUTER_HPP
 
-#include <map>  // For potentially storing handler pointers
+#include "webserv.hpp"
 
 // Forward declarations
 class Request;

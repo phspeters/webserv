@@ -1,15 +1,16 @@
 #ifndef CGIHANDLER_HPP
 #define CGIHANDLER_HPP
 
-#include "Handler.hpp"  // Inherit from base Handler
+#include "webserv.hpp"
 
 // Forward declarations
 class Connection;
 struct ServerConfig;
 class ResponseWriter;
+class IHandler;
 
 // Handles requests by executing CGI scripts.
-class CgiHandler : public Handler {
+class CgiHandler : public IHandler {
    public:
     // Constructor takes dependencies
     CgiHandler(const ServerConfig& config, ResponseWriter& writer);

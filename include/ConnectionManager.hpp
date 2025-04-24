@@ -1,7 +1,7 @@
 #ifndef CONNECTIONMANAGER_HPP
 #define CONNECTIONMANAGER_HPP
 
-#include <map>
+#include "webserv.hpp"
 
 // Forward declarations
 class Connection;

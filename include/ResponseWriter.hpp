@@ -1,11 +1,11 @@
 #ifndef RESPONSEWRITER_HPP
 #define RESPONSEWRITER_HPP
 
-#include <string>
+#include "webserv.hpp"
 
 // Forward declarations
 class Connection;
-class Response;
+class HttpResponse;
 struct ServerConfig;
 
 // Utility class to help format HTTP responses.
@@ -18,7 +18,7 @@ class ResponseWriter {
     // and places it into the Connection's write buffer.
     // Sets standard headers like Date, Server, Content-Length, Content-Type
     // based on Response object. Returns true on success, false on error.
-    bool write_headers(Connection* conn, Response* resp);
+    bool write_headers(Connection* conn, HttpResponse* resp);
 
     // Generates a standard error response (e.g., 404 Not Found, 500 Internal
     // Server Error) directly into the connection's write buffer. Populates

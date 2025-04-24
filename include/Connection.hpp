@@ -1,19 +1,14 @@
 #ifndef CONNECTION_HPP
 #define CONNECTION_HPP
 
-#include <ctime>  // For time_t
-#include <string>
-#include <vector>
-
-// C System Headers for types like pid_t, size_t, off_t and constants like -1
-#include <sys/types.h>
-#include <unistd.h>  // For pid_t, close()
+#include "webserv.hpp"
 
 // Forward declarations
-class Request;
-class Response;
+class IHandler;
+class HttpRequest;
+class HttpResponse;
 struct ServerConfig;
-class Handler;  // Forward declare base Handler
+class Server;
 
 // Represents the state associated with a single client connection
 struct Connection {
@@ -21,8 +16,8 @@ struct Connection {
     // Core Connection Identification & I/O
     //--------------------------------------
     int client_fd;  // File descriptor for the client socket
-    ServerConfig*
-        server_config;  // Pointer to server configuration/context (read-only)
+    const ServerConfig*
+        _server_config;  // Pointer to server configuration/context (read-only)
     time_t
         last_activity;  // Timestamp of last read/write activity (for timeouts)
     bool close_scheduled;  // Flag to signal connection should be closed by
@@ -38,9 +33,9 @@ struct Connection {
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)
     //--------------------------------------
-    Request* request_data;  // Pointer to the parsed request info (NULL until
-                            // allocated)
-    Response*
+    HttpRequest* request_data;  // Pointer to the parsed request info (NULL
+                                // until allocated)
+    HttpResponse*
         response_data;  // Pointer to the response info (NULL until allocated)
 
     //--------------------------------------
@@ -58,8 +53,8 @@ struct Connection {
     //--------------------------------------
     // Handler Association
     //--------------------------------------
-    Handler* active_handler_ptr;  // Pointer to the handler responsible (set by
-                                  // Router)
+    IHandler* active_handler_ptr;  // Pointer to the handler responsible (set by
+                                   // Router)
 
     //--------------------------------------
     // Handler-Specific State (Example for CGI - could be a union or void*)
@@ -85,10 +80,19 @@ struct Connection {
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    Connection(int fd = -1, ServerConfig* config = NULL);
+    Connection(int fd = -1, const ServerConfig* _config = NULL);
     ~Connection();  // Cleans up owned resources (Request, Response, FDs)
 
     void resetForKeepAlive();  // Resets state for handling another request
+
+    void set_server(
+        Server* server);  // Sets the server context for this connection
+
+    // Utility methods
+    bool is_readable() const;  // Checks if the connection is readable
+    bool is_writable() const;  // Checks if the connection is writable
+
+    void close();  // Closes the connection and cleans up resources
 
    private:
     // Prevent copying

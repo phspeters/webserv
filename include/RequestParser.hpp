@@ -1,6 +1,8 @@
 #ifndef REQUESTPARSER_HPP
 #define REQUESTPARSER_HPP
 
+#include "webserv.hpp"
+
 // Forward declarations
 class Connection;
 struct ServerConfig;

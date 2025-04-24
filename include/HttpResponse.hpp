@@ -1,14 +1,12 @@
-#ifndef RESPONSE_HPP
-#define RESPONSE_HPP
+#ifndef HTTP_RESPONSE_HPP
+#define HTTP_RESPONSE_HPP
 
-#include <map>
-#include <string>
-#include <vector>
+#include "webserv.hpp"
 
 // Represents an HTTP Response to be sent back to the client.
 // An instance of this is typically created by a handler
 // and pointed to by Connection::response_data.
-class Response {
+class HttpResponse {
    public:
     //--------------------------------------
     // Response Data Members
@@ -33,7 +31,7 @@ class Response {
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    Response()
+    HttpResponse()
         : status_code(0),  // Indicate not set yet, perhaps? Or default to 200?
           content_length(0)
     // headers_built(false),
@@ -44,7 +42,7 @@ class Response {
         version = "HTTP/1.1";  // Default version
     }
 
-    ~Response() {}
+    ~HttpResponse() {}
 
     //--------------------------------------
     // Helper Methods (declarations)
@@ -74,8 +72,8 @@ class Response {
 
    private:
     // Prevent copying if responses are managed by pointer in Connection
-    Response(const Response&);
-    Response& operator=(const Response&);
+    HttpResponse(const HttpResponse&);
+    HttpResponse& operator=(const HttpResponse&);
 
 };  // class Response
 

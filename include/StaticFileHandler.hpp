@@ -1,7 +1,7 @@
 #ifndef STATICFILEHANDLER_HPP
 #define STATICFILEHANDLER_HPP
 
-#include "Handler.hpp"  // Inherit from base Handler
+#include "webserv.hpp"
 
 // Forward declarations
 class Connection;
@@ -9,7 +9,7 @@ struct ServerConfig;
 class ResponseWriter;
 
 // Handles requests for static files.
-class StaticFileHandler : public Handler {
+class StaticFileHandler : public IHandler {
    public:
     // Constructor takes dependencies
     StaticFileHandler(const ServerConfig& config, ResponseWriter& writer);
