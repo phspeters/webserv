@@ -8,7 +8,11 @@ VPATH = src
 FILES = main.cpp \
 		RouteConfig.cpp \
 		ServerConfig.cpp \
-		ServerBlock.cpp
+		ServerBlock.cpp \
+		Server.cpp \
+		ServerManager.cpp \
+		Connection.cpp \
+		ConnectionManager.cpp
 		
 OBJS = $(FILES:%.cpp=$(OBJ_DIR)/%.o)
 OBJ_DIR = obj

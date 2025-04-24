@@ -1,94 +1,86 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include <string>  // For config file path
-#include <vector>
-
-// Required C/System headers
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <sys/epoll.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-// Include config directly as it's owned/used extensively
-#include "ServerConfig.hpp"
+#include "webserv.hpp"
 
 // Forward declarations of owned components and used types
+class CgiHandler;
+class Connection;
 class ConnectionManager;
 class RequestParser;
-class Router;
 class ResponseWriter;
+class Router;
+class ServerConfig;
+class ServerManager;
 class StaticFileHandler;
-class CgiHandler;
 // Add other handlers...
-class Connection;  // Used in method signatures
 
 // Main server class - orchestrates setup, event loop, and component
 // interactions.
 class Server {
    public:
-    explicit Server(const std::string& config_filename);
+    explicit Server(const ServerConfig& config,
+                    ServerManager* manager = NULL);  // Constructor with config
     ~Server();  // Cleans up owned components and sockets
 
     // Initialize server components and network setup. Returns false on error.
     bool init();
 
-    // Start the main event loop. Blocks until stop() is called or error occurs.
-    void run();
-
-    // Signal the server to stop gracefully. Can be called from another thread
-    // or signal handler (carefully).
+    // Cleanly stop handling requests and prepare for shutdown.
+    // Called by ServerManager during graceful shutdown.
     void stop();
+
+    // Accepts new connections on the listener socket and registers them with
+    // epoll.
+    void accept_new_connection(int shared_epoll_fd,
+                               std::map<int, Server*>& fd_map);
+
+    void handle_client_event(int fd,
+                             uint32_t event);  // Handles client socket events
+
+    // Getters for internal state
+    bool is_ready() const { return _initialized; }
+    int get_listener_fd() const { return _listener_fd; }  // Get listener fd
+    const ServerConfig& get_config() const { return _config; }  // Get config
+    unsigned short get_port() const { return _config.port; }
+    std::string get_server_name() const { return _config.server_name; }
+
+    // Add other getters as needed...
 
    private:
     //--------------------------------------
     // Server State & Configuration
     //--------------------------------------
-    ServerConfig config;    // Loaded server configuration
-    int listener_fd;        // FD for the listening socket
-    int epoll_fd;           // FD for the epoll instance
-    volatile bool running;  // Controls the main event loop
+    ServerManager* _manager;  // Reference to owner
+    ServerConfig _config;     // Loaded server configuration
+    int _listener_fd;         // FD for the listening socket;
+    bool _initialized;        // Flag for server running state
 
     //--------------------------------------
     // Owned Components (Composition)
     //--------------------------------------
-    ConnectionManager* conn_manager;
-    RequestParser* request_parser;
-    Router* router;
-    ResponseWriter* response_writer;
-    // Handler instances (owned by Server)
-    StaticFileHandler* static_file_handler;
-    CgiHandler* cgi_handler;
-    // Add other handler instances...
+    ConnectionManager* _conn_manager;
+    // RequestParser* _request_parser;
+    // Router* _router;
+    // ResponseWriter* _response_writer;
+    //// Handler instances (owned by Server)
+    // StaticFileHandler* _static_file_handler;
+    // CgiHandler* _cgi_handler;
+    //// Add other handler instances...
 
     //--------------------------------------
     // Internal Methods
     //--------------------------------------
-    bool setup_listener_socket();  // Sets up listener_fd
-    bool setup_epoll();            // Sets up epoll_fd and adds listener
-
-    void event_loop();  // The main loop calling epoll_wait
-
-    void handle_listener_event();  // Accepts new connections
-    void handle_client_event(
-        struct epoll_event& event);  // Handles client socket events
-
     void handle_read(Connection* conn);   // Handles readable client socket
     void handle_write(Connection* conn);  // Handles writable client socket
-    void handle_error(Connection* conn,
-                      const char* context);  // Handles client socket error
+    void handle_error(Connection* conn);  // Handles client socket error
 
+    bool setup_listener_socket();   // Sets up listener_fd
     bool set_non_blocking(int fd);  // Utility
 
     // Prevent copying
     Server(const Server&);
     Server& operator=(const Server&);
-
-    // Epoll event buffer
-    std::vector<struct epoll_event> epoll_events;
-    static const int MAX_EPOLL_EVENTS = 64;
 
 };  // class Server
 
