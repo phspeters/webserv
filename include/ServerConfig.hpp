@@ -1,48 +1,64 @@
 #ifndef SERVERCONFIG_HPP
 #define SERVERCONFIG_HPP
 
-#include <map>
 #include <string>
 #include <vector>
+#include <map>
+#include <istream> 
+#include "RouteConfig.hpp"
+#include "ServerBlock.hpp"
 
-// Holds the configuration settings for the server.
-// Typically loaded once at startup.
-struct ServerConfig {
-    //--------------------------------------
-    // Configuration Members (Examples)
-    //--------------------------------------
-    unsigned short port;        // Port to listen on
-    std::string server_root;    // Document root for static files
-    std::string default_index;  // Default file to serve for directory requests (e.g., "index.html")
-    size_t max_request_body_size;    // Max allowed size for request bodies
-    int connection_timeout_seconds;  // Timeout for inactive connections
+class ServerConfig {
+public:
+    // Configuration Members (Primarily initial defaults, may be updated by first server block)
+    unsigned short port;
+    std::string server_root;
+    std::string default_index;
+    size_t max_request_body_size;
+    int connection_timeout_seconds;
 
-    // CGI configuration
-    std::map<std::string, std::string> cgi_executables;  // Maps URI path/extension to CGI script path (e.g., ".php" -> "/usr/bin/php-cgi")
-    std::string cgi_default_handler;  // Default handler if map doesn't match
+    // Global Handlers/Types
+    std::map<std::string, std::string> mime_types;
+    std::map<std::string, std::string> cgi_executables;
 
-    // MIME Types
-    std::map<std::string, std::string> mime_types;  // Maps file extensions to MIME types
+    // Parsed Server Blocks
+    std::vector<ServerBlock> servers;
 
-    //--------------------------------------
-    // Constructor / Destructor
-    //--------------------------------------
-    ServerConfig();  // Constructor might set defaults or trigger loading
-    ~ServerConfig() {}  // Default destructor likely okay
+    // --- Public Methods ---
+    ServerConfig(); // Constructor - sets defaults
 
-    //--------------------------------------
-    // Methods (Declarations)
-    //--------------------------------------
-    bool loadFromFile(const std::string& filename);  // Declaration for loading logic (impl in .cpp)
-    std::string getMimeType(const std::string& filename) const;  // Declaration (impl in .cpp)
+    bool loadFromFile(const std::string& filename);
 
-   private:
-    void setDefaultMimeTypes();  // Helper for constructor (impl in .cpp)
+    // Find appropriate server/route for a request
+    const ServerBlock* findServerBlock(const std::string& listen_host, // Host server is listening on
+                                       unsigned short listen_port,   // Port server is listening on
+                                       const std::string& host_header) const; // Host header from request
 
-    // Usually only have one config; prevent copying if it simplifies ownership.
-    ServerConfig(const ServerConfig&);
-    ServerConfig& operator=(const ServerConfig&);
+    const RouteConfig* findRoute(const ServerBlock* server,
+                                 const std::string& path) const;
 
-};  // struct ServerConfig
+    const RouteConfig* findRouteForRequest(const std::string& listen_host,
+                                           unsigned short listen_port,
+                                           const std::string& host_header,
+                                           const std::string& path) const;
 
-#endif  // SERVERCONFIG_HPP
+    // MIME and CGI lookup
+    std::string getMimeType(const std::string& filename) const;
+    bool isCgiExtension(const std::string& filename) const;
+    std::string getCgiHandler(const std::string& filename) const;
+
+
+private:
+    // --- Private Helper Methods ---
+    void setDefaultMimeTypes();
+    void setDefaultCgiHandlers();
+
+    // Parsing Helpers
+    std::string getFileExtension(const std::string& filename) const;
+    void parseLine(const std::string& line, std::map<std::string, std::string>& configMap);
+    bool skipEmptyAndCommentLines(std::istream& stream, std::string& line);
+    bool parseServerBlock(std::istream& config_file);
+    bool parseLocationBlock(std::istream& config_file, RouteConfig& route);
+};
+
+#endif // SERVERCONFIG_HPP

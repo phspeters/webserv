@@ -5,7 +5,10 @@ CFLAGS = -std=c++98 -Wall -Werror -Wextra
 INCLUDES = -I include
 
 VPATH = src
-FILES = main.cpp
+FILES = main.cpp \
+		RouteConfig.cpp \
+		ServerConfig.cpp \
+		ServerBlock.cpp
 		
 OBJS = $(FILES:%.cpp=$(OBJ_DIR)/%.o)
 OBJ_DIR = obj
