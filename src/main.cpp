@@ -1,4 +1,5 @@
 #include "ServerConfig.hpp"
+#include <cstdlib> 
 #include <iostream>
 #include <vector>
 #include <string>
@@ -7,7 +8,7 @@ int main(int argc, char* argv[]) {
     // Ensure the configuration file is provided as a command-line argument
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <server.conf>" << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     }
 
     std::string config_file = argv[1];
@@ -16,7 +17,7 @@ int main(int argc, char* argv[]) {
     // Load the configuration file
     if (!serverConfig.loadFromFile(config_file)) {
         std::cerr << "Error: Failed to load configuration from file: " << config_file << std::endl;
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Print a summary of the loaded configuration
@@ -45,10 +46,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Placeholder for starting the server (not implemented in the provided code)
     std::cout << "Server is ready to start (not implemented)." << std::endl;
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 /*
 Core Server & Management: Server.hpp, ServerConfig.hpp, ConnectionManager.hpp, Connection.hpp define the main server loop, configuration handling, connection lifecycle, and individual connection state.
