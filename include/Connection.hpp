@@ -16,12 +16,10 @@ struct Connection {
     // Core Connection Identification & I/O
     //--------------------------------------
     int client_fd_;  // File descriptor for the client socket
-    const ServerConfig*
+    const ServerConfig&
         server_config_;  // Pointer to server configuration/context (read-only)
     time_t
         last_activity_;  // Timestamp of last read/write activity (for timeouts)
-    bool close_scheduled_;  // Flag to signal connection should be closed by
-                            // manager
 
     //--------------------------------------
     // Buffers
@@ -72,27 +70,18 @@ struct Connection {
     size_t static_file_bytes_to_send_;  // Total bytes to send from file
 
     //--------------------------------------
-    // Keep-Alive State
-    //--------------------------------------
-    bool keep_alive_;  // Flag indicating if connection should be kept open
-                       // after request
-
-    //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    Connection(int fd = -1, const ServerConfig* config = NULL);
+    Connection(int fd = -1, const ServerConfig& config);
     ~Connection();  // Cleans up owned resources (Request, Response, FDs)
 
     void reset_for_keep_alive();  // Resets state for handling another request
 
-    void set_server(
-        Server* server);  // Sets the server context for this connection
-
     // Utility methods
     bool is_readable() const;  // Checks if the connection is readable
     bool is_writable() const;  // Checks if the connection is writable
-
-    void close();  // Closes the connection and cleans up resources
+	bool is_error() const;     // Checks if the connection is in error state
+	bool is_keep_alive() const;  // Checks if the connection should be kept alive
 
    private:
     // Prevent copying

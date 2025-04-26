@@ -17,7 +17,7 @@ ConnectionManager::~ConnectionManager() {
 
 Connection* ConnectionManager::create_connection(int client_fd) {
     // Create a new Connection object and store it in the map
-    Connection* conn = new Connection(client_fd, &config_);
+    Connection* conn = new Connection(client_fd, config_);
     active_connections_[client_fd] = conn;
     return conn;
 }

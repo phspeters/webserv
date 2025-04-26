@@ -94,6 +94,20 @@ void Server::accept_new_connection(int epoll_fd,
     fd_map[client_fd] = this;
 }
 
+void Server::close_client_connection(Connection* conn) {
+    if (!conn) {
+        return;
+    }
+
+    int client_fd = conn->client_fd_;
+
+    // 1. First unregister from epoll (must happen before socket closure)
+    manager_->unregister_fd(client_fd);
+
+    // 2. Then let connection manager handle the rest
+    conn_manager_->close_connection(conn);
+}
+
 void Server::handle_client_event(int client_fd, uint32_t events) {
     Connection* conn = conn_manager_->get_connection(client_fd);
     if (!conn) {
@@ -125,19 +139,18 @@ void Server::handle_write(Connection* conn) {
     // TODO write response
 
     // After writing response, for keep-alive:
-    if (conn->keep_alive_) {
+    if (conn->is_keep_alive()) {
         conn->reset_for_keep_alive();
         set_socket_mode(conn->client_fd_, EPOLLIN);
     } else {
-        manager_->unregister_fd(conn->client_fd_);
-        conn_manager_->close_connection(conn);
+        // Close connection if not keep-alive
+		close_client_connection(conn);
     }
 }
 
 void Server::handle_error(Connection* conn) {
     // Handle error
-    manager_->unregister_fd(conn->client_fd_);
-    conn_manager_->close_connection(conn);
+	close_client_connection(conn);
 }
 
 bool Server::setup_listener_socket() {
