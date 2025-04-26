@@ -83,7 +83,7 @@ struct Connection {
     Connection(int fd = -1, const ServerConfig* _config = NULL);
     ~Connection();  // Cleans up owned resources (Request, Response, FDs)
 
-    void resetForKeepAlive();  // Resets state for handling another request
+    void reset_for_keep_alive();  // Resets state for handling another request
 
     void set_server(
         Server* server);  // Sets the server context for this connection

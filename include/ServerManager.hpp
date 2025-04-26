@@ -21,6 +21,7 @@ class ServerManager {
 
     // Get pointer to singleton instance (for signal handler)
     static ServerManager* get_instance() { return _instance; };
+    int get_epoll_fd() const { return _epoll_fd; }  // Get epoll fd
     Server* get_server_by_fd(int fd) const;
 
     bool add_server(Server* server);

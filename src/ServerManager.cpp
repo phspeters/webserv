@@ -98,9 +98,9 @@ bool ServerManager::parse_config_file(const std::string& filename) {
 void ServerManager::unregister_fd(int fd) {
     // Remove from epoll instance
     if (epoll_ctl(_epoll_fd, EPOLL_CTL_DEL, fd, NULL) < 0) {
-		// Handle error
-		return;
-	}
+        // Handle error
+        return;
+    }
 
     // Remove from mapping
     _fd_to_server_map.erase(fd);

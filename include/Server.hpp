@@ -77,6 +77,7 @@ class Server {
 
     bool setup_listener_socket();   // Sets up listener_fd
     bool set_non_blocking(int fd);  // Utility
+	bool set_socket_mode(int fd, uint32_t mode);  // Utility
 
     // Prevent copying
     Server(const Server&);

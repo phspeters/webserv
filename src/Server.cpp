@@ -111,12 +111,31 @@ void Server::handle_client_event(int client_fd, uint32_t events) {
 }
 
 // TODO
-void Server::handle_read(Connection* conn) { (void)conn; }
+void Server::handle_read(Connection* conn) {
+    (void)conn;
+    // TODO read and parse request
+
+    // Switch to write mode
+    set_socket_mode(conn->client_fd, EPOLLOUT);
+}
 
 // TODO
-void Server::handle_write(Connection* conn) { (void)conn; }
+void Server::handle_write(Connection* conn) {
+    (void)conn;
+    // TODO write response
+
+    // After writing response, for keep-alive:
+    if (conn->keep_alive) {
+		conn->reset_for_keep_alive();
+        set_socket_mode(conn->client_fd, EPOLLIN);
+    } else {
+        _manager->unregister_fd(conn->client_fd);
+		_conn_manager->close_connection(conn);
+    }
+}
 
 void Server::handle_error(Connection* conn) {
+	// Handle error
     _manager->unregister_fd(conn->client_fd);
     _conn_manager->close_connection(conn);
 }
@@ -182,5 +201,17 @@ bool Server::set_non_blocking(int fd) {
         return false;
     }
 
+    return true;
+}
+
+bool Server::set_socket_mode(int fd, uint32_t mode) {
+    struct epoll_event event;
+    event.events = mode | EPOLLET;  // Always edge-triggered
+    event.data.fd = fd;
+
+    if (epoll_ctl(_manager->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) < 0) {
+        // Handle error
+        return false;
+    }
     return true;
 }
