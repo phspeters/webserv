@@ -30,11 +30,12 @@ class Router {
     Handler* route(const Request* req);
 
    private:
-    const ServerConfig& config;  // Reference to configuration for routing rules
+    const ServerConfig&
+        config_;  // Reference to configuration for routing rules
 
     // Pointers to the handler instances (owned by Server, not Router)
-    StaticFileHandler* static_handler;
-    CgiHandler* cgi_handler;
+    StaticFileHandler* static_handler_;
+    CgiHandler* cgi_handler_;
     // Add pointers for other handlers...
 
     // Prevent copying

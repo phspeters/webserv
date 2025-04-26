@@ -28,9 +28,9 @@ class StaticFileHandler : public IHandler {
     // but often the main Server write loop can handle simple file sending.
 
    private:
-    const ServerConfig& config;  // Reference to server configuration
+    const ServerConfig& config_;  // Reference to server configuration
     ResponseWriter&
-        response_writer;  // Reference to the response writer utility
+        response_writer_;  // Reference to the response writer utility
 
     // Helper methods for path resolution, MIME type lookup etc. go in .cpp
 

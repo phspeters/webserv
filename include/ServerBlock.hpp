@@ -1,24 +1,20 @@
 #ifndef SERVERBLOCK_HPP
 #define SERVERBLOCK_HPP
 
-#include <map>
-#include <string>
-#include <vector>
-
-#include "RouteConfig.hpp"
+#include "webserv.hpp"
 
 class ServerBlock {
    public:
-    std::string host;
-    unsigned short port;
-    std::vector<std::string> server_names;
-    size_t max_body_size;
+    std::string host_;
+    unsigned short port_;
+    std::vector<std::string> server_names_;
+    size_t max_body_size_;
     std::map<int, std::string>
-        error_pages;  // Map status code to error page path
-    std::vector<RouteConfig> routes;
+        error_pages_;  // Map status code to error page path
+    std::vector<RouteConfig> routes_;
 
     ServerBlock();  // Constructor with defaults
-    std::string getErrorPage(int status_code) const;
+    std::string get_error_page(int status_code) const;
 };
 
 #endif  // SERVERBLOCK_HPP

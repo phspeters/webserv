@@ -20,8 +20,8 @@ class ServerManager {
     void shutdown();
 
     // Get pointer to singleton instance (for signal handler)
-    static ServerManager* get_instance() { return _instance; };
-    int get_epoll_fd() const { return _epoll_fd; }  // Get epoll fd
+    static ServerManager* get_instance() { return instance_; };
+    int get_epoll_fd() const { return epoll_fd_; }  // Get epoll fd
     Server* get_server_by_fd(int fd) const;
 
     bool add_server(Server* server);
@@ -39,18 +39,18 @@ class ServerManager {
 
    private:
     // Epoll management
-    int _epoll_fd;
-    std::vector<struct epoll_event> _epoll_events;
+    int epoll_fd_;
+    std::vector<struct epoll_event> epoll_events_;
     static const int MAX_EPOLL_EVENTS = 64;
 
     // Server management
-    std::vector<Server*> _servers;  // List of servers managed by this manager
-    std::map<int, Server*> _fd_to_server_map;  // Maps fd -> responsible server
+    std::vector<Server*> servers_;  // List of servers managed by this manager
+    std::map<int, Server*> fd_to_server_map_;  // Maps fd -> responsible server
 
     // Make singleton instance for signal handling
-    static ServerManager* _instance;
+    static ServerManager* instance_;
     // State management
-    volatile bool _running;
+    volatile bool running_;
 
     // Internal methods
     void event_loop();

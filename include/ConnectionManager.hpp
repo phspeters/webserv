@@ -38,11 +38,11 @@ class ConnectionManager {
     size_t get_active_connection_count() const;
 
    private:
-    const ServerConfig& config;  // For timeout values etc.
+    const ServerConfig& config_;  // For timeout values etc.
 
     // Storage for active connections, keyed by their file descriptor.
     // ConnectionManager owns the Connection objects pointed to.
-    std::map<int, Connection*> active_connections;
+    std::map<int, Connection*> active_connections_;
 
     // Prevent copying
     ConnectionManager(const ConnectionManager&);

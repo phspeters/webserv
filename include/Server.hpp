@@ -39,11 +39,11 @@ class Server {
                              uint32_t event);  // Handles client socket events
 
     // Getters for internal state
-    bool is_ready() const { return _initialized; }
-    int get_listener_fd() const { return _listener_fd; }  // Get listener fd
-    const ServerConfig& get_config() const { return _config; }  // Get config
-    unsigned short get_port() const { return _config.port; }
-    std::string get_server_name() const { return _config.server_name; }
+    bool is_ready() const { return initialized_; }
+    int get_listener_fd() const { return listener_fd_; }  // Get listener fd
+    const ServerConfig& get_config() const { return config_; }  // Get config
+    unsigned short get_port() const { return config_.port_; }
+    std::string get_server_name() const { return config_.server_name_; }
 
     // Add other getters as needed...
 
@@ -51,21 +51,21 @@ class Server {
     //--------------------------------------
     // Server State & Configuration
     //--------------------------------------
-    ServerManager* _manager;  // Reference to owner
-    ServerConfig _config;     // Loaded server configuration
-    int _listener_fd;         // FD for the listening socket;
-    bool _initialized;        // Flag for server running state
+    ServerManager* manager_;  // Reference to owner
+    ServerConfig config_;     // Loaded server configuration
+    int listener_fd_;         // FD for the listening socket;
+    bool initialized_;        // Flag for server running state
 
     //--------------------------------------
     // Owned Components (Composition)
     //--------------------------------------
-    ConnectionManager* _conn_manager;
-    // RequestParser* _request_parser;
-    // Router* _router;
-    // ResponseWriter* _response_writer;
+    ConnectionManager* conn_manager_;
+    // RequestParser* request_parser_;
+    // Router* router_;
+    // ResponseWriter* response_writer_;
     //// Handler instances (owned by Server)
-    // StaticFileHandler* _static_file_handler;
-    // CgiHandler* _cgi_handler;
+    // StaticFileHandler* static_file_handler_;
+    // CgiHandler* cgi_handler_;
     //// Add other handler instances...
 
     //--------------------------------------
@@ -75,9 +75,9 @@ class Server {
     void handle_write(Connection* conn);  // Handles writable client socket
     void handle_error(Connection* conn);  // Handles client socket error
 
-    bool setup_listener_socket();   // Sets up listener_fd
-    bool set_non_blocking(int fd);  // Utility
-	bool set_socket_mode(int fd, uint32_t mode);  // Utility
+    bool setup_listener_socket();                 // Sets up listener_fd
+    bool set_non_blocking(int fd);                // Utility
+    bool set_socket_mode(int fd, uint32_t mode);  // Utility
 
     // Prevent copying
     Server(const Server&);

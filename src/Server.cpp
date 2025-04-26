@@ -1,49 +1,49 @@
 #include "webserv.hpp"
 
 Server::Server(const ServerConfig& config, ServerManager* manager)
-    : _manager(manager),
-      _config(config),
-      _listener_fd(-1),
-      _initialized(false),
-      _conn_manager(NULL) {}
+    : manager_(manager),
+      config_(config),
+      listener_fd_(-1),
+      initialized_(false),
+      conn_manager_(NULL) {}
 /*
-_request_parser(NULL),
-_router(NULL),
-_response_writer(NULL),
-_static_file_handler(NULL),
-_cgi_handler(NULL) {}
+request_parser_(NULL),
+router_(NULL),
+response_writer_(NULL),
+static_file_handler_(NULL),
+cgi_handler_(NULL) {}
 */
 
 Server::~Server() {
     // Clean up owned components
-    delete _conn_manager;
+    delete conn_manager_;
     /*
-     delete _request_parser;
-     delete _router;
-     delete _response_writer;
-     delete _static_file_handler;
-     delete _cgi_handler;
+     delete request_parser_;
+     delete router_;
+     delete response_writer_;
+     delete static_file_handler_;
+     delete cgi_handler_;
      */
 
     // Close sockets if they are open
-    if (_listener_fd != -1) {
-        close(_listener_fd);
+    if (listener_fd_ != -1) {
+        close(listener_fd_);
     }
 }
 
 bool Server::init() {
     /*
     // Initialize components
-    _conn_manager = new ConnectionManager(_config);
-    _request_parser = new RequestParser(_config);
-    _response_writer = new ResponseWriter(_config);
+    conn_manager_ = new ConnectionManager(config_);
+    request_parser_ = new RequestParser(config_);
+    response_writer_ = new ResponseWriter(config_);
 
     // Initialize handlers
-    _static_file_handler = new StaticFileHandler(_config, *_response_writer);
-    _cgi_handler = new CgiHandler(_config, *_response_writer);
+    static_file_handler_ = new StaticFileHandler(config_, *response_writer_);
+    cgi_handler_ = new CgiHandler(config_, *response_writer_);
 
     // Initialize the router with the handlers
-    _router = new Router(_config, _static_file_handler, _cgi_handler);
+    router_ = new Router(config_, static_file_handler_, cgi_handler_);
     */
 
     // Set up the listener socket and epoll instance
@@ -52,7 +52,7 @@ bool Server::init() {
         return false;
     }
 
-    _initialized = true;
+    initialized_ = true;
 
     return true;
 }
@@ -61,7 +61,7 @@ void Server::stop() {}
 
 void Server::accept_new_connection(int epoll_fd,
                                    std::map<int, Server*>& fd_map) {
-    int client_fd = accept(_listener_fd, NULL, NULL);
+    int client_fd = accept(listener_fd_, NULL, NULL);
     if (client_fd < 0) {
         // Handle error
         return;
@@ -74,7 +74,7 @@ void Server::accept_new_connection(int epoll_fd,
     }
 
     // Create connection
-    Connection* conn = _conn_manager->create_connection(client_fd);
+    Connection* conn = conn_manager_->create_connection(client_fd);
     if (!conn) {
         // Handle error
         close(client_fd);
@@ -95,7 +95,7 @@ void Server::accept_new_connection(int epoll_fd,
 }
 
 void Server::handle_client_event(int client_fd, uint32_t events) {
-    Connection* conn = _conn_manager->get_connection(client_fd);
+    Connection* conn = conn_manager_->get_connection(client_fd);
     if (!conn) {
         // Handle error
         return;
@@ -116,7 +116,7 @@ void Server::handle_read(Connection* conn) {
     // TODO read and parse request
 
     // Switch to write mode
-    set_socket_mode(conn->client_fd, EPOLLOUT);
+    set_socket_mode(conn->client_fd_, EPOLLOUT);
 }
 
 // TODO
@@ -125,26 +125,26 @@ void Server::handle_write(Connection* conn) {
     // TODO write response
 
     // After writing response, for keep-alive:
-    if (conn->keep_alive) {
-		conn->reset_for_keep_alive();
-        set_socket_mode(conn->client_fd, EPOLLIN);
+    if (conn->keep_alive_) {
+        conn->reset_for_keep_alive();
+        set_socket_mode(conn->client_fd_, EPOLLIN);
     } else {
-        _manager->unregister_fd(conn->client_fd);
-		_conn_manager->close_connection(conn);
+        manager_->unregister_fd(conn->client_fd_);
+        conn_manager_->close_connection(conn);
     }
 }
 
 void Server::handle_error(Connection* conn) {
-	// Handle error
-    _manager->unregister_fd(conn->client_fd);
-    _conn_manager->close_connection(conn);
+    // Handle error
+    manager_->unregister_fd(conn->client_fd_);
+    conn_manager_->close_connection(conn);
 }
 
 bool Server::setup_listener_socket() {
     // Create the listener socket
     // AF_INET for IPv4, SOCK_STREAM for TCP, 0 for default protocol
-    _listener_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (_listener_fd < 0) {
+    listener_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+    if (listener_fd_ < 0) {
         // Handle error
         return false;
     }
@@ -152,16 +152,16 @@ bool Server::setup_listener_socket() {
     // Set socket option SO_REUSEADDR to allow reuse of the port immediately,
     // avoid TIME_WAIT after TCP close
     int opt = 1;
-    if (setsockopt(_listener_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
+    if (setsockopt(listener_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
         0) {
         // Handle error
-        close(_listener_fd);
+        close(listener_fd_);
         return false;
     }
 
-    if (!set_non_blocking(_listener_fd)) {
+    if (!set_non_blocking(listener_fd_)) {
         // Handle error
-        close(_listener_fd);
+        close(listener_fd_);
         return false;
     }
 
@@ -169,18 +169,18 @@ bool Server::setup_listener_socket() {
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(_config.port);
+    addr.sin_port = htons(config_.port_);
 
-    if (bind(_listener_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    if (bind(listener_fd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         // Handle error
-        close(_listener_fd);
+        close(listener_fd_);
         return false;
     }
 
     // Listen for incoming connections
-    if (listen(_listener_fd, SOMAXCONN) < 0) {
+    if (listen(listener_fd_, SOMAXCONN) < 0) {
         // Handle error
-        close(_listener_fd);
+        close(listener_fd_);
         return false;
     }
 
@@ -209,7 +209,7 @@ bool Server::set_socket_mode(int fd, uint32_t mode) {
     event.events = mode | EPOLLET;  // Always edge-triggered
     event.data.fd = fd;
 
-    if (epoll_ctl(_manager->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) < 0) {
+    if (epoll_ctl(manager_->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) < 0) {
         // Handle error
         return false;
     }

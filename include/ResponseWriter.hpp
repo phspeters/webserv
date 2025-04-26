@@ -27,7 +27,7 @@ class ResponseWriter {
 
    private:
     const ServerConfig&
-        config;  // Reference to config (e.g., for Server header)
+        _config;  // Reference to config (e.g., for Server header)
 
     std::string get_status_message(
         int code) const;  // Helper to get text for status code

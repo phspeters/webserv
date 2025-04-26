@@ -11,13 +11,14 @@ class HttpResponse {
     //--------------------------------------
     // Response Data Members
     //--------------------------------------
-    int status_code;             // e.g., 200, 404
-    std::string status_message;  // e.g., "OK", "Not Found"
-    std::string version;  // e.g., "HTTP/1.1" (usually match request or default)
+    int status_code_;             // e.g., 200, 404
+    std::string status_message_;  // e.g., "OK", "Not Found"
+    std::string
+        version_;  // e.g., "HTTP/1.1" (usually match request or default)
 
-    std::map<std::string, std::string> headers;  // Response headers
+    std::map<std::string, std::string> headers_;  // Response headers
 
-    std::vector<char> body;  // Response body content (if generated in memory)
+    std::vector<char> body_;  // Response body content (if generated in memory)
 
     // State flags (might be managed in Connection instead, depending on design)
     // bool        headers_built; // Indicate if headers string is ready
@@ -25,21 +26,21 @@ class HttpResponse {
     // bool        body_sent;
 
     // Often useful to store these explicitly for header generation
-    size_t content_length;
-    std::string content_type;
+    size_t content_length_;
+    std::string content_type_;
 
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
     HttpResponse()
-        : status_code(0),  // Indicate not set yet, perhaps? Or default to 200?
-          content_length(0)
+        : status_code_(0),  // Indicate not set yet, perhaps? Or default to 200?
+          content_length_(0)
     // headers_built(false),
     // headers_sent(false),
     // body_sent(false)
     {
         // Initialize strings, maps, vectors to empty states automatically
-        version = "HTTP/1.1";  // Default version
+        version_ = "HTTP/1.1";  // Default version
     }
 
     ~HttpResponse() {}
@@ -47,24 +48,24 @@ class HttpResponse {
     //--------------------------------------
     // Helper Methods (declarations)
     //--------------------------------------
-    void setHeader(const std::string& name, const std::string& value);
-    void setStatus(int code, const std::string& message);
+    void set_header(const std::string& name, const std::string& value);
+    void set_status(int code, const std::string& message);
 
     // Method to generate the full status line + headers string (implementation
     // in .cpp)
-    std::string getHeadersString() const;
+    std::string get_headersS_sring() const;
 
     // Method to generate the status line only (implementation in .cpp)
-    std::string getStatusLine() const;
+    std::string get_status_line() const;
 
     void clear() {
-        status_code = 0;
-        status_message.clear();
-        version = "HTTP/1.1";
-        headers.clear();
-        body.clear();
-        content_length = 0;
-        content_type.clear();
+        status_code_ = 0;
+        status_message_.clear();
+        version_ = "HTTP/1.1";
+        headers_.clear();
+        body_.clear();
+        content_length_ = 0;
+        content_type_.clear();
         // headers_built = false;
         // headers_sent = false;
         // body_sent = false;

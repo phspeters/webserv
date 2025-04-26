@@ -9,10 +9,16 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
+#include <fstream>
 #include <iostream>
 #include <map>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -27,6 +33,8 @@
 #include "RequestParser.hpp"
 #include "ResponseWriter.hpp"
 #include "Router.hpp"
+#include "RouteConfig.hpp"
+#include "ServerBlock.hpp"
 #include "Server.hpp"
 #include "ServerManager.hpp"
 #include "StaticFileHandler.hpp"

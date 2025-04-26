@@ -30,7 +30,7 @@ class RequestParser {
     ParseResult parse(Connection* conn);
 
    private:
-    const ServerConfig& config;  // Reference to server configuration
+    const ServerConfig& config_;  // Reference to server configuration
 
     // Internal helper methods for different parsing states would go in .cpp
     // e.g., parseRequestLine, parseHeaders, parseBody

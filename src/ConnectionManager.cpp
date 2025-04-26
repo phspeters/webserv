@@ -1,54 +1,54 @@
 #include "webserv.hpp"
 
 ConnectionManager::ConnectionManager(const ServerConfig& config)
-    : config(config) {
+    : config_(config) {
     // Constructor implementation
 }
 
 ConnectionManager::~ConnectionManager() {
     // Destructor implementation
-    for (std::map<int, Connection*>::iterator it = active_connections.begin();
-         it != active_connections.end(); ++it) {
+    for (std::map<int, Connection*>::iterator it = active_connections_.begin();
+         it != active_connections_.end(); ++it) {
         delete it->second;
     }
 
-    active_connections.clear();
+    active_connections_.clear();
 }
 
 Connection* ConnectionManager::create_connection(int client_fd) {
     // Create a new Connection object and store it in the map
-    Connection* conn = new Connection(client_fd, &config);
-    active_connections[client_fd] = conn;
+    Connection* conn = new Connection(client_fd, &config_);
+    active_connections_[client_fd] = conn;
     return conn;
 }
 
 void ConnectionManager::close_connection(int client_fd) {
     // Find the connection in the map
     std::map<int, Connection*>::iterator it =
-        active_connections.find(client_fd);
-    if (it != active_connections.end()) {
+        active_connections_.find(client_fd);
+    if (it != active_connections_.end()) {
         // Close and delete the connection
         delete it->second;
-        active_connections.erase(it);
+        active_connections_.erase(it);
     }
 }
 
 void ConnectionManager::close_connection(Connection* conn) {
     // Find the connection in the map
     std::map<int, Connection*>::iterator it =
-        active_connections.find(conn->client_fd);
-    if (it != active_connections.end()) {
+        active_connections_.find(conn->client_fd_);
+    if (it != active_connections_.end()) {
         // Close and delete the connection
         delete it->second;
-        active_connections.erase(it);
+        active_connections_.erase(it);
     }
 }
 
 Connection* ConnectionManager::get_connection(int client_fd) {
     // Find the connection in the map
     std::map<int, Connection*>::iterator it =
-        active_connections.find(client_fd);
-    if (it != active_connections.end()) {
+        active_connections_.find(client_fd);
+    if (it != active_connections_.end()) {
         return it->second;
     }
     return NULL;  // Not found
@@ -58,5 +58,5 @@ Connection* ConnectionManager::get_connection(int client_fd) {
 int ConnectionManager::check_timeouts() { return 0; }
 
 size_t ConnectionManager::get_active_connection_count() const {
-    return active_connections.size();
+    return active_connections_.size();
 }
