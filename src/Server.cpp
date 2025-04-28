@@ -126,13 +126,46 @@ void Server::handle_client_event(int client_fd, uint32_t events) {
     }
 }
 
-// TODO
+// TODO - Temporary printing data implementation
 void Server::handle_read(Connection* conn) {
-    (void)conn;
-    // TODO read and parse request
+    char buffer[4096];
+    ssize_t bytes_read;
+    bool data_read = false;
+    
+    // Drain the socket buffer
+    while ((bytes_read = read(conn->client_fd_, buffer, sizeof(buffer))) > 0) {
+        data_read = true;
+        conn->read_buffer_.insert(conn->read_buffer_.end(), buffer, buffer + bytes_read);
+        
+		// TODO - Read and parse the request
 
-    // Switch to write mode
-    set_socket_mode(conn->client_fd_, EPOLLOUT);
+        // TEMP - Print raw data to console
+        std::cout << "==== INCOMING DATA (fd: " << conn->client_fd_ << ", "
+                  << bytes_read << " bytes) ====\n";
+        std::cout.write(buffer, bytes_read);
+        std::cout << "\n=============================\n" << std::endl;
+    }
+    
+    // Handle read results without checking errno
+    if (bytes_read == 0) {
+        // Connection closed by client
+        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")" << std::endl;
+        handle_error(conn);
+        return;
+    } 
+    
+    if (data_read) {
+        // We read some data successfully before getting -1
+        // Most likely this is just EAGAIN/EWOULDBLOCK (buffer empty)
+		
+		// TEMP - Echo back the data to the client
+        conn->write_buffer_ = conn->read_buffer_;
+        set_socket_mode(conn->client_fd_, EPOLLOUT);
+    } else {
+        // First read failed with -1, must be a real error
+        std::cout << "Read error on socket (fd: " << conn->client_fd_ << ")" << std::endl;
+        handle_error(conn);
+    }
 }
 
 // TODO
