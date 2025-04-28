@@ -19,6 +19,7 @@ bool ServerManager::init() {
     epoll_fd_ = epoll_create1(0);
     if (epoll_fd_ < 0) {
         // Handle error
+        std::cerr << "Failed to create epoll instance" << std::endl;
         return false;  // Return error, don't terminate
     }
 
@@ -45,7 +46,13 @@ Server* ServerManager::get_server_by_fd(int fd) const {
     return it->second;
 }
 
-bool ServerManager::add_server(Server* server) {
+bool ServerManager::register_server(Server* server) {
+    if (server->is_ready() == false) {
+        // Handle error
+        std::cerr << "Server is not initialized and cannot be registered"
+                  << std::endl;
+        return false;
+    }
     // Get server's listener fd
     int listener_fd = server->get_listener_fd();
 
@@ -55,6 +62,8 @@ bool ServerManager::add_server(Server* server) {
     event.data.fd = listener_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, listener_fd, &event) < 0) {
         // Handle error
+		std::cerr << "Failed to register on epoll server " << server->get_server_name()
+				  << "on port " << server->get_port() << std::endl;
         return false;
     }
 
@@ -77,11 +86,13 @@ bool ServerManager::parse_config_file(const std::string& filename) {
     Server* server = new Server(config, this);
     if (!server->init()) {
         // Handle error
+        std::cerr << "Failed to initialize server " << server->get_server_name()
+                  << "on port " << server->get_port() << std::endl;
         delete server;
         return false;
     }
 
-    if (!add_server(server)) {
+    if (!register_server(server)) {
         // Handle error
         delete server;
         return false;
@@ -94,6 +105,7 @@ void ServerManager::unregister_fd(int fd) {
     // Remove from epoll instance
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, NULL) < 0) {
         // Handle error
+		std::cerr << "Failed to unregister fd " << fd << " from epoll" << std::endl;
         return;
     }
 
@@ -109,11 +121,13 @@ void ServerManager::setup_signal_handlers() {
 
     if (sigaction(SIGINT, &sa, NULL) < 0) {
         // Handle error
+		std::cerr << "Failed to set up SIGINT handler" << std::endl;
         return;
     }
-	
+
     if (sigaction(SIGTERM, &sa, NULL) < 0) {
         // Handle error
+		std::cerr << "Failed to set up SIGTERM handler" << std::endl;
         return;
     }
 }
@@ -121,7 +135,7 @@ void ServerManager::setup_signal_handlers() {
 void ServerManager::signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         get_instance()->shutdown();
-		std::cout << "Received shutdown signal. Exiting..." << std::endl;
+        std::cout << "Received shutdown signal. Exiting..." << std::endl;
     }
 }
 
@@ -138,6 +152,7 @@ void ServerManager::event_loop() {
             Server* server = get_server_by_fd(fd);
             if (!server) {
                 // Handle error - fd not found in server map
+				std::cerr << "Unknown fd " << fd << " in epoll event" << std::endl;
                 continue;
             }
 

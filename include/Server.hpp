@@ -31,7 +31,7 @@ class Server {
     void accept_new_connection(int shared_epoll_fd,
                                std::map<int, Server*>& fd_map);
 
-    void Server::close_client_connection(Connection* conn);
+    void close_client_connection(Connection* conn);
 
     void handle_client_event(int fd,
                              uint32_t event);  // Handles client socket events

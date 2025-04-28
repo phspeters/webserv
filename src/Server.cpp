@@ -66,11 +66,17 @@ void Server::accept_new_connection(int epoll_fd,
     int client_fd = accept(listener_fd_, NULL, NULL);
     if (client_fd < 0) {
         // Handle error
+        std::cerr << "Failed to accept new connection for server "
+                  << config_.server_name_ << "on port " << config_.port_
+                  << std::endl;
         return;
     }
     // Set non-blocking
     if (!set_non_blocking(client_fd)) {
         // Handle error
+        std::cerr << "Failed to set non-blocking mode for client socket (fd: "
+                  << client_fd << ")" << "on server " << config_.server_name_
+                  << "on port " << config_.port_ << std::endl;
         close(client_fd);
         return;
     }
@@ -79,6 +85,9 @@ void Server::accept_new_connection(int epoll_fd,
     Connection* conn = conn_manager_->create_connection(client_fd);
     if (!conn) {
         // Handle error
+        std::cerr << "Failed to create connection for client (fd: " << client_fd
+                  << ")" << "on server " << config_.server_name_ << "on port "
+                  << config_.port_ << std::endl;
         close(client_fd);
     }
 
@@ -88,6 +97,9 @@ void Server::accept_new_connection(int epoll_fd,
     event.data.fd = client_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event)) {
         // Handle error
+        std::cerr << "Failed to register client socket (fd: " << client_fd
+                  << ")" << "on server " << config_.server_name_ << "on port "
+                  << config_.port_ << std::endl;
         close(client_fd);
         return;
     }
@@ -98,6 +110,7 @@ void Server::accept_new_connection(int epoll_fd,
 
 void Server::close_client_connection(Connection* conn) {
     if (!conn) {
+        std::cerr << "Connection is NULL, cannot close." << std::endl;
         return;
     }
 
@@ -114,6 +127,9 @@ void Server::handle_client_event(int client_fd, uint32_t events) {
     Connection* conn = conn_manager_->get_connection(client_fd);
     if (!conn) {
         // Handle error
+        std::cerr << "Connection not found for client (fd: " << client_fd << ")"
+                  << "on server " << config_.server_name_ << "on port "
+                  << config_.port_ << std::endl;
         return;
     }
 
@@ -131,13 +147,14 @@ void Server::handle_read(Connection* conn) {
     char buffer[4096];
     ssize_t bytes_read;
     bool data_read = false;
-    
+
     // Drain the socket buffer
     while ((bytes_read = read(conn->client_fd_, buffer, sizeof(buffer))) > 0) {
         data_read = true;
-        conn->read_buffer_.insert(conn->read_buffer_.end(), buffer, buffer + bytes_read);
-        
-		// TODO - Read and parse the request
+        conn->read_buffer_.insert(conn->read_buffer_.end(), buffer,
+                                  buffer + bytes_read);
+
+        // TODO - Read and parse the request
 
         // TEMP - Print raw data to console
         std::cout << "==== INCOMING DATA (fd: " << conn->client_fd_ << ", "
@@ -145,25 +162,27 @@ void Server::handle_read(Connection* conn) {
         std::cout.write(buffer, bytes_read);
         std::cout << "\n=============================\n" << std::endl;
     }
-    
+
     // Handle read results without checking errno
     if (bytes_read == 0) {
         // Connection closed by client
-        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")" << std::endl;
+        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")"
+                  << std::endl;
         handle_error(conn);
         return;
-    } 
-    
+    }
+
     if (data_read) {
         // We read some data successfully before getting -1
         // Most likely this is just EAGAIN/EWOULDBLOCK (buffer empty)
-		
-		// TEMP - Echo back the data to the client
+
+        // TEMP - Echo back the data to the client
         conn->write_buffer_ = conn->read_buffer_;
         set_socket_mode(conn->client_fd_, EPOLLOUT);
     } else {
         // First read failed with -1, must be a real error
-        std::cout << "Read error on socket (fd: " << conn->client_fd_ << ")" << std::endl;
+        std::cout << "Read error on socket (fd: " << conn->client_fd_ << ")"
+                  << std::endl;
         handle_error(conn);
     }
 }
@@ -194,6 +213,9 @@ bool Server::setup_listener_socket() {
     listener_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (listener_fd_ < 0) {
         // Handle error
+        std::cerr << "Failed to create listener socket for server "
+                  << config_.server_name_ << "on port " << config_.port_
+                  << std::endl;
         return false;
     }
 
@@ -203,12 +225,18 @@ bool Server::setup_listener_socket() {
     if (setsockopt(listener_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
         0) {
         // Handle error
+        std::cerr << "Failed to set socket options for server "
+                  << config_.server_name_ << "on port " << config_.port_
+                  << std::endl;
         close(listener_fd_);
         return false;
     }
 
     if (!set_non_blocking(listener_fd_)) {
         // Handle error
+        std::cerr << "Failed to set non-blocking mode for listener socket "
+                  << "for server " << config_.server_name_ << "on port "
+                  << config_.port_ << std::endl;
         close(listener_fd_);
         return false;
     }
@@ -221,6 +249,9 @@ bool Server::setup_listener_socket() {
 
     if (bind(listener_fd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         // Handle error
+        std::cerr << "Failed to bind listener socket for server "
+                  << config_.server_name_ << "on port " << config_.port_
+                  << std::endl;
         close(listener_fd_);
         return false;
     }
@@ -228,6 +259,9 @@ bool Server::setup_listener_socket() {
     // Listen for incoming connections
     if (listen(listener_fd_, SOMAXCONN) < 0) {
         // Handle error
+        std::cerr << "Failed to listen on socket for server "
+                  << config_.server_name_ << "on port " << config_.port_
+                  << std::endl;
         close(listener_fd_);
         return false;
     }
@@ -239,6 +273,9 @@ bool Server::set_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
         // Handle error
+        std::cerr << "Failed to get flags for socket (fd: " << fd << ")"
+                  << "on server " << config_.server_name_ << "on port "
+                  << config_.port_ << std::endl;
         return false;
     }
 
@@ -246,6 +283,9 @@ bool Server::set_non_blocking(int fd) {
 
     if (fcntl(fd, F_SETFL, flags) == -1) {
         // Handle error
+        std::cerr << "Failed to set non-blocking mode for socket (fd: " << fd
+                  << ")" << "on server " << config_.server_name_ << "on port "
+                  << config_.port_ << std::endl;
         return false;
     }
 
@@ -259,6 +299,9 @@ bool Server::set_socket_mode(int fd, uint32_t mode) {
 
     if (epoll_ctl(manager_->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) < 0) {
         // Handle error
+		std::cerr << "Failed to set socket mode for fd: " << fd
+				  << "on server " << config_.server_name_ << "on port "
+				  << config_.port_ << std::endl;
         return false;
     }
     return true;

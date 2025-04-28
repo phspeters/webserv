@@ -79,8 +79,13 @@ bool Connection::is_writable() const {
 bool Connection::is_error() const { return state_ == CONN_ERROR; }
 
 bool Connection::is_keep_alive() const {
-    if (!request_data_) return false;
+    if (!request_data_) {
+        return false;
+    }
 
+	// TEMP
+	return true;
+	
     // For HTTP/1.0: requires explicit "Connection: keep-alive"
     if (request_data_->version_ == "HTTP/1.0") {
         std::string connection = request_data_->getHeader("Connection");

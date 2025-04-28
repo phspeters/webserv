@@ -15,7 +15,7 @@ struct Connection {
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    Connection(int fd = -1, const ServerConfig& config);
+    Connection(int fd, const ServerConfig& config);
     ~Connection();  // Cleans up owned resources (Request, Response, FDs)
 
     //--------------------------------------

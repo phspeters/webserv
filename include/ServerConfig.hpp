@@ -3,6 +3,9 @@
 
 #include "webserv.hpp"
 
+class ServerBlock;
+class RouteConfig;
+
 class ServerConfig {
    public:
     // Configuration Members

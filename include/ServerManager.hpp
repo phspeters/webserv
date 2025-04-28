@@ -24,7 +24,7 @@ class ServerManager {
     int get_epoll_fd() const { return epoll_fd_; }  // Get epoll fd
     Server* get_server_by_fd(int fd) const;
 
-    bool add_server(Server* server);
+    bool register_server(Server* server);
     bool parse_config_file(
         const std::string& filename);  // Parses the config file and initializes
                                        // servers
