@@ -13,6 +13,12 @@ class Server;
 // Represents the state associated with a single client connection
 struct Connection {
     //--------------------------------------
+    // Constructor / Destructor
+    //--------------------------------------
+    Connection(int fd = -1, const ServerConfig& config);
+    ~Connection();  // Cleans up owned resources (Request, Response, FDs)
+
+    //--------------------------------------
     // Core Connection Identification & I/O
     //--------------------------------------
     int client_fd_;  // File descriptor for the client socket
@@ -49,6 +55,18 @@ struct Connection {
     ConnectionState state_;
 
     //--------------------------------------
+    // Connection Management
+    //--------------------------------------
+    void reset_for_keep_alive();  // Resets state for handling another request
+
+    // Utility methods
+    bool is_readable() const;  // Checks if the connection is readable
+    bool is_writable() const;  // Checks if the connection is writable
+    bool is_error() const;     // Checks if the connection is in error state
+    bool is_keep_alive()
+        const;  // Checks if the connection should be kept alive
+
+    //--------------------------------------
     // Handler Association
     //--------------------------------------
     IHandler* active_handler_ptr_;  // Pointer to the handler responsible (set
@@ -68,20 +86,6 @@ struct Connection {
     int static_file_fd_;        // FD of the file being sent (-1 if none)
     off_t static_file_offset_;  // Current position within the file
     size_t static_file_bytes_to_send_;  // Total bytes to send from file
-
-    //--------------------------------------
-    // Constructor / Destructor
-    //--------------------------------------
-    Connection(int fd = -1, const ServerConfig& config);
-    ~Connection();  // Cleans up owned resources (Request, Response, FDs)
-
-    void reset_for_keep_alive();  // Resets state for handling another request
-
-    // Utility methods
-    bool is_readable() const;  // Checks if the connection is readable
-    bool is_writable() const;  // Checks if the connection is writable
-	bool is_error() const;     // Checks if the connection is in error state
-	bool is_keep_alive() const;  // Checks if the connection should be kept alive
 
    private:
     // Prevent copying

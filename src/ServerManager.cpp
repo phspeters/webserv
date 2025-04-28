@@ -35,12 +35,7 @@ void ServerManager::run() {
     event_loop();
 }
 
-void ServerManager::shutdown() {
-    running_ = false;
-
-    // Clean up servers
-    cleanup_servers();
-}
+void ServerManager::shutdown() { running_ = false; }
 
 Server* ServerManager::get_server_by_fd(int fd) const {
     std::map<int, Server*>::const_iterator it = fd_to_server_map_.find(fd);
@@ -56,7 +51,7 @@ bool ServerManager::add_server(Server* server) {
 
     // Add to epoll and our map
     struct epoll_event event;
-    event.events = EPOLLIN;
+    event.events = EPOLLIN | EPOLLET;  // Edge-triggered
     event.data.fd = listener_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, listener_fd, &event) < 0) {
         // Handle error
@@ -106,12 +101,27 @@ void ServerManager::unregister_fd(int fd) {
     fd_to_server_map_.erase(fd);
 }
 
-// TODO
-void ServerManager::setup_signal_handlers() {}
+void ServerManager::setup_signal_handlers() {
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        // Handle error
+        return;
+    }
+	
+    if (sigaction(SIGTERM, &sa, NULL) < 0) {
+        // Handle error
+        return;
+    }
+}
 
 void ServerManager::signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         get_instance()->shutdown();
+		std::cout << "Received shutdown signal. Exiting..." << std::endl;
     }
 }
 
@@ -146,7 +156,7 @@ void ServerManager::event_loop() {
 void ServerManager::cleanup_servers() {
     for (std::vector<Server*>::iterator it = servers_.begin();
          it != servers_.end(); ++it) {
-        delete *it;
+        delete *it;  // Clean up server instance
     }
 
     servers_.clear();

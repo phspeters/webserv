@@ -25,9 +25,13 @@ Server::~Server() {
      delete cgi_handler_;
      */
 
-    // Close sockets if they are open
+    // Close listener socket if it's open
     if (listener_fd_ != -1) {
+        // Unregister from epoll first
+        manager_->unregister_fd(listener_fd_);
+        // Then close the socket
         close(listener_fd_);
+        listener_fd_ = -1;
     }
 }
 
@@ -56,8 +60,6 @@ bool Server::init() {
 
     return true;
 }
-
-void Server::stop() {}
 
 void Server::accept_new_connection(int epoll_fd,
                                    std::map<int, Server*>& fd_map) {
@@ -144,13 +146,13 @@ void Server::handle_write(Connection* conn) {
         set_socket_mode(conn->client_fd_, EPOLLIN);
     } else {
         // Close connection if not keep-alive
-		close_client_connection(conn);
+        close_client_connection(conn);
     }
 }
 
 void Server::handle_error(Connection* conn) {
     // Handle error
-	close_client_connection(conn);
+    close_client_connection(conn);
 }
 
 bool Server::setup_listener_socket() {

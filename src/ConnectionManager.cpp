@@ -11,8 +11,6 @@ ConnectionManager::~ConnectionManager() {
          it != active_connections_.end(); ++it) {
         delete it->second;
     }
-
-    active_connections_.clear();
 }
 
 Connection* ConnectionManager::create_connection(int client_fd) {

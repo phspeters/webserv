@@ -26,10 +26,6 @@ class Server {
     // Initialize server components and network setup. Returns false on error.
     bool init();
 
-    // Cleanly stop handling requests and prepare for shutdown.
-    // Called by ServerManager during graceful shutdown.
-    void stop();
-
     // Accepts new connections on the listener socket and registers them with
     // epoll.
     void accept_new_connection(int shared_epoll_fd,

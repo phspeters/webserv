@@ -41,7 +41,7 @@ class ServerManager {
     // Epoll management
     int epoll_fd_;
     std::vector<struct epoll_event> epoll_events_;
-    static const int MAX_EPOLL_EVENTS = 64;
+    static const int MAX_EPOLL_EVENTS = 1024;
 
     // Server management
     std::vector<Server*> servers_;  // List of servers managed by this manager

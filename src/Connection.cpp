@@ -13,7 +13,6 @@ Connection::Connection(int client_fd, const ServerConfig& config)
       active_handler_ptr_(NULL) {}
 
 Connection::~Connection() {
-    // Placeholder for destructor implementation
     if (request_data_) {
         delete request_data_;
     }
@@ -82,8 +81,13 @@ bool Connection::is_error() const { return state_ == CONN_ERROR; }
 bool Connection::is_keep_alive() const {
     if (!request_data_) return false;
 
-    // In HTTP/1.1, the only case to close is "Connection: close"
+    // For HTTP/1.0: requires explicit "Connection: keep-alive"
+    if (request_data_->version_ == "HTTP/1.0") {
+        std::string connection = request_data_->getHeader("Connection");
+        return connection.find("keep-alive") != std::string::npos;
+    }
+
+    // For HTTP/1.1: keep-alive by default unless "Connection: close"
     std::string connection = request_data_->getHeader("Connection");
-    return connection.find("close") ==
-           std::string::npos;  // Not found = keep-alive
+    return connection.find("close") == std::string::npos;
 }
