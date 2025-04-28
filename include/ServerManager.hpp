@@ -16,7 +16,7 @@ class ServerManager {
 
     void run();
 
-    // Signal servers to stop and cleanly terminate
+    // Set the running flag to false and exit the event loop
     void shutdown();
 
     // Get pointer to singleton instance (for signal handler)
