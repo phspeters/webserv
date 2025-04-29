@@ -93,7 +93,7 @@ void Server::accept_new_connection(int epoll_fd,
 
     // Register with epoll
     struct epoll_event event;
-    event.events = EPOLLIN | EPOLLET;
+    event.events = EPOLLIN;
     event.data.fd = client_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event)) {
         // Handle error
@@ -145,44 +145,30 @@ void Server::handle_client_event(int client_fd, uint32_t events) {
 // TODO - Temporary printing data implementation
 void Server::handle_read(Connection* conn) {
     char buffer[4096];
-    ssize_t bytes_read;
-    bool data_read = false;
+    ssize_t bytes_read = read(conn->client_fd_, buffer, sizeof(buffer));
 
-    // Drain the socket buffer
-    while ((bytes_read = read(conn->client_fd_, buffer, sizeof(buffer))) > 0) {
-        data_read = true;
-        conn->read_buffer_.insert(conn->read_buffer_.end(), buffer,
-                                  buffer + bytes_read);
-
-        // TODO - Read and parse the request
+    if (bytes_read > 0) {
+        // Process the data we received
+        conn->read_buffer_.insert(conn->read_buffer_.end(), buffer, buffer + bytes_read);
 
         // TEMP - Print raw data to console
         std::cout << "==== INCOMING DATA (fd: " << conn->client_fd_ << ", "
                   << bytes_read << " bytes) ====\n";
         std::cout.write(buffer, bytes_read);
         std::cout << "\n=============================\n" << std::endl;
-    }
-
-    // Handle read results without checking errno
-    if (bytes_read == 0) {
-        // Connection closed by client
-        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")"
-                  << std::endl;
-        handle_error(conn);
-        return;
-    }
-
-    if (data_read) {
-        // We read some data successfully before getting -1
-        // Most likely this is just EAGAIN/EWOULDBLOCK (buffer empty)
 
         // TEMP - Echo back the data to the client
         conn->write_buffer_ = conn->read_buffer_;
         set_socket_mode(conn->client_fd_, EPOLLOUT);
-    } else {
-        // First read failed with -1, must be a real error
-        std::cout << "Read error on socket (fd: " << conn->client_fd_ << ")"
-                  << std::endl;
+    } 
+    else if (bytes_read == 0) {
+        // Connection closed by client
+        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")" << std::endl;
+        handle_error(conn);
+    } 
+    else {
+        // Read error (bytes_read < 0)
+        std::cout << "Read error on socket (fd: " << conn->client_fd_ << ")" << std::endl;
         handle_error(conn);
     }
 }
@@ -294,7 +280,7 @@ bool Server::set_non_blocking(int fd) {
 
 bool Server::set_socket_mode(int fd, uint32_t mode) {
     struct epoll_event event;
-    event.events = mode | EPOLLET;  // Always edge-triggered
+    event.events = mode;
     event.data.fd = fd;
 
     if (epoll_ctl(manager_->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) < 0) {

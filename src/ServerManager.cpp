@@ -58,7 +58,7 @@ bool ServerManager::register_server(Server* server) {
 
     // Add to epoll and our map
     struct epoll_event event;
-    event.events = EPOLLIN | EPOLLET;  // Edge-triggered
+    event.events = EPOLLIN;
     event.data.fd = listener_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, listener_fd, &event) < 0) {
         // Handle error
