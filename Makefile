@@ -26,11 +26,15 @@ $(OBJ_DIR)/%.o: %.cpp
 $(NAME): $(OBJS)
 	@$(CC) $(CFLAGS) $(OBJS) -o $(NAME)
 
+client:
+	@echo "Compiling client..."
+	@$(CC) $(CFLAGS) -o client tests/client.cpp
+
 clean:
 	@rm -rf $(OBJ_DIR)
 
 fclean: clean
-	@rm -rf $(NAME)
+	@rm -rf $(NAME) client
 
 re: fclean all
 
