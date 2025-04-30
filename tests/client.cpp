@@ -1,10 +1,11 @@
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
 
@@ -35,9 +36,17 @@ class SimpleHttpClient {
         server_addr_.sin_family = AF_INET;
         server_addr_.sin_port = htons(port);
 
+        // Try to convert as IP address first
         if (inet_pton(AF_INET, host.c_str(), &server_addr_.sin_addr) <= 0) {
-            std::cerr << "Invalid address: " << host << std::endl;
-            return false;
+            // Not a valid IP address, try to resolve hostname
+            struct hostent* he;
+            if ((he = gethostbyname(host.c_str())) == NULL) {
+                std::cerr << "Could not resolve hostname: " << host
+                          << std::endl;
+                return false;
+            }
+            // Copy the first IP address
+            memcpy(&server_addr_.sin_addr, he->h_addr_list[0], he->h_length);
         }
 
         // Connect to server

@@ -36,9 +36,9 @@ Server::~Server() {
 }
 
 bool Server::init() {
-    /*
     // Initialize components
     conn_manager_ = new ConnectionManager(config_);
+    /*
     request_parser_ = new RequestParser(config_);
     response_writer_ = new ResponseWriter(config_);
 
@@ -57,6 +57,8 @@ bool Server::init() {
     }
 
     initialized_ = true;
+    std::cout << "Server initialized successfully: " << config_.server_name_
+              << " on port " << config_.port_ << std::endl;
 
     return true;
 }
@@ -116,10 +118,10 @@ void Server::close_client_connection(Connection* conn) {
 
     int client_fd = conn->client_fd_;
 
-    // 1. First unregister from epoll (must happen before socket closure)
+    // First unregister from epoll (must happen before socket closure)
     manager_->unregister_fd(client_fd);
 
-    // 2. Then let connection manager handle the rest
+    // Then let connection manager handle the rest
     conn_manager_->close_connection(conn);
 }
 
@@ -149,34 +151,48 @@ void Server::handle_read(Connection* conn) {
 
     if (bytes_read > 0) {
         // Process the data we received
-        conn->read_buffer_.insert(conn->read_buffer_.end(), buffer, buffer + bytes_read);
+        conn->read_buffer_.insert(conn->read_buffer_.end(), buffer,
+                                  buffer + bytes_read);
 
         // TEMP - Print raw data to console
-        std::cout << "==== INCOMING DATA (fd: " << conn->client_fd_ << ", "
-                  << bytes_read << " bytes) ====\n";
+        std::cout << "\n==== INCOMING DATA (fd: " << conn->client_fd_ << ", "
+                  << bytes_read << " bytes) ====\n\n";
         std::cout.write(buffer, bytes_read);
-        std::cout << "\n=============================\n" << std::endl;
+        std::cout << "\n====================================\n" << std::endl;
 
         // TEMP - Echo back the data to the client
         conn->write_buffer_ = conn->read_buffer_;
         set_socket_mode(conn->client_fd_, EPOLLOUT);
-    } 
-    else if (bytes_read == 0) {
+    } else if (bytes_read == 0) {
         // Connection closed by client
-        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")" << std::endl;
+        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")"
+                  << std::endl;
         handle_error(conn);
-    } 
-    else {
+    } else {
         // Read error (bytes_read < 0)
-        std::cout << "Read error on socket (fd: " << conn->client_fd_ << ")" << std::endl;
+        std::cout << "Read error on socket (fd: " << conn->client_fd_ << ")"
+                  << std::endl;
         handle_error(conn);
     }
 }
 
 // TODO
 void Server::handle_write(Connection* conn) {
-    (void)conn;
     // TODO write response
+
+    // TEMP For now, just echo back the data
+    std::cout << "Writing response to client (fd: " << conn->client_fd_ << ")"
+              << std::endl;
+    ssize_t bytes_written = write(conn->client_fd_, conn->write_buffer_.data(),
+                                  conn->write_buffer_.size());
+    if (bytes_written < 0) {
+        // Handle error
+        std::cerr << "Write error on socket (fd: " << conn->client_fd_ << ")"
+                  << "on server " << config_.server_name_ << "on port "
+                  << config_.port_ << std::endl;
+        handle_error(conn);
+        return;
+    }
 
     // After writing response, for keep-alive:
     if (conn->is_keep_alive()) {
@@ -285,9 +301,9 @@ bool Server::set_socket_mode(int fd, uint32_t mode) {
 
     if (epoll_ctl(manager_->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) < 0) {
         // Handle error
-		std::cerr << "Failed to set socket mode for fd: " << fd
-				  << "on server " << config_.server_name_ << "on port "
-				  << config_.port_ << std::endl;
+        std::cerr << "Failed to set socket mode for fd: " << fd << "on server "
+                  << config_.server_name_ << "on port " << config_.port_
+                  << std::endl;
         return false;
     }
     return true;

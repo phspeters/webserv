@@ -25,7 +25,7 @@ bool ServerManager::init() {
 
     // Set up signal handlers
     setup_signal_handlers();
-
+    std::cout << "ServerManager initialized successfully" << std::endl;
     return true;  // Successfully initialized
 }
 
@@ -33,6 +33,8 @@ void ServerManager::run() {
     running_ = true;
 
     // Start the event loop
+    std::cout << "ServerManager is ready and waiting for connections"
+              << std::endl;
     event_loop();
 }
 
@@ -62,8 +64,9 @@ bool ServerManager::register_server(Server* server) {
     event.data.fd = listener_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, listener_fd, &event) < 0) {
         // Handle error
-		std::cerr << "Failed to register on epoll server " << server->get_server_name()
-				  << "on port " << server->get_port() << std::endl;
+        std::cerr << "Failed to register on epoll server "
+                  << server->get_server_name() << "on port "
+                  << server->get_port() << std::endl;
         return false;
     }
 
@@ -105,7 +108,8 @@ void ServerManager::unregister_fd(int fd) {
     // Remove from epoll instance
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, NULL) < 0) {
         // Handle error
-		std::cerr << "Failed to unregister fd " << fd << " from epoll" << std::endl;
+        std::cerr << "Failed to unregister fd " << fd << " from epoll"
+                  << std::endl;
         return;
     }
 
@@ -121,13 +125,13 @@ void ServerManager::setup_signal_handlers() {
 
     if (sigaction(SIGINT, &sa, NULL) < 0) {
         // Handle error
-		std::cerr << "Failed to set up SIGINT handler" << std::endl;
+        std::cerr << "Failed to set up SIGINT handler" << std::endl;
         return;
     }
 
     if (sigaction(SIGTERM, &sa, NULL) < 0) {
         // Handle error
-		std::cerr << "Failed to set up SIGTERM handler" << std::endl;
+        std::cerr << "Failed to set up SIGTERM handler" << std::endl;
         return;
     }
 }
@@ -152,16 +156,23 @@ void ServerManager::event_loop() {
             Server* server = get_server_by_fd(fd);
             if (!server) {
                 // Handle error - fd not found in server map
-				std::cerr << "Unknown fd " << fd << " in epoll event" << std::endl;
+                std::cerr << "Unknown fd " << fd << " in epoll event"
+                          << std::endl;
                 continue;
             }
 
             // Let the server handle its own event
             if (fd == server->get_listener_fd()) {
                 // Listening socket event - server accepts new connection
+                std::cout << "New connection on server "
+                          << server->get_server_name() << " on port "
+                          << server->get_port() << std::endl;
                 server->accept_new_connection(epoll_fd_, fd_to_server_map_);
             } else {
                 // Client socket event
+                std::cout << "Client event on server "
+                          << server->get_server_name() << " on port "
+                          << server->get_port() << std::endl;
                 server->handle_client_event(fd, events[i].events);
             }
         }

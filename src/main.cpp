@@ -49,8 +49,19 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    std::cout << "Server is ready to start (not implemented)." << std::endl;
+    std::cout << std::endl;
 
+    ServerManager serverManager;
+    if (!serverManager.init()) {
+        std::cerr << "Error: Failed to initialize server manager." << std::endl;
+        return EXIT_FAILURE;
+    };
+    if (!serverManager.parse_config_file(config_file)) {
+        std::cerr << "Error: Failed to parse configuration file: "
+                  << config_file << std::endl;
+        return EXIT_FAILURE;
+    }
+    serverManager.run();
     return EXIT_SUCCESS;
 }
 /*
