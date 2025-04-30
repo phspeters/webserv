@@ -19,6 +19,8 @@ class HttpRequest {
         headers_;  // Map of header names to values
 
     std::vector<char> body_;  // Request body content
+    std::vector<char>*
+        temp_body_;  // Temporary storage for chunked body (if needed)
 
     // Parsed components of the URI (populated after basic parsing)
     std::string path_;          // Path part of the URI (e.g., "/index.html")
@@ -29,31 +31,16 @@ class HttpRequest {
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    HttpRequest() : parse_error_(false) {
-        // Initialize strings, maps, vectors to empty states automatically
-    }
-
-    // Default destructor is likely sufficient as std containers manage their
-    // own memory
-    ~HttpRequest() {}
+    HttpRequest();
+    ~HttpRequest();
 
     //--------------------------------------
     // Helper Methods (optional declarations)
     //--------------------------------------
-    // Example: Get a header value (case-insensitive lookup might be needed in
-    // .cpp)
-    std::string getHeader(const std::string& name) const;
+    // Example: Get a header value (case-insensitive lookup)
+    std::string get_header(const std::string& name) const;
 
-    void clear() {
-        method_.clear();
-        uri_.clear();
-        version_.clear();
-        headers_.clear();
-        body_.clear();
-        path_.clear();
-        query_string_.clear();
-        parse_error_ = false;
-    }
+    void clear();
 
    private:
     // Prevent copying if requests are managed by pointer in Connection

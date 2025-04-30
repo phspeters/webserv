@@ -6,13 +6,15 @@ INCLUDES = -I include
 
 VPATH = src
 FILES = main.cpp \
-		RouteConfig.cpp \
-		ServerConfig.cpp \
-		ServerBlock.cpp \
-		Server.cpp \
-		ServerManager.cpp \
 		Connection.cpp \
-		ConnectionManager.cpp
+		ConnectionManager.cpp \
+		HttpRequest.cpp \
+		RequestParser.cpp \
+		RouteConfig.cpp \
+		Server.cpp \
+		ServerBlock.cpp \
+		ServerConfig.cpp \
+		ServerManager.cpp
 		
 OBJS = $(FILES:%.cpp=$(OBJ_DIR)/%.o)
 OBJ_DIR = obj

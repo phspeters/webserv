@@ -88,11 +88,11 @@ bool Connection::is_keep_alive() const {
 
     // For HTTP/1.0: requires explicit "Connection: keep-alive"
     if (request_data_->version_ == "HTTP/1.0") {
-        std::string connection = request_data_->getHeader("Connection");
+        std::string connection = request_data_->get_header("Connection");
         return connection.find("keep-alive") != std::string::npos;
     }
 
     // For HTTP/1.1: keep-alive by default unless "Connection: close"
-    std::string connection = request_data_->getHeader("Connection");
+    std::string connection = request_data_->get_header("Connection");
     return connection.find("close") == std::string::npos;
 }
