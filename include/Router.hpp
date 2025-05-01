@@ -4,38 +4,33 @@
 #include "webserv.hpp"
 
 // Forward declarations
-class Request;
-class Handler;
-struct ServerConfig;
-class StaticFileHandler;  // Need specific handlers if router holds pointers
-class CgiHandler;
-// Add other specific handler types here
+// class Request;
+// class Handler;
+// struct ServerConfig;
+// class StaticFileHandler;  // Need specific handlers if router holds pointers
+// class CgiHandler;
 
 // Determines which Handler should process a given Request.
 class Router {
    public:
     // Constructor might take references to the actual handler instances owned
     // by Server
-    Router(
-        const ServerConfig& config,
-        StaticFileHandler*
-            static_handler,  // Pointer to the single static handler instance
-        CgiHandler* cgi_handler  // Pointer to the single CGI handler instance
-        /* Add other handlers */);
+    Router(const ServerConfig& config);
     ~Router();
 
     // Selects the appropriate handler based on the request properties (URI,
     // method) and server configuration (CGI paths, etc.). Returns a pointer to
     // the handler instance responsible.
-    Handler* route(const Request* req);
+    IHandler* route(const HttpRequest* req);
 
    private:
     const ServerConfig&
         config_;  // Reference to configuration for routing rules
+    const IHandler* handler_;
 
     // Pointers to the handler instances (owned by Server, not Router)
-    StaticFileHandler* static_handler_;
-    CgiHandler* cgi_handler_;
+    // StaticFileHandler* static_handler_;
+    // CgiHandler* cgi_handler_;
     // Add pointers for other handlers...
 
     // Prevent copying
