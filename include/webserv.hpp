@@ -1,6 +1,7 @@
 #ifndef WEBSERV_HPP
 #define WEBSERV_HPP
 
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -33,10 +34,12 @@
 #include "RequestParser.hpp"
 #include "ResponseWriter.hpp"
 #include "Router.hpp"
-#include "RouteConfig.hpp"
-#include "ServerBlock.hpp"
 #include "Server.hpp"
 #include "ServerManager.hpp"
 #include "StaticFileHandler.hpp"
+#include "ServerConfig.hpp"
+
+// utils
+std::string trim(const std::string& str);
 
 #endif

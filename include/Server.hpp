@@ -41,7 +41,7 @@ class Server {
     int get_listener_fd() const { return listener_fd_; }  // Get listener fd
     const ServerConfig& get_config() const { return config_; }  // Get config
     unsigned short get_port() const { return config_.port_; }
-    std::string get_server_name() const { return config_.server_name_; }
+    std::string get_server_name() const { return config_.server_names_[0]; }
 
     // Add other getters as needed...
 

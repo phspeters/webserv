@@ -76,32 +76,61 @@ bool ServerManager::register_server(Server* server) {
     return true;
 }
 
-// TEMP
 bool ServerManager::parse_config_file(const std::string& filename) {
-    (void)filename;
-    // Parse the configuration file and initialize servers
-    // This is a placeholder for actual parsing logic
-    // For now, we just create a single server with default settings
-    ServerConfig config;
-    config.port_ = 8080;                // Example port
-    config.server_name_ = "localhost";  // Example server name
-
-    Server* server = new Server(config, this);
-    if (!server->init()) {
-        // Handle error
-        std::cerr << "Failed to initialize server " << server->get_server_name()
-                  << "on port " << server->get_port() << std::endl;
-        delete server;
+    std::ifstream file(filename.c_str());
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open configuration file: " << filename
+                  << std::endl;
         return false;
     }
 
-    if (!register_server(server)) {
-        // Handle error
-        delete server;
-        return false;
-    }
+    std::string line;
+    std::vector<ServerConfig> configs;
+    while (std::getline(file, line)) {
+        line = trim(line);
 
-    return true;
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == '#') continue;
+
+        // Look for server block
+        if (line == "server {" ||
+            (line.find("server") == 0 && line.find("{") != std::string::npos)) {
+            // Create a new server config
+            ServerConfig config;
+            // Parse the server block
+            if (ServerConfig::parseServerBlock(file, config)) {
+                configs.push_back(config);
+                // Print the parsed configuration
+                std::cout << "\n===== PARSED SERVER CONFIGURATION =====\n"
+                          << std::endl;
+                config.print();
+                std::cout << "\n========================================\n"
+                          << std::endl;
+            } else {
+                std::cerr << "Error parsing server block" << std::endl;
+            }
+        }
+    }
+    for (std::vector<ServerConfig>::iterator it = configs.begin();
+         it != configs.end(); it++) {
+        // Create and initialize a new server
+        Server* server = new Server(*it, this);
+        if (!server->init()) {
+            // Handle error
+            std::cerr << "Failed to initialize server "
+                      << server->get_server_name() << "on port "
+                      << server->get_port() << std::endl;
+            delete server;
+            return false;
+        }
+
+        if (!register_server(server)) {
+            // Handle error
+            delete server;
+            return false;
+        }
+    }
+    return !servers_.empty();
 }
 
 void ServerManager::unregister_fd(int fd) {

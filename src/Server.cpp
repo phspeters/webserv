@@ -57,7 +57,7 @@ bool Server::init() {
     }
 
     initialized_ = true;
-    std::cout << "Server initialized successfully: " << config_.server_name_
+    std::cout << "Server initialized successfully: " << config_.server_names_[0]
               << " on port " << config_.port_ << std::endl;
 
     return true;
@@ -69,7 +69,7 @@ void Server::accept_new_connection(int epoll_fd,
     if (client_fd < 0) {
         // Handle error
         std::cerr << "Failed to accept new connection for server "
-                  << config_.server_name_ << "on port " << config_.port_
+                  << config_.server_names_[0] << "on port " << config_.port_
                   << std::endl;
         return;
     }
@@ -77,35 +77,35 @@ void Server::accept_new_connection(int epoll_fd,
     if (!set_non_blocking(client_fd)) {
         // Handle error
         std::cerr << "Failed to set non-blocking mode for client socket (fd: "
-                  << client_fd << ")" << "on server " << config_.server_name_
+                  << client_fd << ")" << "on server "
+                  << config_.server_names_[0] << "on port " << config_.port_
+                  << std::endl;
+        close(client_fd);
+        return;
+    }
+
+    // Register with epoll
+    struct epoll_event event;
+    event.events = EPOLLIN;
+    event.data.fd = client_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event)) {
+        // Handle error
+        std::cerr << "Failed to register client socket (fd: " << client_fd
+                  << ")" << "on server " << config_.server_names_[0]
                   << "on port " << config_.port_ << std::endl;
         close(client_fd);
         return;
     }
 
-	// Register with epoll
-	struct epoll_event event;
-	event.events = EPOLLIN;
-	event.data.fd = client_fd;
-	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event)) {
-		// Handle error
-		std::cerr << "Failed to register client socket (fd: " << client_fd
-				  << ")" << "on server " << config_.server_name_ << "on port "
-				  << config_.port_ << std::endl;
-		close(client_fd);
-		return;
-	}
-	
     // Create connection
     Connection* conn = conn_manager_->create_connection(client_fd);
     if (!conn) {
         // Handle error
         std::cerr << "Failed to create connection for client (fd: " << client_fd
-                  << ")" << "on server " << config_.server_name_ << "on port "
-                  << config_.port_ << std::endl;
+                  << ")" << "on server " << config_.server_names_[0]
+                  << "on port " << config_.port_ << std::endl;
         close(client_fd);
     }
-
 
     // Add to ServerManager's map
     fd_map[client_fd] = this;
@@ -131,7 +131,7 @@ void Server::handle_client_event(int client_fd, uint32_t events) {
     if (!conn) {
         // Handle error
         std::cerr << "Connection not found for client (fd: " << client_fd << ")"
-                  << "on server " << config_.server_name_ << "on port "
+                  << "on server " << config_.server_names_[0] << "on port "
                   << config_.port_ << std::endl;
         return;
     }
@@ -189,7 +189,7 @@ void Server::handle_write(Connection* conn) {
     if (bytes_written < 0) {
         // Handle error
         std::cerr << "Write error on socket (fd: " << conn->client_fd_ << ")"
-                  << "on server " << config_.server_name_ << "on port "
+                  << "on server " << config_.server_names_[0] << "on port "
                   << config_.port_ << std::endl;
         handle_error(conn);
         return;
@@ -217,7 +217,7 @@ bool Server::setup_listener_socket() {
     if (listener_fd_ < 0) {
         // Handle error
         std::cerr << "Failed to create listener socket for server "
-                  << config_.server_name_ << "on port " << config_.port_
+                  << config_.server_names_[0] << "on port " << config_.port_
                   << std::endl;
         return false;
     }
@@ -229,7 +229,7 @@ bool Server::setup_listener_socket() {
         0) {
         // Handle error
         std::cerr << "Failed to set socket options for server "
-                  << config_.server_name_ << "on port " << config_.port_
+                  << config_.server_names_[0] << "on port " << config_.port_
                   << std::endl;
         close(listener_fd_);
         return false;
@@ -238,22 +238,28 @@ bool Server::setup_listener_socket() {
     if (!set_non_blocking(listener_fd_)) {
         // Handle error
         std::cerr << "Failed to set non-blocking mode for listener socket "
-                  << "for server " << config_.server_name_ << "on port "
+                  << "for server " << config_.server_names_[0] << "on port "
                   << config_.port_ << std::endl;
         close(listener_fd_);
         return false;
     }
 
+    // TODO - allow Virtual Hosting (bind to multiple hostnames)
     // Bind to the specified port
     struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(config_.port_);
+    if (config_.host_ == "0.0.0.0") {
+        addr.sin_addr.s_addr = INADDR_ANY;
+    } else {
+        addr.sin_addr.s_addr = inet_addr(config_.host_.c_str());
+    }
 
     if (bind(listener_fd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         // Handle error
         std::cerr << "Failed to bind listener socket for server "
-                  << config_.server_name_ << "on port " << config_.port_
+                  << config_.server_names_[0] << "on port " << config_.port_
                   << std::endl;
         close(listener_fd_);
         return false;
@@ -263,7 +269,7 @@ bool Server::setup_listener_socket() {
     if (listen(listener_fd_, SOMAXCONN) < 0) {
         // Handle error
         std::cerr << "Failed to listen on socket for server "
-                  << config_.server_name_ << "on port " << config_.port_
+                  << config_.server_names_[0] << "on port " << config_.port_
                   << std::endl;
         close(listener_fd_);
         return false;
@@ -277,7 +283,7 @@ bool Server::set_non_blocking(int fd) {
     if (flags == -1) {
         // Handle error
         std::cerr << "Failed to get flags for socket (fd: " << fd << ")"
-                  << "on server " << config_.server_name_ << "on port "
+                  << "on server " << config_.server_names_[0] << "on port "
                   << config_.port_ << std::endl;
         return false;
     }
@@ -287,8 +293,8 @@ bool Server::set_non_blocking(int fd) {
     if (fcntl(fd, F_SETFL, flags) == -1) {
         // Handle error
         std::cerr << "Failed to set non-blocking mode for socket (fd: " << fd
-                  << ")" << "on server " << config_.server_name_ << "on port "
-                  << config_.port_ << std::endl;
+                  << ")" << "on server " << config_.server_names_[0]
+                  << "on port " << config_.port_ << std::endl;
         return false;
     }
 
@@ -303,7 +309,7 @@ bool Server::set_socket_mode(int fd, uint32_t mode) {
     if (epoll_ctl(manager_->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) < 0) {
         // Handle error
         std::cerr << "Failed to set socket mode for fd: " << fd << "on server "
-                  << config_.server_name_ << "on port " << config_.port_
+                  << config_.server_names_[0] << "on port " << config_.port_
                   << std::endl;
         return false;
     }
