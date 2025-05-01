@@ -4,11 +4,11 @@
 #include "webserv.hpp"
 
 // Forward declarations
-class Connection;
+struct Connection;
 struct ServerConfig;
 
 // Manages the lifecycle of active Connection objects.
-class ConnectionManager {
+struct ConnectionManager {
    public:
     explicit ConnectionManager(const ServerConfig& config);
     ~ConnectionManager();  // Deletes all managed Connection objects
@@ -48,6 +48,6 @@ class ConnectionManager {
     ConnectionManager(const ConnectionManager&);
     ConnectionManager& operator=(const ConnectionManager&);
 
-};  // class ConnectionManager
+};  // struct ConnectionManager
 
 #endif  // CONNECTIONMANAGER_HPP

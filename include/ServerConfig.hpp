@@ -6,7 +6,7 @@
 class ServerBlock;
 class RouteConfig;
 
-class ServerConfig {
+struct ServerConfig {
    public:
     // Configuration Members
     unsigned short port_;

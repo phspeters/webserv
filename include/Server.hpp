@@ -5,12 +5,12 @@
 
 // Forward declarations of owned components and used types
 class CgiHandler;
-class Connection;
-class ConnectionManager;
+struct Connection;
+struct ConnectionManager;
 class RequestParser;
 class ResponseWriter;
 class Router;
-class ServerConfig;
+struct ServerConfig;
 class ServerManager;
 class StaticFileHandler;
 // Add other handlers...

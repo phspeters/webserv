@@ -596,6 +596,8 @@ bool ServerConfig::load_from_file(const std::string& filename) {
         std::cerr << "Error: Failed to open config file: " << filename << std::endl;
         return false;
     }
+	//TEMP
+	return true;
 
     servers_.clear();
     std::string line;

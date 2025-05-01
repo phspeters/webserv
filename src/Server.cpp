@@ -83,6 +83,19 @@ void Server::accept_new_connection(int epoll_fd,
         return;
     }
 
+	// Register with epoll
+	struct epoll_event event;
+	event.events = EPOLLIN;
+	event.data.fd = client_fd;
+	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event)) {
+		// Handle error
+		std::cerr << "Failed to register client socket (fd: " << client_fd
+				  << ")" << "on server " << config_.server_name_ << "on port "
+				  << config_.port_ << std::endl;
+		close(client_fd);
+		return;
+	}
+	
     // Create connection
     Connection* conn = conn_manager_->create_connection(client_fd);
     if (!conn) {
@@ -93,18 +106,6 @@ void Server::accept_new_connection(int epoll_fd,
         close(client_fd);
     }
 
-    // Register with epoll
-    struct epoll_event event;
-    event.events = EPOLLIN;
-    event.data.fd = client_fd;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event)) {
-        // Handle error
-        std::cerr << "Failed to register client socket (fd: " << client_fd
-                  << ")" << "on server " << config_.server_name_ << "on port "
-                  << config_.port_ << std::endl;
-        close(client_fd);
-        return;
-    }
 
     // Add to ServerManager's map
     fd_map[client_fd] = this;

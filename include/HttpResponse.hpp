@@ -53,7 +53,7 @@ class HttpResponse {
 
     // Method to generate the full status line + headers string (implementation
     // in .cpp)
-    std::string get_headersS_sring() const;
+    std::string get_headers_sring() const;
 
     // Method to generate the status line only (implementation in .cpp)
     std::string get_status_line() const;

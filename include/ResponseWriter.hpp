@@ -4,7 +4,7 @@
 #include "webserv.hpp"
 
 // Forward declarations
-class Connection;
+struct Connection;
 class HttpResponse;
 struct ServerConfig;
 

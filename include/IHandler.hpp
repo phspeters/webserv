@@ -4,7 +4,7 @@
 #include "webserv.hpp"
 
 // Forward declaration
-class Connection;
+struct Connection;
 
 // Abstract base class for all request handlers.
 class IHandler {

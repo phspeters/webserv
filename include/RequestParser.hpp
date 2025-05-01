@@ -4,8 +4,8 @@
 #include "webserv.hpp"
 
 // Forward declarations
-class Connection;
-struct HttpRequest;
+struct Connection;
+class HttpRequest;
 struct ServerConfig;
 
 #define CRLF "\r\n"  // Carriage return + line feed

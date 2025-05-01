@@ -17,39 +17,39 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Print a summary of the loaded configuration
-    std::cout << "Configuration loaded successfully from: " << config_file
-              << std::endl;
-    std::cout << "Server count: " << serverConfig.servers_.size() << std::endl;
+    //// Print a summary of the loaded configuration
+    //std::cout << "Configuration loaded successfully from: " << config_file
+    //          << std::endl;
+    //std::cout << "Server count: " << serverConfig.servers_.size() << std::endl;
 
-    for (size_t i = 0; i < serverConfig.servers_.size(); ++i) {
-        const ServerBlock& server = serverConfig.servers_[i];
-        std::cout << "Server " << i + 1 << ":" << std::endl;
-        std::cout << "  Host: " << server.host_ << std::endl;
-        std::cout << "  Port: " << server.port_ << std::endl;
-        std::cout << "  Max Body Size: " << server.max_body_size_ << " bytes"
-                  << std::endl;
+    //for (size_t i = 0; i < serverConfig.servers_.size(); ++i) {
+    //    const ServerBlock& server = serverConfig.servers_[i];
+    //    std::cout << "Server " << i + 1 << ":" << std::endl;
+    //    std::cout << "  Host: " << server.host_ << std::endl;
+    //    std::cout << "  Port: " << server.port_ << std::endl;
+    //    std::cout << "  Max Body Size: " << server.max_body_size_ << " bytes"
+    //              << std::endl;
 
-        for (size_t j = 0; j < server.routes_.size(); ++j) {
-            const RouteConfig& route = server.routes_[j];
-            std::cout << "  Route " << j + 1 << ":" << std::endl;
-            std::cout << "    Path: " << route.path_ << std::endl;
-            std::cout << "    Root: " << route.root_ << std::endl;
-            std::cout << "    Index File: " << route.index_file_ << std::endl;
-            std::cout << "    Directory Listing: "
-                      << (route.directory_listing_ ? "Enabled" : "Disabled")
-                      << std::endl;
-            std::cout << "    Allowed Methods: ";
-            for (std::vector<std::string>::const_iterator it =
-                     route.allowed_methods_.begin();
-                 it != route.allowed_methods_.end(); ++it) {
-                std::cout << *it << " ";
-            }
-            std::cout << std::endl;
-        }
-    }
+    //    for (size_t j = 0; j < server.routes_.size(); ++j) {
+    //        const RouteConfig& route = server.routes_[j];
+    //        std::cout << "  Route " << j + 1 << ":" << std::endl;
+    //        std::cout << "    Path: " << route.path_ << std::endl;
+    //        std::cout << "    Root: " << route.root_ << std::endl;
+    //        std::cout << "    Index File: " << route.index_file_ << std::endl;
+    //        std::cout << "    Directory Listing: "
+    //                  << (route.directory_listing_ ? "Enabled" : "Disabled")
+    //                  << std::endl;
+    //        std::cout << "    Allowed Methods: ";
+    //        for (std::vector<std::string>::const_iterator it =
+    //                 route.allowed_methods_.begin();
+    //             it != route.allowed_methods_.end(); ++it) {
+    //            std::cout << *it << " ";
+    //        }
+    //        std::cout << std::endl;
+    //    }
+    //}
 
-    std::cout << std::endl;
+    //std::cout << std::endl;
 
     ServerManager serverManager;
     if (!serverManager.init()) {

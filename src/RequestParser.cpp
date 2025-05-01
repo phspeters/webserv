@@ -55,7 +55,7 @@ RequestParser::ParseResult RequestParser::parse_request_line(Connection* conn) {
 
     // Find the end of the request line (CRLF)
     std::vector<char>::iterator line_end =
-        std::search(buffer.begin(), buffer.end(), CRLF, CRLF + 2);
+        std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
 
     if (line_end == buffer.end()) {
         // Not enough data yet
@@ -113,7 +113,7 @@ RequestParser::ParseResult RequestParser::parse_headers(Connection* conn) {
     while (true) {
         // Find the end of the current header line
         std::vector<char>::iterator line_end =
-            std::search(buffer.begin(), buffer.end(), CRLF, CRLF + 2);
+            std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
 
         if (line_end == buffer.end()) {
             // Need more data
@@ -233,7 +233,7 @@ RequestParser::ParseResult RequestParser::parse_chunked_body(Connection* conn) {
         if (chunkRemaining_ == 0) {
             // Need to read a new chunk size
             std::vector<char>::iterator line_end =
-                std::search(buffer.begin(), buffer.end(), CRLF, CRLF + 2);
+                std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
 
             if (line_end == buffer.end()) {
                 return PARSE_INCOMPLETE;  // Need more data
@@ -266,7 +266,7 @@ RequestParser::ParseResult RequestParser::parse_chunked_body(Connection* conn) {
             if (chunkRemaining_ == 0) {
                 // Look for the final CRLF
                 std::vector<char>::iterator final_crlf =
-                    std::search(buffer.begin(), buffer.end(), CRLF, CRLF + 2);
+                    std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
 
                 if (final_crlf == buffer.end()) {
                     return PARSE_INCOMPLETE;
