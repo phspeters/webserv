@@ -324,25 +324,8 @@ bool ServerConfig::parse_error_page_directive(ServerBlock& server, const std::st
             std::cerr << "Error: Missing path in error_page directive: " << value << std::endl;
             return false;
         }
-}
 
-// Process a server-level directive
-bool ServerConfig::process_server_directive(ServerBlock& server,
-                                            const std::string& key,
-                                            const std::string& value) {
-    if (key == "listen") {
-        return parse_listen_directive(server, value);
-    } else if (key == "server_name") {
-        parse_server_name_directive(server, value);
-        return true;
-    } else if (key == "client_max_body_size") {
-        return parse_max_body_size_directive(server, value);
-    } else if (key == "error_page") {
-        return parse_error_page_directive(server, value);
-    } else {
-        std::cerr << "Warning: Unknown server directive '" << key << "' found. Ignoring." << std::endl;
-        return true;  // Not fatal
-    }
+    return true;
 }
 
 // Check if a location block has a valid path
@@ -623,7 +606,6 @@ bool ServerConfig::load_from_file(const std::string& filename) {
             size_t first_char = line.find_first_not_of(" \t");
 
             if (server_pos != std::string::npos && server_pos == first_char) {
-                size_t brace_pos;
                 if (!parse_server_block(config_file)) {
                     servers_.clear();
                     return false;
@@ -694,7 +676,6 @@ const ServerBlock* ServerConfig::find_server_block(
     const std::string& listen_host, unsigned short listen_port,
     const std::string& host_header) const {
     const ServerBlock* default_server_for_port = NULL;
-    const ServerBlock* named_match = NULL;
 
     for (size_t i = 0; i < servers_.size(); ++i) {
         const ServerBlock& server = servers_[i];
