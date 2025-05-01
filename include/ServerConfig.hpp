@@ -86,8 +86,8 @@ class ServerConfig {
 
     // Location Block Helpers
     bool validate_location_path(const std::string& line, std::string& path);
-    bool find_location_opening_brace(std::istream& config_file, const std::string& line, size_t& brace_pos);
-
+    bool find_opening_brace(std::istream& config_file, std::string& current_line, size_t& brace_pos, const std::string& context_label)
+    
     // Post-Parsing / Finalization Helpers                                 
     bool handle_empty_server_config(const std::string& filename);
     void update_config_from_first_server();
