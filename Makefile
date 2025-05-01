@@ -10,9 +10,7 @@ FILES = main.cpp \
 		ConnectionManager.cpp \
 		HttpRequest.cpp \
 		RequestParser.cpp \
-		RouteConfig.cpp \
 		Server.cpp \
-		ServerBlock.cpp \
 		ServerConfig.cpp \
 		ServerManager.cpp
 		
