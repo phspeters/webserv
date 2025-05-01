@@ -707,8 +707,7 @@ const ServerBlock* ServerConfig::find_server_block(
         // Check if the server is listening on the correct host/IP address
         // Note: "0.0.0.0" should match any incoming address. 
         // '*' might also be used.
-        if (server.host_ != "0.0.0.0" && server.host_ != "*" &&
-            server.host_ != listen_host) {
+        if (server.host_ != "0.0.0.0" && server.host_ != "*" && server.host_ != listen_host) {
             continue;
         }
 
@@ -722,20 +721,12 @@ const ServerBlock* ServerConfig::find_server_block(
         // Check if server_name matches the Host header
         if (!host_header.empty()) {
             for (size_t j = 0; j < server.server_names_.size(); ++j) {
-                // Simple exact match for now. Add wildcard/regex support if needed.
                 if (server.server_names_[j] == host_header) {
-                    named_match = &server;
-                    goto found_match;  // Found the best possible match
+                    return &server;
                 }
             }
         }
     }
-
-found_match:
-    if (named_match) {
-        return named_match;  // Return specific server_name match
-    }
-    // Otherwise, return the first server that matched the listen address:port
     return default_server_for_port;
 }
 
