@@ -49,56 +49,51 @@ class ServerConfig {
 
    private:
     // --- Private Helper Methods ---
+
+    // Initialization Helpers
     void set_default_mime_types();
     void set_default_cgi_handlers();
     void set_default_server_block();
 
-    // Parsing Helpers
+    // String/File Helpers 
     std::string get_file_extension(const std::string& filename) const;
-    void parse_line(const std::string& line,
-                    std::map<std::string, std::string>& configMap);
     bool skip_empty_and_comment_lines(std::istream& stream, std::string& line);
-    bool parse_server_block(std::istream& config_file);
-    bool parse_location_block(std::istream& config_file, RouteConfig& route);
     std::string trim_string(const std::string& str);
-    void handle_cgi_ext_directive(
-        std::map<std::string, std::string>& directives,
-        const std::string& line);
-    void handle_key_only_directive(
-        std::map<std::string, std::string>& directives,
-        const std::string& trimmed_line, size_t first_char);
-    void handle_key_value_directive(
-        std::map<std::string, std::string>& directives,
-        const std::string& trimmed_line, size_t first_char, size_t first_space);
+
+    // Line Parsing Helpers
+    void parse_line(const std::string& line, std::map<std::string, std::string>& directives);
+    void handle_cgi_ext_directive(std::map<std::string, std::string>& directives, const std::string& line);
+    void handle_key_only_directive(std::map<std::string, std::string>& directives, const std::string& trimmed_line, size_t first_char);
+    void handle_key_value_directive(std::map<std::string, std::string>& directives, const std::string& trimmed_line, size_t first_char, size_t first_space);
+
+    // --- Directive Parsing ---
+    // Server Level
     bool parse_listen_directive(ServerBlock& server, const std::string& value);
-    void parse_server_name_directive(ServerBlock& server,
-                                     const std::string& value);
-    bool parse_max_body_size_directive(ServerBlock& server,
-                                       const std::string& value);
-    bool parse_error_page_directive(ServerBlock& server,
-                                    const std::string& value);
-    bool process_server_directive(ServerBlock& server, const std::string& key,
-                                  const std::string& value);
-    bool validate_location_path(const std::string& line, std::string& path);
-    bool find_location_opening_brace(std::istream& config_file,
-                                     const std::string& line,
-                                     size_t& brace_pos);
-    void parse_root_directive(RouteConfig& route, const std::string& value);
-    void parse_index_directive(RouteConfig& route, const std::string& value);
-    void parse_autoindex_directive(RouteConfig& route,
-                                   const std::string& value);
+    void parse_server_name_directive(ServerBlock& server, const std::string& value);
+    bool parse_max_body_size_directive(ServerBlock& server, const std::string& value);
+    bool parse_error_page_directive(ServerBlock& server, const std::string& value);
+    // Location Level
     bool parse_return_directive(RouteConfig& route, const std::string& value);
     void parse_methods_directive(RouteConfig& route, const std::string& value);
-    void parse_cgi_directive(RouteConfig& route, const std::string& key,
-                             const std::string& value);
-    void parse_upload_directive(RouteConfig& route, const std::string& key,
-                                const std::string& value);
-    bool process_location_directive(RouteConfig& route, const std::string& key,
-                                    const std::string& value);
+    
+    // --- Directive Processors ---
+    bool process_server_directive(ServerBlock& server, const std::string& key, const std::string& value);
+    bool process_location_directive(RouteConfig& route, const std::string& key, const std::string& value);
+
+    // Block Parsing
+    bool parse_server_block(std::istream& config_file);
+    bool parse_location_block(std::istream& config_file, RouteConfig& route);
+
+    // Location Block Helpers
+    bool validate_location_path(const std::string& line, std::string& path);
+    bool find_location_opening_brace(std::istream& config_file, const std::string& line, size_t& brace_pos);
+
+    // Post-Parsing / Finalization Helpers                                 
     bool handle_empty_server_config(const std::string& filename);
     void update_config_from_first_server();
-    bool is_route_match(const RouteConfig& route,
-                        const std::string& path) const;
+
+    // Matching Logic Helpers 
+    bool is_route_match(const RouteConfig& route, const std::string& path) const;
 };
 
 #endif  // SERVERCONFIG_HPP

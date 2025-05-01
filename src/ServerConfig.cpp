@@ -23,8 +23,8 @@ void ServerConfig::set_default_server_block() {
     defaultRoute.path_ = "/";
     defaultRoute.root_ = this->server_root_;
     defaultRoute.index_file_ = this->default_index_;
+    defaultRoute.allowed_methods_.push_back("POST");
     defaultRoute.allowed_methods_.push_back("GET");
-    defaultRoute.allowed_methods_.push_back("HEAD");
 
     defaultServer.routes_.push_back(defaultRoute);
     servers_.push_back(defaultServer);  // Add this default server
@@ -201,9 +201,8 @@ void ServerConfig::handle_key_value_directive(
     directives[key] = value;
 }
 
-// Parse a single line into key-value pairs (refactored)
-void ServerConfig::parse_line(const std::string& line,
-                              std::map<std::string, std::string>& directives) {
+// Parse a single line into key-value pairs 
+void ServerConfig::parse_line(const std::string& line, std::map<std::string, std::string>& directives) {
     std::string trimmed_line = line;
     size_t comment_pos = trimmed_line.find('#');
     if (comment_pos != std::string::npos) {
@@ -228,20 +227,17 @@ void ServerConfig::parse_line(const std::string& line,
     }
 
     // Handle standard key-value directive
-    handle_key_value_directive(directives, trimmed_line, first_char,
-                               first_space);
+    handle_key_value_directive(directives, trimmed_line, first_char, first_space);
 }
 
 // Parse listen directive for server block
-bool ServerConfig::parse_listen_directive(ServerBlock& server,
-                                          const std::string& value) {
+bool ServerConfig::parse_listen_directive(ServerBlock& server, const std::string& value) {
     size_t colon_pos = value.find(':');
     if (colon_pos != std::string::npos) {
         server.host_ = value.substr(0, colon_pos);
         std::istringstream ss(value.substr(colon_pos + 1));
         if (!(ss >> server.port_)) {
-            std::cerr << "Error: Invalid port number in listen directive: "
-                      << value << std::endl;
+            std::cerr << "Error: Invalid port number in listen directive: " << value << std::endl;
             return false;
         }
     } else {
@@ -256,8 +252,7 @@ bool ServerConfig::parse_listen_directive(ServerBlock& server,
         if (is_numeric_port) {
             std::istringstream ss(value);
             if (!(ss >> server.port_)) {
-                std::cerr << "Error: Invalid port number in listen directive: "
-                          << value << std::endl;
+                std::cerr << "Error: Invalid port number in listen directive: " << value << std::endl;
                 return false;
             }
             // Keep default host
@@ -270,8 +265,7 @@ bool ServerConfig::parse_listen_directive(ServerBlock& server,
 }
 
 // Parse server_name directive
-void ServerConfig::parse_server_name_directive(ServerBlock& server,
-                                               const std::string& value) {
+void ServerConfig::parse_server_name_directive(ServerBlock& server, const std::string& value) {
     std::istringstream ss(value);
     std::string name;
     while (ss >> name) {
@@ -282,8 +276,7 @@ void ServerConfig::parse_server_name_directive(ServerBlock& server,
 }
 
 // Parse client_max_body_size directive
-bool ServerConfig::parse_max_body_size_directive(ServerBlock& server,
-                                                 const std::string& value) {
+bool ServerConfig::parse_max_body_size_directive(ServerBlock& server, const std::string& value) {
     size_t size_val = 0;
     std::string size_str = value;
     char unit = ' ';
@@ -297,8 +290,7 @@ bool ServerConfig::parse_max_body_size_directive(ServerBlock& server,
     }
     std::istringstream ss(size_str);
     if (!(ss >> size_val)) {
-        std::cerr << "Error: Invalid value for client_max_body_size: " << value
-                  << std::endl;
+        std::cerr << "Error: Invalid value for client_max_body_size: " << value << std::endl;
         return false;
     }
 
@@ -313,29 +305,25 @@ bool ServerConfig::parse_max_body_size_directive(ServerBlock& server,
 }
 
 // Parse error_page directive
-bool ServerConfig::parse_error_page_directive(ServerBlock& server,
-                                              const std::string& value) {
+bool ServerConfig::parse_error_page_directive(ServerBlock& server, const std::string& value) {
     std::istringstream ss(value);
     int code;
-    std::string page_path;
     if (!(ss >> code)) {
-        std::cerr << "Error: Invalid status code in error_page directive: "
-                  << value << std::endl;
+        std::cerr << "Error: Invalid status code in error_page directive: " << value << std::endl;
         return false;
     }
-    // The rest of the line is the path
-    size_t path_start = value.find_first_not_of(
-        " \t", ss.tellg() == std::streampos(-1) ? 0 : (size_t)ss.tellg());
 
-    if (path_start != std::string::npos) {
-        page_path = value.substr(path_start);
-        server.error_pages_[code] = page_path;
-        return true;
-    } else {
-        std::cerr << "Error: Missing path in error_page directive: " << value
-                  << std::endl;
-        return false;
-    }
+    // The rest of the line is the path
+    std::string page_path;
+    std::getline(ss, page_path);
+        page_path = trim_string(page_path);
+        
+        if (!page_path.empty()) {
+            server.error_pages_[code] = page_path;
+        } else {
+            std::cerr << "Error: Missing path in error_page directive: " << value << std::endl;
+            return false;
+        }
 }
 
 // Process a server-level directive
@@ -352,8 +340,7 @@ bool ServerConfig::process_server_directive(ServerBlock& server,
     } else if (key == "error_page") {
         return parse_error_page_directive(server, value);
     } else {
-        std::cerr << "Warning: Unknown server directive '" << key
-                  << "' found. Ignoring." << std::endl;
+        std::cerr << "Warning: Unknown server directive '" << key << "' found. Ignoring." << std::endl;
         return true;  // Not fatal
     }
 }
@@ -385,53 +372,30 @@ bool ServerConfig::validate_location_path(const std::string& line,
 }
 
 // Find opening brace for location block
-bool ServerConfig::find_location_opening_brace(std::istream& config_file,
-                                               const std::string& line,
-                                               size_t& brace_pos) {
-    std::string current_line = line;
+bool ServerConfig::find_opening_brace(std::istream& config_file,
+                                      std::string& current_line,
+                                      size_t& brace_pos,
+                                      const std::string& context_label) {
     brace_pos = current_line.find('{');
 
     if (brace_pos == std::string::npos) {
         if (!skip_empty_and_comment_lines(config_file, current_line)) {
-            std::cerr << "Error: Expected '{' after location path, but reached "
-                         "end of file."
-                      << std::endl;
+            std::cerr << "Error: Expected '{' after " << context_label
+                      << ", but reached end of file." << std::endl;
             return false;
         }
         brace_pos = current_line.find('{');
     }
 
     if (brace_pos == std::string::npos) {
-        std::cerr << "Error: Expected '{' to start location block, found: "
-                  << current_line << std::endl;
+        std::cerr << "Error: Expected '{' to start " << context_label
+                  << " block, found: " << current_line << std::endl;
         return false;
     }
 
     return true;
 }
 
-// Parse root directive in location block
-void ServerConfig::parse_root_directive(RouteConfig& route,
-                                        const std::string& value) {
-    route.root_ = value;
-}
-
-// Parse index directive in location block
-void ServerConfig::parse_index_directive(RouteConfig& route,
-                                         const std::string& value) {
-    std::istringstream ss(value);
-    std::string index;
-    ss >> index;  // Just take the first one for now
-    if (!index.empty()) {
-        route.index_file_ = index;
-    }
-}
-
-// Parse autoindex directive in location block
-void ServerConfig::parse_autoindex_directive(RouteConfig& route,
-                                             const std::string& value) {
-    route.directory_listing_ = (value == "on");
-}
 
 // Parse return (redirect) directive in location block
 bool ServerConfig::parse_return_directive(RouteConfig& route,
@@ -446,16 +410,14 @@ bool ServerConfig::parse_return_directive(RouteConfig& route,
         if (url_start != std::string::npos) {
             url = value.substr(url_start);
         } else {
-            std::cerr << "Error: Missing URL in return directive for location '"
-                      << route.path_ << "'" << std::endl;
+            std::cerr << "Error: Missing URL in return directive for location '" << route.path_ << "'" << std::endl;
             return false;
         }
         route.redirect_code_ = code;
         route.redirect_url_ = url;
         return true;
     } else {
-        std::cerr << "Error: Invalid code in return directive for location '"
-                  << route.path_ << "'" << std::endl;
+        std::cerr << "Error: Invalid code in return directive for location '" << route.path_ << "'" << std::endl;
         return false;
     }
 }
@@ -474,57 +436,62 @@ void ServerConfig::parse_methods_directive(RouteConfig& route,
     // Optional: Validate methods (GET, POST, PUT, DELETE, HEAD, etc.)
 }
 
-// Parse CGI directives in location block
-void ServerConfig::parse_cgi_directive(RouteConfig& route,
-                                       const std::string& key,
-                                       const std::string& value) {
-    if (key == "cgi_pass" || key == "fastcgi_pass") {
-        route.cgi_handler_ = value;
+// Process a server-level directive 
+bool ServerConfig::process_server_directive(ServerBlock& server, const std::string& key, const std::string& value) {
+    if (key == "listen") {
+        return parse_listen_directive(server, value); 
+    } else if (key == "server_name") {
+        parse_server_name_directive(server, value); 
+        return true;
+    } else if (key == "client_max_body_size") {
+        return parse_max_body_size_directive(server, value); 
+    } else if (key == "error_page") {
+        return parse_error_page_directive(server, value); 
+    }
+    else {
+        std::cerr << "Warning: Unknown server directive '" << key << "' found. Ignoring." << std::endl;
+        return true; // Treat unknown directives as non-fatal warnings
+    }
+}
+
+// Process a location-level directive 
+bool ServerConfig::process_location_directive(RouteConfig& route, const std::string& key, const std::string& value) {
+    if (key == "root") {
+        route.root_ = value; 
+    } else if (key == "index") {
+        std::istringstream ss(value);
+        std::string index_file;
+        if (ss >> index_file && !index_file.empty()) {
+            route.index_file_ = index_file;
+        } else {
+             std::cerr << "Warning: Empty or invalid index directive value in location '" << route.path_ << "'" << std::endl;
+        }
+    } else if (key == "autoindex") {
+        route.directory_listing_ = (value == "on"); // Inline boolean conversion
+    } else if (key == "cgi_pass" || key == "fastcgi_pass") {
+        route.cgi_handler_ = value; 
     } else if (key == "cgi_extension") {
         route.cgi_extension_ = value;
+        if (!route.cgi_extension_.empty() && route.cgi_extension_[0] != '.') {
+            route.cgi_extension_ = "." + route.cgi_extension_;
+        }
+    } else if (key == "upload_enable" || key == "accept_uploads") {
+         route.uploads_enabled_ = (value == "on" || value == "true" || value == "yes" || value == "1"); // Inline boolean conversion
+    } else if (key == "upload_store" || key == "upload_dir" || key == "upload_path") {
+         route.upload_dir_ = value; 
     }
-}
-
-// Parse upload directives in location block
-void ServerConfig::parse_upload_directive(RouteConfig& route,
-                                          const std::string& key,
-                                          const std::string& value) {
-    if (key == "upload_enable" || key == "accept_uploads") {
-        route.uploads_enabled_ = (value == "on" || value == "true" ||
-                                  value == "yes" || value == "1");
-    } else if (key == "upload_store" || key == "upload_dir" ||
-               key == "upload_path") {
-        route.upload_dir_ = value;
-    }
-}
-
-// Process a location-level directive
-bool ServerConfig::process_location_directive(RouteConfig& route,
-                                              const std::string& key,
-                                              const std::string& value) {
-    if (key == "root") {
-        parse_root_directive(route, value);
-    } else if (key == "index") {
-        parse_index_directive(route, value);
-    } else if (key == "autoindex") {
-        parse_autoindex_directive(route, value);
-    } else if (key == "return") {
-        return parse_return_directive(route, value);
+    // --- Handle complex directives via specific parsers ---
+    else if (key == "return") {
+        return parse_return_directive(route, value); 
     } else if (key == "allow_methods" || key == "limit_except") {
-        parse_methods_directive(route, value);
-    } else if (key == "cgi_pass" || key == "fastcgi_pass" ||
-               key == "cgi_extension") {
-        parse_cgi_directive(route, key, value);
-    } else if (key == "upload_enable" || key == "accept_uploads" ||
-               key == "upload_store" || key == "upload_dir" ||
-               key == "upload_path") {
-        parse_upload_directive(route, key, value);
-    } else {
-        std::cerr << "Warning: Unknown location directive '" << key
-                  << "' in location '" << route.path_ << "'. Ignoring."
-                  << std::endl;
+        parse_methods_directive(route, value); 
     }
-    return true;
+    // --- Handle unknown directives ---
+    else {
+        std::cerr << "Warning: Unknown location directive '" << key << "' in location '" << route.path_ << "'. Ignoring." << std::endl;
+    }
+
+    return true; // Assume success unless a complex parser returns false
 }
 
 // Parse a location block (expects stream position after '{')
@@ -571,10 +538,14 @@ bool ServerConfig::parse_location_block(std::istream& config_file,
 
 // Parse a server block (expects the stream position after '{')
 bool ServerConfig::parse_server_block(std::istream& config_file) {
-    ServerBlock
-        current_server;  // Uses ServerBlock constructor defaults initially
+    ServerBlock current_server;  // Uses ServerBlock constructor defaults initially
     std::string line;
     std::map<std::string, std::string> directives;
+
+    size_t brace_pos;
+    if (!find_opening_brace(config_file, line, brace_pos, "server block")) {
+        return false;
+    }
 
     while (skip_empty_and_comment_lines(config_file, line)) {
         if (line.find('}') != std::string::npos) {
@@ -596,7 +567,7 @@ bool ServerConfig::parse_server_block(std::istream& config_file) {
 
             // Find opening brace '{'
             size_t brace_pos;
-            if (!find_location_opening_brace(config_file, line, brace_pos)) {
+            if (!find_opening_brace(config_file, line, brace_pos, "location path")) {
                 return false;
             }
 
@@ -639,57 +610,33 @@ bool ServerConfig::parse_server_block(std::istream& config_file) {
 bool ServerConfig::load_from_file(const std::string& filename) {
     std::ifstream config_file(filename.c_str());
     if (!config_file.is_open()) {
-        std::cerr << "Error: Failed to open config file: " << filename
-                  << std::endl;
+        std::cerr << "Error: Failed to open config file: " << filename << std::endl;
         return false;
     }
 
-    servers_.clear();  // Clear any existing server blocks
-
+    servers_.clear();
     std::string line;
+
     try {
         while (skip_empty_and_comment_lines(config_file, line)) {
-            // Expect 'server {' directive
             size_t server_pos = line.find("server");
-            size_t brace_pos = line.find('{');
+            size_t first_char = line.find_first_not_of(" \t");
 
-            // Allow "server" and "{" on same or separate lines
-            if (server_pos != std::string::npos &&
-                server_pos == line.find_first_not_of(" \t")) {
-                if (brace_pos == std::string::npos) {
-                    if (!skip_empty_and_comment_lines(config_file, line)) {
-                        std::cerr << "Error: Expected '{' after 'server' "
-                                     "directive, but reached end of file."
-                                  << std::endl;
-                        servers_.clear();
-                        return false;  // Parsing error
-                    }
-                    brace_pos = line.find('{');
-                }
-
-                if (brace_pos != std::string::npos) {
-                    if (!parse_server_block(config_file)) {
-                        servers_.clear();
-                        return false;  // Propagate parsing error
-                    }
-                } else {
-                    std::cerr << "Error: Expected '{' after 'server' "
-                                 "directive, found: "
-                              << line << std::endl;
+            if (server_pos != std::string::npos && server_pos == first_char) {
+                size_t brace_pos;
+                if (!parse_server_block(config_file)) {
                     servers_.clear();
-                    return false;  // Parsing error
+                    return false;
                 }
             } else {
-                std::cerr << "Error: Expected 'server' directive at top level, "
-                             "found: "
-                          << line << std::endl;
+                std::cerr << "Error: Expected 'server' directive at top level, found: " << line << std::endl;
                 servers_.clear();
-                return false;  // Parsing error
+                return false;
             }
         }
     } catch (const std::exception& e) {
         std::cerr << "Error parsing config file: " << e.what() << std::endl;
-        servers_.clear();  // Clear partially parsed data on error
+        servers_.clear();
         return false;
     }
 
@@ -702,12 +649,9 @@ bool ServerConfig::handle_empty_server_config(const std::string& filename) {
     if (servers_.empty()) {
         std::cerr << "Warning: No server blocks defined in config file: "
                   << filename << ". Using default server." << std::endl;
-        // Re-add the default server configuration if parsing finished but found
-        // nothing
         ServerConfig default_config;  // Create a temporary default config
         servers_ = default_config.servers_;  // Copy its default server setup
-        // We *don't* return false here, as the file was read, just
-        // empty/invalid structure.
+        // We don't return false here, as the file was read, just empty/invalid structure.
     }
 
     // Update ServerConfig members from the *first* parsed server block
@@ -761,8 +705,8 @@ const ServerBlock* ServerConfig::find_server_block(
         }
 
         // Check if the server is listening on the correct host/IP address
-        // Note: "0.0.0.0" should match any incoming address. '*' might also be
-        // used.
+        // Note: "0.0.0.0" should match any incoming address. 
+        // '*' might also be used.
         if (server.host_ != "0.0.0.0" && server.host_ != "*" &&
             server.host_ != listen_host) {
             continue;
@@ -778,8 +722,7 @@ const ServerBlock* ServerConfig::find_server_block(
         // Check if server_name matches the Host header
         if (!host_header.empty()) {
             for (size_t j = 0; j < server.server_names_.size(); ++j) {
-                // Simple exact match for now. Add wildcard/regex support if
-                // needed.
+                // Simple exact match for now. Add wildcard/regex support if needed.
                 if (server.server_names_[j] == host_header) {
                     named_match = &server;
                     goto found_match;  // Found the best possible match
