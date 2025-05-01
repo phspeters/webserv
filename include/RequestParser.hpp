@@ -35,6 +35,8 @@ class RequestParser {
         PARSE_SUCCESS,                 // Request fully parsed
         PARSE_INCOMPLETE,              // Need more data
         PARSE_ERROR,                   // General parsing error
+        PARSE_METHOD_NOT_ALLOWED,      // Unsupported HTTP method
+        PARSE_VERSION_NOT_SUPPORTED,   // Unsupported HTTP version
         PARSE_URI_TOO_LONG,            // URI exceeds maximum length
         PARSE_HEADER_TOO_LONG,         // Header exceeds maximum length
         PARSE_TOO_MANY_HEADERS,        // Too many headers
@@ -72,9 +74,12 @@ class RequestParser {
     ParseResult parse_headers(Connection* conn);
     ParseResult parse_body(Connection* conn);
     ParseResult parse_chunked_body(Connection* conn);
-
     size_t
         chunkRemaining_;  // Remaining bytes in the current chunk (if chunked)
+
+	bool validate_method(const std::string& method);
+	bool validate_uri(const std::string& uri);
+	bool validate_http_version(const std::string& version);
 
     // Prevent copying
     RequestParser(const RequestParser&);

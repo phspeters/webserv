@@ -30,6 +30,8 @@ int main(int argc, char* argv[]) {
                   << config_file << std::endl;
         return EXIT_FAILURE;
     }
+	
+	serverManager.run();
 
     return EXIT_SUCCESS;
 }

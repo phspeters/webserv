@@ -33,11 +33,7 @@ RequestParser::ParseResult RequestParser::parse(Connection* conn) {
                 return PARSE_SUCCESS;
         }
 
-        // Check the result of parsing to determine if we should continue
-        if (result == PARSE_SUCCESS) {
-            currentState_ = PARSING_COMPLETE;
-            return PARSE_SUCCESS;
-        } else if (result != PARSE_INCOMPLETE) {
+        if (result != PARSE_INCOMPLETE) {
             // Error occurred
             return result;
         }
@@ -66,36 +62,37 @@ RequestParser::ParseResult RequestParser::parse_request_line(Connection* conn) {
     }
 
     // Get the complete request line
-    std::string line(buffer.begin(), line_end);
+    std::string request_line(buffer.begin(), line_end);
 
     // Parse method, URI, and version
-    size_t first_space = line.find(' ');
-    size_t last_space = line.rfind(' ');
+    size_t first_space = request_line.find(' ');
+    size_t last_space = request_line.rfind(' ');
 
     if (first_space == std::string::npos || last_space == first_space) {
         return PARSE_ERROR;
     }
 
     // Extract components
-    request->method_ = line.substr(0, first_space);
-    request->uri_ = line.substr(first_space + 1, last_space - first_space - 1);
-    request->version_ = line.substr(last_space + 1);
+    request->method_ = request_line.substr(0, first_space);
+    request->uri_ =
+        request_line.substr(first_space + 1, last_space - first_space - 1);
+    request->version_ = request_line.substr(last_space + 1);
 
-    // Validate method
-    if (request->method_ != "GET" && request->method_ != "POST" &&
-        request->method_ != "DELETE" && request->method_ != "PUT" &&
-        request->method_ != "HEAD") {
-        return PARSE_ERROR;
+    // Validate components
+    if (!validate_method(request->method_)) {
+        return PARSE_METHOD_NOT_ALLOWED;
     }
 
-    // Validate HTTP version
-    if (request->version_ != "HTTP/1.0" && request->version_ != "HTTP/1.1") {
-        return PARSE_ERROR;
+    if (!validate_http_version(request->version_)) {
+        return PARSE_VERSION_NOT_SUPPORTED;
     }
 
-    // URI length check
     if (request->uri_.length() > HttpConfig::MAX_URI_LENGTH) {
         return PARSE_URI_TOO_LONG;
+    }
+
+    if (!validate_uri(request->uri_)) {
+        return PARSE_ERROR;
     }
 
     // Remove processed data (including CRLF)
@@ -104,6 +101,45 @@ RequestParser::ParseResult RequestParser::parse_request_line(Connection* conn) {
     // Move to header parsing
     currentState_ = PARSING_HEADERS;
     return PARSE_INCOMPLETE;
+}
+
+bool RequestParser::validate_method(const std::string& method) {
+    static const std::string methods[] = {"GET", "POST", "PUT", "DELETE",
+                                          "HEAD"};
+    static const std::vector<std::string> valid_methods(
+        methods, methods + sizeof(methods) / sizeof(methods[0]));
+
+    return std::find(valid_methods.begin(), valid_methods.end(), method) !=
+           valid_methods.end();
+}
+
+bool RequestParser::validate_uri(const std::string& uri) {
+    // Reject directory traversal
+    if (uri.find("..") != std::string::npos) {
+        return false;
+    }
+
+    // Check for invalid characters
+    for (size_t i = 0; i < uri.length(); i++) {
+        unsigned char c = static_cast<unsigned char>(uri[i]);
+        if (c < 32 || c == 127) return false;
+    }
+
+    // Basic percent-encoding validation
+    size_t pos = 0;
+    while ((pos = uri.find('%', pos)) != std::string::npos) {
+        if (pos + 2 >= uri.length() || !isxdigit(uri[pos + 1]) ||
+            !isxdigit(uri[pos + 2])) {
+            return false;
+        }
+        pos += 3;
+    }
+
+    return true;
+}
+
+bool RequestParser::validate_http_version(const std::string& version) {
+    return version == "HTTP/1.0" || version == "HTTP/1.1";
 }
 
 RequestParser::ParseResult RequestParser::parse_headers(Connection* conn) {
