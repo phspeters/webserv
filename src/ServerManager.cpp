@@ -2,7 +2,7 @@
 
 ServerManager* ServerManager::instance_ = NULL;
 
-ServerManager::ServerManager() : epoll_fd_(-1), running_(false) {
+ServerManager::ServerManager() : epoll_fd_(-1), ready_(false) {
     instance_ = this;
 }
 
@@ -30,7 +30,10 @@ bool ServerManager::init() {
 }
 
 void ServerManager::run() {
-    running_ = true;
+    if (!ready_) {
+        std::cerr << "Exiting..." << std::endl;
+        return;
+    }
 
     // Start the event loop
     std::cout << "ServerManager is ready and waiting for connections"
@@ -38,7 +41,7 @@ void ServerManager::run() {
     event_loop();
 }
 
-void ServerManager::shutdown() { running_ = false; }
+void ServerManager::shutdown() { ready_ = false; }
 
 Server* ServerManager::get_server_by_fd(int fd) const {
     std::map<int, Server*>::const_iterator it = fd_to_server_map_.find(fd);
@@ -60,6 +63,7 @@ bool ServerManager::register_server(Server* server) {
 
     // Add to epoll and our map
     struct epoll_event event;
+    memset(&event, 0, sizeof(event));
     event.events = EPOLLIN;
     event.data.fd = listener_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, listener_fd, &event) < 0) {
@@ -90,7 +94,9 @@ bool ServerManager::parse_config_file(const std::string& filename) {
         line = trim(line);
 
         // Skip empty lines and comments
-        if (line.empty() || line[0] == '#') continue;
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
 
         // Look for server block
         if (line == "server {" ||
@@ -111,25 +117,34 @@ bool ServerManager::parse_config_file(const std::string& filename) {
             }
         }
     }
-    for (std::vector<ServerConfig>::iterator it = configs.begin();
-         it != configs.end(); it++) {
-        // Create and initialize a new server
-        Server* server = new Server(*it, this);
-        if (!server->init()) {
-            // Handle error
-            std::cerr << "Failed to initialize server "
-                      << server->get_server_name() << "on port "
-                      << server->get_port() << std::endl;
-            delete server;
-            return false;
-        }
 
-        if (!register_server(server)) {
-            // Handle error
-            delete server;
-            return false;
+    try {
+        for (std::vector<ServerConfig>::iterator it = configs.begin();
+             it != configs.end(); it++) {
+            // Create and initialize a new server
+            Server* server = new Server(*it, this);
+            if (!server->init()) {
+                // Handle error
+                std::cerr << "Failed to initialize server "
+                          << server->get_server_name() << "on port "
+                          << server->get_port() << std::endl;
+                delete server;
+                return false;
+            }
+
+            if (!register_server(server)) {
+                // Handle error
+                delete server;
+                return false;
+            }
         }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: Failed to create server instances" << std::endl;
+        std::cerr << e.what() << std::endl;
+        return false;
     }
+
+    ready_ = true;
     return !servers_.empty();
 }
 
@@ -175,7 +190,7 @@ void ServerManager::signal_handler(int signal) {
 void ServerManager::event_loop() {
     struct epoll_event events[MAX_EPOLL_EVENTS];
 
-    while (running_) {
+    while (ready_) {
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS, -1);
 
         for (int i = 0; i < ready_events; i++) {
@@ -196,7 +211,7 @@ void ServerManager::event_loop() {
                 std::cout << "New connection on server "
                           << server->get_server_name() << " on port "
                           << server->get_port() << std::endl;
-                server->accept_new_connection(epoll_fd_, fd_to_server_map_);
+                server->accept_new_connection(fd_to_server_map_);
             } else {
                 // Client socket event
                 std::cout << "Client event on server "

@@ -5,7 +5,7 @@
 
 // Forward declarations
 struct Connection;
-class HttpRequest;
+struct HttpRequest;
 struct ServerConfig;
 
 #define CRLF "\r\n"  // Carriage return + line feed
@@ -59,27 +59,42 @@ class RequestParser {
     ~RequestParser();
 
     // Parses data currently in the connection's read buffer.
-    // - Allocates/populates conn->request_data if successful (PARSE_OK).
+    // - Allocates/populates conn->request_data if successful (PARSE_SUCCESS).
     // - Updates conn->read_buffer (removing parsed data).
     // - Returns the result status.
     ParseResult parse(Connection* conn);
 
    private:
-    ParserState currentState_;  // Current state of the parser
-    // Reference to server configuration for limits
+    ParserState current_state_;   // Current state of the parser
     const ServerConfig& config_;  // Reference to server configuration
 
-    // Internal helper methods for different parsing states would go in .cpp
+    // Request line parsing methods
     ParseResult parse_request_line(Connection* conn);
+    ParseResult validate_request_line(const std::string& method,
+                                      const std::string& uri,
+                                      const std::string& version);
+    bool validate_method(const std::string& method);
+    bool validate_uri(const std::string& uri);
+    bool validate_http_version(const std::string& version);
+
+    // Header parsing methods
     ParseResult parse_headers(Connection* conn);
+    ParseResult process_single_header(const std::string& header_line,
+                                      HttpRequest* request);
+    ParseResult determine_request_body_handling(HttpRequest* request);
+
+    // Body parsing methods
     ParseResult parse_body(Connection* conn);
     ParseResult parse_chunked_body(Connection* conn);
-    size_t
-        chunkRemaining_;  // Remaining bytes in the current chunk (if chunked)
+    ParseResult parse_chunk_header(std::vector<char>& buffer,
+                                   size_t& out_chunk_size);
+    ParseResult read_chunk_data(std::vector<char>& buffer, HttpRequest* request,
+                                size_t& chunk_remaining_bytes);
+    ParseResult process_chunk_terminator(std::vector<char>& buffer);
+    ParseResult finish_chunked_parsing(std::vector<char>& buffer);
+    size_t chunk_remaining_bytes_;
 
-	bool validate_method(const std::string& method);
-	bool validate_uri(const std::string& uri);
-	bool validate_http_version(const std::string& version);
+    void reset_parser_state();
 
     // Prevent copying
     RequestParser(const RequestParser&);
