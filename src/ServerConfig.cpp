@@ -133,12 +133,13 @@ bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
                 config.client_max_body_size_ = size;
             } else {
                 // Store other directives
-                // Initialize vector if key doesn't exist
                 if (config.directives.find(key) == config.directives.end()) {
                     config.directives[key] = std::vector<std::string>();
                 }
                 // Add value to the vector
                 config.directives[key].push_back(value);
+                std::cerr << "Error: Unknown directive '" << key << "'" << std::endl;
+                return false;
             }
         }
     }
@@ -173,6 +174,7 @@ void ServerConfig::addDirectiveValue(
 bool ServerConfig::parseDirective(const std::string& line, std::string& key,
                                   std::string& value) {
     size_t pos = line.find_first_of(" \t");
+    
     if (pos == std::string::npos) return false;
 
     key = line.substr(0, pos);
@@ -543,23 +545,23 @@ void ServerConfig::print() const {
     }
 
     // Print other directives
-    std::cout << "Other Directives:" << std::endl;
-    if (directives.empty()) {
-        std::cout << "  (none)" << std::endl;
-    } else {
-        for (std::map<std::string, std::vector<std::string> >::const_iterator
-                 it = directives.begin();
-             it != directives.end(); ++it) {
-            std::cout << "  " << it->first << ": ";
-            for (size_t i = 0; i < it->second.size(); ++i) {
-                std::cout << it->second[i];
-                if (i < it->second.size() - 1) {
-                    std::cout << ", ";
-                }
-            }
-            std::cout << std::endl;
-        }
-    }
+    // std::cout << "Other Directives:" << std::endl;
+    // if (directives.empty()) {
+    //     std::cout << "  (none)" << std::endl;
+    // } else {
+    //     for (std::map<std::string, std::vector<std::string> >::const_iterator
+    //              it = directives.begin();
+    //          it != directives.end(); ++it) {
+    //         std::cout << "  " << it->first << ": ";
+    //         for (size_t i = 0; i < it->second.size(); ++i) {
+    //             std::cout << it->second[i];
+    //             if (i < it->second.size() - 1) {
+    //                 std::cout << ", ";
+    //             }
+    //         }
+    //         std::cout << std::endl;
+    //     }
+    // }
 
     // Print location blocks
     std::cout << "Location Blocks (" << locations.size() << "):" << std::endl;

@@ -123,6 +123,7 @@ bool ServerManager::parse_config_file(const std::string& filename) {
                           << std::endl;
             } else {
                 std::cerr << "Error parsing server block" << std::endl;
+                return false; // Exit
             }
         }
     }
