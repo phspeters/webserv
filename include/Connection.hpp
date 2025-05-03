@@ -5,8 +5,8 @@
 
 // Forward declarations
 class IHandler;
-class HttpRequest;
-class HttpResponse;
+struct HttpRequest;
+struct HttpResponse;
 struct ServerConfig;
 class Server;
 

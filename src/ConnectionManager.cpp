@@ -1,9 +1,7 @@
 #include "webserv.hpp"
 
 ConnectionManager::ConnectionManager(const ServerConfig& config)
-    : config_(config) {
-    // Constructor implementation
-}
+    : config_(config) {}
 
 ConnectionManager::~ConnectionManager() {
     // Destructor implementation
@@ -15,9 +13,17 @@ ConnectionManager::~ConnectionManager() {
 
 Connection* ConnectionManager::create_connection(int client_fd) {
     // Create a new Connection object and store it in the map
-    Connection* conn = new Connection(client_fd, config_);
-    active_connections_[client_fd] = conn;
-    return conn;
+    try {
+        Connection* conn = new Connection(client_fd, config_);
+        active_connections_[client_fd] = conn;
+        return conn;
+    } catch (const std::exception& e) {
+        // Handle error
+        std::cerr << "Failed to create connection for client (fd: " << client_fd
+                  << ")" << "on server " << config_.server_names_[0]
+                  << "on port " << config_.port_ << std::endl;
+        return NULL;
+    }
 }
 
 void ConnectionManager::close_connection(int client_fd) {
@@ -49,6 +55,9 @@ Connection* ConnectionManager::get_connection(int client_fd) {
     if (it != active_connections_.end()) {
         return it->second;
     }
+    std::cerr << "Connection not found for client (fd: " << client_fd << ")"
+              << "on server " << config_.server_names_[0] << "on port "
+              << config_.port_ << std::endl;
     return NULL;  // Not found
 }
 

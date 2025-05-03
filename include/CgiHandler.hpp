@@ -34,9 +34,9 @@ class CgiHandler : public IHandler {
         Connection* conn);  // Called when CGI stdin pipe is writable
 
    private:
-    const ServerConfig& config;  // Reference to server configuration
+    const ServerConfig& config_;  // Reference to server configuration
     ResponseWriter&
-        response_writer;  // Reference to the response writer utility
+        response_writer_;  // Reference to the response writer utility
 
     // Helper methods for setting up environment, parsing CGI headers etc. go in
     // .cpp

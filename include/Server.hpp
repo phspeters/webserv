@@ -13,7 +13,7 @@ class Router;
 struct ServerConfig;
 class ServerManager;
 class StaticFileHandler;
-// Add other handlers...
+// class FileUploadHandler;
 
 // Main server class - orchestrates setup, event loop, and component
 // interactions.
@@ -28,8 +28,7 @@ class Server {
 
     // Accepts new connections on the listener socket and registers them with
     // epoll.
-    void accept_new_connection(int shared_epoll_fd,
-                               std::map<int, Server*>& fd_map);
+    void accept_new_connection(std::map<int, Server*>& fd_map);
 
     void close_client_connection(Connection* conn);
 
@@ -38,12 +37,10 @@ class Server {
 
     // Getters for internal state
     bool is_ready() const { return initialized_; }
-    int get_listener_fd() const { return listener_fd_; }  // Get listener fd
-    const ServerConfig& get_config() const { return config_; }  // Get config
+    int get_listener_fd() const { return listener_fd_; }
+    const ServerConfig& get_config() const { return config_; }
     unsigned short get_port() const { return config_.port_; }
     std::string get_server_name() const { return config_.server_names_[0]; }
-
-    // Add other getters as needed...
 
    private:
     //--------------------------------------
@@ -58,13 +55,13 @@ class Server {
     // Owned Components (Composition)
     //--------------------------------------
     ConnectionManager* conn_manager_;
-    // RequestParser* request_parser_;
+    RequestParser* request_parser_;
     // Router* router_;
     // ResponseWriter* response_writer_;
     //// Handler instances (owned by Server)
     // StaticFileHandler* static_file_handler_;
     // CgiHandler* cgi_handler_;
-    //// Add other handler instances...
+    // FileUploadHandler* file_upload_handler_;
 
     //--------------------------------------
     // Internal Methods
@@ -73,9 +70,10 @@ class Server {
     void handle_write(Connection* conn);  // Handles writable client socket
     void handle_error(Connection* conn);  // Handles client socket error
 
-    bool setup_listener_socket();                 // Sets up listener_fd
-    bool set_non_blocking(int fd);                // Utility
-    bool set_socket_mode(int fd, uint32_t mode);  // Utility
+    bool setup_listener_socket();
+    bool set_non_blocking(int fd);
+    bool register_epoll_events(int fd, uint32_t events = EPOLLIN);
+    bool update_epoll_events(int fd, uint32_t mode);
 
     // Prevent copying
     Server(const Server&);

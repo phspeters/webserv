@@ -1,15 +1,8 @@
 #include "webserv.hpp"
 
-HttpRequest::HttpRequest() : parse_error_(false) {
-    // Initialize strings, maps, vectors to empty states automatically
-}
+HttpRequest::HttpRequest() : parse_status_(RequestParser::PARSE_INCOMPLETE) {}
 
-HttpRequest::~HttpRequest() {
-    if (temp_body_) {
-        delete temp_body_;
-        temp_body_ = NULL;
-    }
-}
+HttpRequest::~HttpRequest() {}
 
 std::string HttpRequest::get_header(const std::string& name) const {
     // Case-insensitive lookup for headers
@@ -26,6 +19,10 @@ std::string HttpRequest::get_header(const std::string& name) const {
     return "";
 }
 
+bool HttpRequest::is_valid() const {
+    return parse_status_ == RequestParser::PARSE_SUCCESS;
+}
+
 void HttpRequest::clear() {
     method_.clear();
     uri_.clear();
@@ -34,5 +31,5 @@ void HttpRequest::clear() {
     body_.clear();
     path_.clear();
     query_string_.clear();
-    parse_error_ = false;
+    parse_status_ = RequestParser::PARSE_INCOMPLETE;
 }

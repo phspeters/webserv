@@ -1,16 +1,20 @@
 #include "webserv.hpp"
 
-Connection::Connection(int client_fd, const ServerConfig& config)
-    : client_fd_(client_fd),
+Connection::Connection(int fd, const ServerConfig& config)
+    : client_fd_(fd),
       server_config_(config),
       last_activity_(time(NULL)),
-      read_buffer_(),
-      write_buffer_(),
       write_buffer_offset_(0),
-      request_data_(NULL),
-      response_data_(NULL),
+      request_data_(new HttpRequest()),
+      response_data_(new HttpResponse()),
       state_(CONN_READING),
-      active_handler_ptr_(NULL) {}
+      active_handler_ptr_(NULL),
+      cgi_pid_(-1),
+      cgi_pipe_stdin_fd_(-1),
+      cgi_pipe_stdout_fd_(-1),
+      static_file_fd_(-1),
+      static_file_offset_(0),
+      static_file_bytes_to_send_(0) {}
 
 Connection::~Connection() {
     if (request_data_) {
@@ -28,19 +32,16 @@ Connection::~Connection() {
 
 // TODO implement cleanup for file_upload_handler
 void Connection::reset_for_keep_alive() {
-    // Reset buffers
-    read_buffer_.clear();
+    // Reset write buffers
     write_buffer_.clear();
     write_buffer_offset_ = 0;
 
-    // Clean up request/response
+    // Reset request/response
     if (request_data_) {
-        delete request_data_;
-        request_data_ = NULL;
+        request_data_->clear();
     }
     if (response_data_) {
-        delete response_data_;
-        response_data_ = NULL;
+        response_data_->clear();
     }
 
     // Close any open file descriptors
@@ -79,10 +80,9 @@ bool Connection::is_writable() const {
 bool Connection::is_error() const { return state_ == CONN_ERROR; }
 
 bool Connection::is_keep_alive() const {
-    // TEMP
-    return true;
-
     if (!request_data_) {
+        std::cout << "Request data is invalid for fd: " << client_fd_
+                  << std::endl;
         return false;
     }
 

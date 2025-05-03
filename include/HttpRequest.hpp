@@ -3,11 +3,12 @@
 
 #include "webserv.hpp"
 
+class RequestParser;
+
 // Represents a parsed HTTP Request.
 // An instance of this is typically created during the parsing phase
 // and pointed to by Connection::request_data.
-class HttpRequest {
-   public:
+struct HttpRequest {
     //--------------------------------------
     // Request Data Members
     //--------------------------------------
@@ -19,14 +20,12 @@ class HttpRequest {
         headers_;  // Map of header names to values
 
     std::vector<char> body_;  // Request body content
-    std::vector<char>*
-        temp_body_;  // Temporary storage for chunked body (if needed)
 
     // Parsed components of the URI (populated after basic parsing)
     std::string path_;          // Path part of the URI (e.g., "/index.html")
     std::string query_string_;  // Query part of the URI (e.g., "a=1&b=2")
 
-    bool parse_error_;  // Flag indicating if a fatal parsing error occurred
+    RequestParser::ParseResult parse_status_;  // Status of request parsing
 
     //--------------------------------------
     // Constructor / Destructor
@@ -35,15 +34,14 @@ class HttpRequest {
     ~HttpRequest();
 
     //--------------------------------------
-    // Helper Methods (optional declarations)
+    // Helper Methods
     //--------------------------------------
-    // Example: Get a header value (case-insensitive lookup)
     std::string get_header(const std::string& name) const;
-
+    bool is_valid() const;
     void clear();
 
    private:
-    // Prevent copying if requests are managed by pointer in Connection
+    // Prevent copying
     HttpRequest(const HttpRequest&);
     HttpRequest& operator=(const HttpRequest&);
 
