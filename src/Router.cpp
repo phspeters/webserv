@@ -83,10 +83,17 @@ IHandler* Router::route(const HttpRequest* req) {
 
     // Find the matching location block
     std::vector<LocationConfig>::const_iterator it;
-    LocationConfig* location_match = NULL;
+    const LocationConfig* location_match = NULL;
     std::string longest_match_path = "";
 
-    // Find the best matching location (longest prefix match)
+    // example 
+    // path_part = /blogs/index.html
+    // Location with path "/"
+    // Location with path "/blogs"
+    // Location with path "/images"
+
+    // Find the best matching location (longest prefix match) 
+    // Checks if the current location's path is a prefix of the requested path
     for (it = config_.locations.begin(); it != config_.locations.end(); ++it) {
         if (path_part.find(it->path) == 0) {
             // This location matches - check if it's better than our current match
@@ -108,7 +115,7 @@ IHandler* Router::route(const HttpRequest* req) {
                     << location_match->path << std::endl;
             return nullptr; // Return Method Not Allowed handler
         }
-        
+    
         // Get the root directory from the matched location
         std::string rootDir = location_match->directives.at("root")[0];
         
