@@ -6,8 +6,7 @@
 // Represents an HTTP Response to be sent back to the client.
 // An instance of this is typically created by a handler
 // and pointed to by Connection::response_data.
-class HttpResponse {
-   public:
+struct HttpResponse {
     //--------------------------------------
     // Response Data Members
     //--------------------------------------

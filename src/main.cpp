@@ -3,7 +3,9 @@
 // Helper function to trim whitespace
 std::string trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t");
-    if (first == std::string::npos) return "";
+    if (first == std::string::npos) {
+        return "";
+    }
     size_t last = str.find_last_not_of(" \t");
     return str.substr(first, last - first + 1);
 }
@@ -20,18 +22,15 @@ int main(int argc, char* argv[]) {
     // Initialize server manager
     ServerManager serverManager;
     if (!serverManager.init()) {
-        std::cerr << "Error: Failed to initialize server manager." << std::endl;
         return EXIT_FAILURE;
     }
 
     // Parse configuration file
     if (!serverManager.parse_config_file(config_file)) {
-        std::cerr << "Error: Failed to parse configuration file: "
-                  << config_file << std::endl;
         return EXIT_FAILURE;
     }
-	
-	serverManager.run();
+
+    serverManager.run();
 
     return EXIT_SUCCESS;
 }

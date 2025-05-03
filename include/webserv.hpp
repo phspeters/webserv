@@ -25,13 +25,13 @@
 
 #include "IHandler.hpp"
 #include "ServerConfig.hpp"
+#include "RequestParser.hpp"
 
 #include "CgiHandler.hpp"
 #include "Connection.hpp"
 #include "ConnectionManager.hpp"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
-#include "RequestParser.hpp"
 #include "ResponseWriter.hpp"
 #include "Router.hpp"
 #include "Server.hpp"

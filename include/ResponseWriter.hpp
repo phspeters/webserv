@@ -5,7 +5,7 @@
 
 // Forward declarations
 struct Connection;
-class HttpResponse;
+struct HttpResponse;
 struct ServerConfig;
 
 // Utility class to help format HTTP responses.
@@ -27,7 +27,7 @@ class ResponseWriter {
 
    private:
     const ServerConfig&
-        _config;  // Reference to config (e.g., for Server header)
+        config_;  // Reference to config (e.g., for Server header)
 
     std::string get_status_message(
         int code) const;  // Helper to get text for status code

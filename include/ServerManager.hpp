@@ -50,7 +50,7 @@ class ServerManager {
     // Make singleton instance for signal handling
     static ServerManager* instance_;
     // State management
-    volatile bool running_;
+    volatile bool ready_;
 
     // Internal methods
     void event_loop();
