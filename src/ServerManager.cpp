@@ -88,6 +88,9 @@ bool ServerManager::parse_config_file(const std::string& filename) {
         return false;
     }
 
+    // Initialize location directive map before parsing
+    LocationConfig::initDirectiveMap();
+
     std::string line;
     std::vector<ServerConfig> configs;
     while (std::getline(file, line)) {
@@ -105,6 +108,12 @@ bool ServerManager::parse_config_file(const std::string& filename) {
             ServerConfig config;
             // Parse the server block
             if (ServerConfig::parseServerBlock(file, config)) {
+                std::string error_msg;
+                if (!config.isValid(error_msg)) {
+                    std::cerr << "Error: Invalid server configuration: " << error_msg << std::endl;
+                    return false; // Exit with failure - don't continue processing
+                }
+                // std::cout << "DEBUG: Server configuration validated successfully" << std::endl;
                 configs.push_back(config);
                 // Print the parsed configuration
                 std::cout << "\n===== PARSED SERVER CONFIGURATION =====\n"
