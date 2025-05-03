@@ -6,7 +6,7 @@
 // std::map<std::string, std::vector<std::string> > directives;
 struct LocationConfig {
     std::string path;
-    std::map<std::string, std::string> directives;
+    std::map<std::string, std::vector<std::string> > directives;
 };
 
 // Server configuration
