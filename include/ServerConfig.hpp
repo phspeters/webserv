@@ -14,9 +14,8 @@ struct LocationConfig {
     // Constructor with defaults
     LocationConfig();
 
-    // Validation methods
+    // Validation method
     bool isValid(std::string& error_msg) const;
-    // void applyDefaults();
 };
 
 // Server configuration

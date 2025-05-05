@@ -141,7 +141,6 @@ bool ServerConfig::handleServerDirective(const std::string& key, const std::stri
         return parseClientMaxBodySize(value, config);
     }
     else {
-        // Unknown directive
         std::cerr << "Error: Unknown directive '" << key << "'" << std::endl;
         return false;
     }
@@ -169,7 +168,6 @@ bool ServerConfig::parseListen(const std::string& value, ServerConfig& config) {
 }
 
 bool ServerConfig::parseClientMaxBodySize(const std::string& value, ServerConfig& config) {
-    // Check for empty value
     if (value.empty()) {
         std::cerr << "Error: client_max_body_size cannot be empty" << std::endl;
         return false;
@@ -433,7 +431,6 @@ bool ServerConfig::isValid(std::string& error_msg) const {
 }
 
 bool LocationConfig::isValid(std::string& error_msg) const {
-    // Check if path is defined
     if (path.empty()) {
         error_msg = "Location path is required";
         return false;
@@ -444,7 +441,6 @@ bool LocationConfig::isValid(std::string& error_msg) const {
         return false;
     }
 
-    // Validate allowed_methods if present
     if (!allowed_methods.empty()) {
         for (size_t i = 0; i < allowed_methods.size(); i++) {
             const std::string& method = allowed_methods[i];
@@ -510,13 +506,10 @@ void ServerConfig::print() const {
         const LocationConfig& loc = locations[i];
         std::cout << "  ---------- LOCATION: " << loc.path << " ----------" << std::endl;
         
-        // Print root directory
         std::cout << "    root: " << loc.root << std::endl;
         
-        // Print autoindex
         std::cout << "    autoindex: " << (loc.autoindex ? "on" : "off") << std::endl;
         
-        // Print allowed methods
         std::cout << "    allowed_methods: ";
         for (size_t j = 0; j < loc.allowed_methods.size(); ++j) {
             std::cout << loc.allowed_methods[j];
@@ -526,13 +519,10 @@ void ServerConfig::print() const {
         }
         std::cout << std::endl;
         
-        // Print CGI enabled
         std::cout << "    cgi: " << (loc.cgi_enabled ? "on" : "off") << std::endl;
         
-        // Print index
         std::cout << "    index: " << loc.index << std::endl;
         
-        // Print redirect (only if set)
         if (!loc.redirect.empty()) {
             std::cout << "    redirect: " << loc.redirect << std::endl;
         }
