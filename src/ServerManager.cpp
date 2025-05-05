@@ -88,9 +88,6 @@ bool ServerManager::parse_config_file(const std::string& filename) {
         return false;
     }
 
-    // Initialize location directive map before parsing
-    LocationConfig::initDirectiveMap();
-
     std::string line;
     std::vector<ServerConfig> configs;
     while (std::getline(file, line)) {

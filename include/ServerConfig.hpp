@@ -1,38 +1,22 @@
 #ifndef SERVERCONFIG_HPP
 #define SERVERCONFIG_HPP
 
-// Define allowed location directives as an enum
-enum LocationDirective {
-    ROOT,
-    AUTOINDEX,
-    ALLOWED_METHODS,
-    CGI,
-    INDEX,
-    REDIRECT,
-    // CGI_EXT,
-    UNKNOWN
-};
-
 // Location configuration block
 struct LocationConfig {
     std::string path;
-    std::map<std::string, std::vector<std::string> > directives;
+    std::string root;
+    bool autoindex;
+    std::vector<std::string> allowed_methods;
+    bool cgi_enabled;
+    std::string index;
+    std::string redirect;
 
-    // Static mapping between directive names and enum values
-    static std::map<std::string, LocationDirective> directive_map;
-
-    // Initialize the directive map (called once at startup)
-    static void initDirectiveMap();
-
-    // Convert string to directive enum
-    static LocationDirective getDirectiveType(const std::string& directive);
+    // Constructor with defaults
+    LocationConfig();
 
     // Validation methods
     bool isValid(std::string& error_msg) const;
-    static bool hasSingleValue(
-        const std::map<std::string, std::vector<std::string> >& directives,
-        const std::string& key, std::string& error_msg);
-    void applyDefaults();
+    // void applyDefaults();
 };
 
 // Server configuration
@@ -50,12 +34,10 @@ struct ServerConfig {
     // Locations within this server
     std::vector<LocationConfig> locations;
 
-    // Other directives
-    std::map<std::string, std::vector<std::string> > directives;
-
     // Default constructor
     ServerConfig();
 
+    // Parse configuration from a file
     static bool parseServerBlock(std::ifstream& file, ServerConfig& config);
     static bool parseLocationBlock(std::ifstream& file, std::string line, ServerConfig& config);
     static bool handleServerDirective(const std::string& key, const std::string& value, ServerConfig& config);
@@ -65,16 +47,12 @@ struct ServerConfig {
     static bool parseClientMaxBodySize(const std::string& value, ServerConfig& config);
     static bool parseDirective(const std::string& line, std::string& key,
                                std::string& value);
-    static void addDirectiveValue(
-        std::map<std::string, std::vector<std::string> >& directives,
-        const std::string& key, const std::string& value);
+    static bool addDirectiveValue(LocationConfig& location, const std::string& key, const std::string& value);
 
     bool applyDefaults();
 
-    // Add validation method
+    // Validation methods
     bool isValid(std::string& error_msg) const;
-
-    // Helper methods for validation
     bool isValidHost(std::string& error_msg) const;
     bool isValidPort(std::string& error_msg) const;
     bool hasValidLocations(std::string& error_msg) const;

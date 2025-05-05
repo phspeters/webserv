@@ -1,9 +1,37 @@
 #include "webserv.hpp"
 
+// Server defaults
 static const int DEFAULT_PORT = 80;
 static const std::string DEFAULT_HOST = "0.0.0.0";
 static const size_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024; // 1MB
+static const std::string DEFAULT_SERVER_NAME = "default_server";
 
+// Error page defaults
+static const int DEFAULT_404_ERROR_CODE = 404;
+static const std::string DEFAULT_404_ERROR_PAGE = "/error/404.html";
+static const int DEFAULT_500_ERROR_CODE = 500; 
+static const std::string DEFAULT_500_ERROR_PAGE = "/error/500.html";
+
+// Location defaults
+static const bool DEFAULT_AUTOINDEX = false;
+static const bool DEFAULT_CGI_ENABLED = false;
+static const std::string DEFAULT_INDEX = "index.html";
+
+static std::vector<std::string> createDefaultAllowedMethods() {
+    std::vector<std::string> methods;
+    methods.push_back("GET");
+    methods.push_back("POST");
+    methods.push_back("DELETE");
+    return methods;
+}
+
+static const std::vector<std::string> DEFAULT_ALLOWED_METHODS = createDefaultAllowedMethods();
+
+// Constructor for LocationConfig with defaults
+LocationConfig::LocationConfig()
+    : autoindex(DEFAULT_AUTOINDEX), cgi_enabled(DEFAULT_CGI_ENABLED), index(DEFAULT_INDEX) {
+    allowed_methods = DEFAULT_ALLOWED_METHODS;
+}
 
 // Default constructor implementation
 ServerConfig::ServerConfig()
@@ -82,14 +110,15 @@ bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line, Ser
         if (locLine.empty() || locLine[0] == '#') continue;
 
         if (locLine == "}") {
-            location.applyDefaults();
             config.locations.push_back(location);
             return true;
         }
 
         std::string key, value;
         if (parseDirective(locLine, key, value)) {
-            addDirectiveValue(location.directives, key, value);
+            if (!addDirectiveValue(location, key, value)) {
+                return false; // Reject if directive isn't recognized
+            }
         }
     }
     
@@ -222,26 +251,32 @@ bool ServerConfig::parseErrorPage(const std::string& value, ServerConfig& config
     return false;
 }
 
-void ServerConfig::addDirectiveValue(
-    std::map<std::string, std::vector<std::string> >& directives,
-    const std::string& key, const std::string& value) {
-    // Initialize vector if key doesn't exist
-    if (directives.find(key) == directives.end()) {
-        directives[key] = std::vector<std::string>();
-    }
-
-    // Special handling for space-separated directives
-    if (key == "allow_methods") {
-        // Split by spaces
+bool ServerConfig::addDirectiveValue(LocationConfig& location, const std::string& key, const std::string& value) {
+    if (key == "root") {
+        location.root = value;
+    } else if (key == "autoindex") {
+        location.autoindex = (value == "on");
+    } else if (key == "allow_methods") {
+        // Clear default methods first
+        location.allowed_methods.clear();
+        
+        // Split and add methods
         std::istringstream iss(value);
-        std::string part;
-        while (iss >> part) {
-            directives[key].push_back(part);
+        std::string method;
+        while (iss >> method) {
+            location.allowed_methods.push_back(method);
         }
+    } else if (key == "cgi") {
+        location.cgi_enabled = (value == "on");
+    } else if (key == "index") {
+        location.index = value;
+    } else if (key == "redirect") {
+        location.redirect = value;
     } else {
-        // Keep value as is
-        directives[key].push_back(value);
+        std::cerr << "Unknown directive in location block: " << key << std::endl;
+        return false;
     }
+    return true;
 }
 
 // Helper to parse a single directive line
@@ -284,20 +319,15 @@ bool ServerConfig::parseDirective(const std::string& line, std::string& key,
 bool ServerConfig::applyDefaults() {
     // Apply server-level defaults
     if (server_names_.empty()) {
-        server_names_.push_back("default_server");
+        server_names_.push_back(DEFAULT_SERVER_NAME);
     }
 
     // Default error pages if not specified
-    if (error_pages.find(404) == error_pages.end()) {
-        error_pages[404] = "/error/404.html";
+    if (error_pages.find(DEFAULT_404_ERROR_CODE) == error_pages.end()) {
+        error_pages[DEFAULT_404_ERROR_CODE] = DEFAULT_404_ERROR_PAGE;
     }
-    if (error_pages.find(500) == error_pages.end()) {
-        error_pages[500] = "/error/500.html";
-    }
-
-    // Apply defaults only to locations from the config file
-    for (size_t i = 0; i < locations.size(); i++) {
-        locations[i].applyDefaults();
+    if (error_pages.find(DEFAULT_500_ERROR_CODE) == error_pages.end()) {
+        error_pages[DEFAULT_500_ERROR_CODE] = DEFAULT_500_ERROR_PAGE;
     }
 
     return true;
@@ -402,171 +432,33 @@ bool ServerConfig::isValid(std::string& error_msg) const {
     return true;
 }
 
-// Initialize static member for directive mapping
-std::map<std::string, LocationDirective> LocationConfig::directive_map;
-
-// Initialize the directive map
-void LocationConfig::initDirectiveMap() {
-    if (directive_map.empty()) {
-        directive_map["root"] = ROOT;
-        directive_map["autoindex"] = AUTOINDEX;
-        directive_map["allow_methods"] = ALLOWED_METHODS;
-        directive_map["cgi"] = CGI;
-        directive_map["index"] = INDEX;
-        directive_map["redirect"] = REDIRECT;
-        // directive_map["cgi_ext"] = CGI_EXT;
-    }
-}
-
-// Convert string to directive enum
-LocationDirective LocationConfig::getDirectiveType(
-    const std::string& directive) {
-    std::map<std::string, LocationDirective>::iterator it =
-        directive_map.find(directive);
-    if (it != directive_map.end()) {
-        return it->second;
-    }
-    return UNKNOWN;
-}
-
-// Helper function for single value validation
-bool LocationConfig::hasSingleValue(
-    const std::map<std::string, std::vector<std::string> >& directives,
-    const std::string& key, std::string& error_msg) {
-    std::map<std::string, std::vector<std::string> >::const_iterator it =
-        directives.find(key);
-    if (it != directives.end()) {
-        if (it->second.size() != 1) {
-            error_msg = key + " directive must have exactly one value";
-            return false;
-        }
-    }
-    return true;
-}
-
 bool LocationConfig::isValid(std::string& error_msg) const {
-    // Ensure directive map is initialized
-    initDirectiveMap();
-
     // Check if path is defined
     if (path.empty()) {
         error_msg = "Location path is required";
         return false;
     }
 
-    // Check that all directive keys are allowed
-    for (std::map<std::string, std::vector<std::string> >::const_iterator it =
-             directives.begin();
-         it != directives.end(); ++it) {
-        if (getDirectiveType(it->first) == UNKNOWN) {
-            error_msg =
-                "Invalid directive in location block: '" + it->first + "'";
-            return false;
-        }
-    }
-
-    // Check for mandatory root directive
-    std::map<std::string, std::vector<std::string> >::const_iterator root_it =
-        directives.find("root");
-    if (root_it == directives.end() || root_it->second.empty()) {
+    if (root.empty()) {
         error_msg = "Root directive is mandatory";
         return false;
     }
 
-    // Validate directives that must have exactly one value
-    std::string single_value_dirs[] = {"root", "index", "autoindex", "cgi",
-                                       "redirect"};
-    for (size_t i = 0;
-         i < sizeof(single_value_dirs) / sizeof(single_value_dirs[0]); i++) {
-        if (!hasSingleValue(directives, single_value_dirs[i], error_msg)) {
-            return false;
-        }
-    }
-
-    // Validate autoindex value if present
-    std::map<std::string, std::vector<std::string> >::const_iterator
-        autoindex_it = directives.find("autoindex");
-    if (autoindex_it != directives.end() && !autoindex_it->second.empty()) {
-        std::string value = autoindex_it->second[0];
-        if (value != "on" && value != "off") {
-            error_msg = "Autoindex must be 'on' or 'off'";
-            return false;
-        }
-    }
-
-    // Validate cgi value if present
-    std::map<std::string, std::vector<std::string> >::const_iterator cgi_it =
-        directives.find("cgi");
-    if (cgi_it != directives.end() && !cgi_it->second.empty()) {
-        std::string value = cgi_it->second[0];
-        if (value != "on" && value != "off") {
-            error_msg = "Cgi must be 'on' or 'off'";
-            // std::cout << "DEBUG: CGI validation failed: " << error_msg
-            //           << std::endl;
-            return false;
-        }
-
-        // Check if cgi is enabled but no cgi_ext is specified
-        // if (value == "on") {
-        //     std::map<std::string, std::vector<std::string> >::const_iterator
-        //         cgi_ext_it = directives.find("cgi_ext");
-        //     if (cgi_ext_it == directives.end() || cgi_ext_it->second.empty()) {
-        //         error_msg = "Cgi is enabled but no cgi_ext specified";
-        //         return false;
-        //     }
-
-        //     // Validate cgi_ext values - must be .py, .php, or .sh
-        //     for (size_t i = 0; i < cgi_ext_it->second.size(); i++) {
-        //         const std::string& ext = cgi_ext_it->second[i];
-        //         if (ext != ".py" && ext != ".php" && ext != ".sh") {
-        //             error_msg = "Invalid cgi_ext value: '" + ext +
-        //                         "'. Only .py, .php, and .sh are supported";
-        //             return false;
-        //         }
-        //     }
-        // }
-    }
-
     // Validate allowed_methods if present
-    std::map<std::string, std::vector<std::string> >::const_iterator
-        methods_it = directives.find("allow_methods");
-    if (methods_it != directives.end() && !methods_it->second.empty()) {
-        for (size_t i = 0; i < methods_it->second.size(); i++) {
-            std::string method = methods_it->second[i];
+    if (!allowed_methods.empty()) {
+        for (size_t i = 0; i < allowed_methods.size(); i++) {
+            const std::string& method = allowed_methods[i];
             if (method != "GET" && method != "POST" && method != "DELETE") {
                 error_msg = "Invalid HTTP method: " + method;
                 return false;
             }
         }
+    } else {
+        error_msg = "At least one HTTP method must be allowed";
+        return false;
     }
 
     return true;
-}
-
-void LocationConfig::applyDefaults() {
-    // Default allow_methods if not specified
-    if (directives.find("allow_methods") == directives.end()) {
-        std::vector<std::string> methods;
-        methods.push_back("GET");
-        methods.push_back("POST");
-        methods.push_back("DELETE");
-        directives["allow_methods"] = methods;
-    }
-
-    // Default index if not specified
-    if (directives.find("index") == directives.end()) {
-        directives["index"] = std::vector<std::string>(1, "index.html");
-    }
-
-    // Default autoindex if not specified
-    if (directives.find("autoindex") == directives.end()) {
-        directives["autoindex"] = std::vector<std::string>(1, "off");
-    }
-
-    // Default cgi if not specified
-    if (directives.find("cgi") == directives.end()) {
-        directives["cgi"] = std::vector<std::string>(1, "off");
-    }
 }
 
 void ServerConfig::print() const {
@@ -606,53 +498,43 @@ void ServerConfig::print() const {
     if (error_pages.empty()) {
         std::cout << "  (none)" << std::endl;
     } else {
-        for (std::map<int, std::string>::const_iterator it =
-                 error_pages.begin();
+        for (std::map<int, std::string>::const_iterator it = error_pages.begin();
              it != error_pages.end(); ++it) {
             std::cout << "  " << it->first << " -> " << it->second << std::endl;
         }
     }
 
-    // Print other directives
-    // std::cout << "Other Directives:" << std::endl;
-    // if (directives.empty()) {
-    //     std::cout << "  (none)" << std::endl;
-    // } else {
-    //     for (std::map<std::string, std::vector<std::string> >::const_iterator
-    //              it = directives.begin();
-    //          it != directives.end(); ++it) {
-    //         std::cout << "  " << it->first << ": ";
-    //         for (size_t i = 0; i < it->second.size(); ++i) {
-    //             std::cout << it->second[i];
-    //             if (i < it->second.size() - 1) {
-    //                 std::cout << ", ";
-    //             }
-    //         }
-    //         std::cout << std::endl;
-    //     }
-    // }
-
     // Print location blocks
     std::cout << "Location Blocks (" << locations.size() << "):" << std::endl;
     for (size_t i = 0; i < locations.size(); ++i) {
-        std::cout << "  ---------- LOCATION: " << locations[i].path
-                  << " ----------" << std::endl;
-
-        for (std::map<std::string, std::vector<std::string> >::const_iterator
-                 it = locations[i].directives.begin();
-             it != locations[i].directives.end(); ++it) {
-            std::cout << "    " << it->first << ": ";
-            for (size_t j = 0; j < it->second.size(); ++j) {
-                std::cout << it->second[j];
-                if (j < it->second.size() - 1) {
-                    std::cout << ", ";
-                }
+        const LocationConfig& loc = locations[i];
+        std::cout << "  ---------- LOCATION: " << loc.path << " ----------" << std::endl;
+        
+        // Print root directory
+        std::cout << "    root: " << loc.root << std::endl;
+        
+        // Print autoindex
+        std::cout << "    autoindex: " << (loc.autoindex ? "on" : "off") << std::endl;
+        
+        // Print allowed methods
+        std::cout << "    allowed_methods: ";
+        for (size_t j = 0; j < loc.allowed_methods.size(); ++j) {
+            std::cout << loc.allowed_methods[j];
+            if (j < loc.allowed_methods.size() - 1) {
+                std::cout << ", ";
             }
-            std::cout << std::endl;
         }
-
-        if (locations[i].directives.empty()) {
-            std::cout << "    (no directives)" << std::endl;
+        std::cout << std::endl;
+        
+        // Print CGI enabled
+        std::cout << "    cgi: " << (loc.cgi_enabled ? "on" : "off") << std::endl;
+        
+        // Print index
+        std::cout << "    index: " << loc.index << std::endl;
+        
+        // Print redirect (only if set)
+        if (!loc.redirect.empty()) {
+            std::cout << "    redirect: " << loc.redirect << std::endl;
         }
     }
 
