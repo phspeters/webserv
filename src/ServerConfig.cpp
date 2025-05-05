@@ -6,14 +6,12 @@ ServerConfig::ServerConfig()
     host_ = "0.0.0.0";
 }
 
-// Server block parsing implementation
 bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
     std::string line;
 
     while (std::getline(file, line)) {
         line = trim(line);
 
-        // Skip empty lines and comments
         if (line.empty() || line[0] == '#') continue;
 
         // Check for block end
@@ -22,129 +20,188 @@ bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
             return true;
         }
 
-        // Check for location block
         if (line.find("location") == 0) {
-            // Extract location path
-            size_t pathStart =
-                line.find_first_not_of(" \t", 8);  // Skip "location"
-            if (pathStart == std::string::npos) continue;
-
-            size_t pathEnd = line.find_first_of(" \t{", pathStart);
-            if (pathEnd == std::string::npos) continue;
-
-            std::string path = line.substr(pathStart, pathEnd - pathStart);
-            // std::cout << "DEBUG: Extracted location path: '" << path << "'"
-            //           << std::endl;
-
-            // Find opening brace
-            size_t bracePos = line.find('{', pathEnd);
-            if (bracePos == std::string::npos) {
-                // Get next line and look for brace
-                if (!std::getline(file, line)) return false;
-
-                line = trim(line);
-                if (line != "{") return false;
+            if (!parseLocationBlock(file, line, config)) {
+                return false;
             }
-
-            // Create a new location config
-            LocationConfig location;
-            location.path = path;
-
-            // Parse location block
-            while (std::getline(file, line)) {
-                line = trim(line);
-
-                // Skip empty lines and comments
-                if (line.empty() || line[0] == '#') continue;
-
-                // Check for block end
-                if (line == "}") break;
-
-                // Parse directive
-                std::string key, value;
-                if (parseDirective(line, key, value)) {
-                    addDirectiveValue(location.directives, key, value);
-                }
-            }
-
-            config.locations.push_back(location);
             continue;
         }
 
-        // Parse regular directive
         std::string key, value;
         if (parseDirective(line, key, value)) {
-            // Handle special directives
-            if (key == "listen") {
-                config.listen_specified_ = true;
-                // Parse listen directive (host:port or just port)
-                size_t colonPos = value.find(':');
-                if (colonPos != std::string::npos) {
-                    config.host_ = value.substr(0, colonPos);
-                    std::istringstream(value.substr(colonPos + 1)) >>
-                        config.port_;
-                } else {
-                    // Just a port_ number
-                    std::istringstream iss(value);
-                    if (iss >> config.port_) {
-                        config.host_ = "0.0.0.0";  // Default to all interfaces
-                    }
-                }
-            } else if (key == "server_name") {
-                // Parse server_name directive (space-separated list)
-                std::istringstream iss(value);
-                std::string name;
-                while (iss >> name) {
-                    config.server_names_.push_back(name);
-                }
-            } else if (key == "error_page") {
-                // Parse error_page directive (format: error_page CODE PATH)
-                std::istringstream iss(value);
-                int code;
-                std::string path;
-                if (iss >> code >> path) {
-                    config.error_pages[code] = path;
-                }
-            } else if (key == "client_max_body_size") {
-                // Parse size with unit (e.g., 8M)
-                size_t size = 0;
-                std::string sizeStr = value;
-                char unit = sizeStr[sizeStr.length() - 1];
-
-                if (isalpha(unit)) {
-                    std::istringstream(
-                        sizeStr.substr(0, sizeStr.length() - 1)) >>
-                        size;
-                    switch (toupper(unit)) {
-                        case 'K':
-                            size *= 1024;
-                            break;
-                        case 'M':
-                            size *= 1024 * 1024;
-                            break;
-                        case 'G':
-                            size *= 1024 * 1024 * 1024;
-                            break;
-                    }
-                } else {
-                    std::istringstream(sizeStr) >> size;
-                }
-
-                config.client_max_body_size_ = size;
-            } else {
-                // Store other directives
-                if (config.directives.find(key) == config.directives.end()) {
-                    config.directives[key] = std::vector<std::string>();
-                }
-                // Add value to the vector
-                config.directives[key].push_back(value);
-                std::cerr << "Error: Unknown directive '" << key << "'" << std::endl;
+            if (!handleServerDirective(key, value, config)) {
                 return false;
             }
         }
     }
 
     // Reached end of file without closing brace
+    return false;
+}
+
+bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line, ServerConfig& config) {
+    // Extract location path
+    size_t pathStart = line.find_first_not_of(" \t", 8);  // Skip "location"
+    if (pathStart == std::string::npos) return false;
+
+    size_t pathEnd = line.find_first_of(" \t{", pathStart);
+    if (pathEnd == std::string::npos) return false;
+
+    std::string path = line.substr(pathStart, pathEnd - pathStart);
+    
+    // Find opening brace
+    size_t bracePos = line.find('{', pathEnd);
+    if (bracePos == std::string::npos) {
+        // Get next line and look for brace
+        std::string nextLine;
+        if (!std::getline(file, nextLine)) return false;
+
+        nextLine = trim(nextLine);
+        if (nextLine != "{") return false;
+    }
+
+    // Create a new location config
+    LocationConfig location;
+    location.path = path;
+
+    // Parse location block
+    std::string locLine;
+    while (std::getline(file, locLine)) {
+        locLine = trim(locLine);
+
+        if (locLine.empty() || locLine[0] == '#') continue;
+
+        if (locLine == "}") {
+            location.applyDefaults();
+            config.locations.push_back(location);
+            return true;
+        }
+
+        std::string key, value;
+        if (parseDirective(locLine, key, value)) {
+            addDirectiveValue(location.directives, key, value);
+        }
+    }
+    
+    return false;
+}
+
+// Handle server directives with a separate method
+bool ServerConfig::handleServerDirective(const std::string& key, const std::string& value, ServerConfig& config) {
+    if (key == "listen") {
+        config.listen_specified_ = true;
+        return parseListen(value, config);
+    } 
+    else if (key == "server_name") {
+        return parseServerName(value, config);
+    }
+    else if (key == "error_page") {
+        return parseErrorPage(value, config);
+    }
+    else if (key == "client_max_body_size") {
+        return parseClientMaxBodySize(value, config);
+    }
+    else {
+        // Unknown directive
+        std::cerr << "Error: Unknown directive '" << key << "'" << std::endl;
+        return false;
+    }
+}
+
+bool ServerConfig::parseListen(const std::string& value, ServerConfig& config) {
+    size_t colonPos = value.find(':');
+    if (colonPos != std::string::npos) {
+        config.host_ = value.substr(0, colonPos);
+        std::istringstream iss(value.substr(colonPos + 1));
+        if (!(iss >> config.port_)) {
+            std::cerr << "Error parsing port in listen directive: " << value << std::endl;
+            return false;
+        }
+    } else {
+        // Just a port number
+        std::istringstream iss(value);
+        if (!(iss >> config.port_)) {
+            std::cerr << "Error parsing port in listen directive: " << value << std::endl;
+            return false;
+        }
+        config.host_ = "0.0.0.0";  // Default to all interfaces
+    }
+    return true;
+}
+
+bool ServerConfig::parseClientMaxBodySize(const std::string& value, ServerConfig& config) {
+    size_t size = 0;
+    std::string sizeStr = value;
+    
+    if (sizeStr.empty()) {
+        std::cerr << "Error parsing client_max_body_size: Empty value" << std::endl;
+        return false;
+    }
+    
+    // Get the last character to check if it's a unit
+    char unit = sizeStr[sizeStr.length() - 1];
+    
+    if (isalpha(unit)) {
+        // Extract the numeric part
+        std::string numPart = sizeStr.substr(0, sizeStr.length() - 1);
+        std::istringstream iss(numPart);
+        
+        if (!(iss >> size)) {
+            std::cerr << "Error parsing client_max_body_size: Invalid number format" << std::endl;
+            return false;
+        }
+        
+        // Apply the unit multiplier
+        switch (toupper(unit)) {
+            case 'K':
+                size *= 1024;
+                break;
+            case 'M':
+                size *= 1024 * 1024;
+                break;
+            case 'G':
+                size *= 1024 * 1024 * 1024;
+                break;
+            default:
+                std::cerr << "Unknown size unit: " << unit << std::endl;
+                return false;
+        }
+    } else {
+        std::istringstream iss(sizeStr);
+        
+        if (!(iss >> size)) {
+            std::cerr << "Error parsing client_max_body_size: Invalid number format" << std::endl;
+            return false;
+        }
+    }
+    
+    if (size < 1) {
+        std::cerr << "Error: client_max_body_size must be positive" << std::endl;
+        return false;
+    }
+    
+    config.client_max_body_size_ = size;
+    return true;
+}
+
+bool ServerConfig::parseServerName(const std::string& value, ServerConfig& config) {
+    std::istringstream iss(value);
+    std::string name;
+    while (iss >> name) {
+        config.server_names_.push_back(name);
+    }
+    return true;
+}
+
+bool ServerConfig::parseErrorPage(const std::string& value, ServerConfig& config) {
+    std::istringstream iss(value);
+    int code;
+    std::string path;
+    if (iss >> code >> path) {
+        config.error_pages[code] = path;
+        return true;
+    }
+    std::cerr << "Error parsing error_page directive: " << value << std::endl;
     return false;
 }
 
@@ -318,11 +375,6 @@ bool ServerConfig::isValid(std::string& error_msg) const {
     }
 
     if (!isValidPort(error_msg)) {
-        return false;
-    }
-
-    if (client_max_body_size_ <= 0) {
-        error_msg = "Client max body size must be positive";
         return false;
     }
 

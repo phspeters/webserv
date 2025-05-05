@@ -57,6 +57,12 @@ struct ServerConfig {
     ServerConfig();
 
     static bool parseServerBlock(std::ifstream& file, ServerConfig& config);
+    static bool parseLocationBlock(std::ifstream& file, std::string line, ServerConfig& config);
+    static bool handleServerDirective(const std::string& key, const std::string& value, ServerConfig& config);
+    static bool parseListen(const std::string& value, ServerConfig& config);
+    static bool parseServerName(const std::string& value, ServerConfig& config);
+    static bool parseErrorPage(const std::string& value, ServerConfig& config);
+    static bool parseClientMaxBodySize(const std::string& value, ServerConfig& config);
     static bool parseDirective(const std::string& line, std::string& key,
                                std::string& value);
     static void addDirectiveValue(
