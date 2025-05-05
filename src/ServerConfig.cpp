@@ -130,28 +130,41 @@ bool ServerConfig::parseListen(const std::string& value, ServerConfig& config) {
 }
 
 bool ServerConfig::parseClientMaxBodySize(const std::string& value, ServerConfig& config) {
-    size_t size = 0;
-    std::string sizeStr = value;
-    
-    if (sizeStr.empty()) {
-        std::cerr << "Error parsing client_max_body_size: Empty value" << std::endl;
+    // Check for empty value
+    if (value.empty()) {
+        std::cerr << "Error: client_max_body_size cannot be empty" << std::endl;
         return false;
     }
     
-    // Get the last character to check if it's a unit
-    char unit = sizeStr[sizeStr.length() - 1];
+    size_t size = 0;
+    std::string numPart;
+    char unit = '\0';
     
-    if (isalpha(unit)) {
-        // Extract the numeric part
-        std::string numPart = sizeStr.substr(0, sizeStr.length() - 1);
-        std::istringstream iss(numPart);
-        
-        if (!(iss >> size)) {
-            std::cerr << "Error parsing client_max_body_size: Invalid number format" << std::endl;
+    // Check if last character is a unit
+    if (isalpha(value[value.length() - 1])) {
+        unit = value[value.length() - 1];
+        numPart = value.substr(0, value.length() - 1);
+    } else {
+        numPart = value;
+    }
+    
+    // Check that numPart contains only digits
+    for (size_t i = 0; i < numPart.length(); i++) {
+        if (!isdigit(numPart[i])) {
+            std::cerr << "Error: client_max_body_size must contain only digits" << std::endl;
             return false;
         }
-        
-        // Apply the unit multiplier
+    }
+    
+    // Parse the numeric part
+    std::istringstream iss(numPart);
+    if (!(iss >> size)) {
+        std::cerr << "Error: invalid number format in client_max_body_size" << std::endl;
+        return false;
+    }
+    
+    // Apply unit multiplier if present
+    if (unit != '\0') {
         switch (toupper(unit)) {
             case 'K':
                 size *= 1024;
@@ -163,20 +176,14 @@ bool ServerConfig::parseClientMaxBodySize(const std::string& value, ServerConfig
                 size *= 1024 * 1024 * 1024;
                 break;
             default:
-                std::cerr << "Unknown size unit: " << unit << std::endl;
+                std::cerr << "Error: unknown size unit '" << unit << "'" << std::endl;
                 return false;
-        }
-    } else {
-        std::istringstream iss(sizeStr);
-        
-        if (!(iss >> size)) {
-            std::cerr << "Error parsing client_max_body_size: Invalid number format" << std::endl;
-            return false;
         }
     }
     
-    if (size < 1) {
-        std::cerr << "Error: client_max_body_size must be positive" << std::endl;
+    // Check for zero
+    if (size == 0) {
+        std::cerr << "Error: client_max_body_size cannot be zero" << std::endl;
         return false;
     }
     
