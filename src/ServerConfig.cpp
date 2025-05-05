@@ -1,9 +1,14 @@
 #include "webserv.hpp"
 
+static const int DEFAULT_PORT = 80;
+static const std::string DEFAULT_HOST = "0.0.0.0";
+static const size_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024; // 1MB
+
+
 // Default constructor implementation
 ServerConfig::ServerConfig()
-    : port_(80), listen_specified_(false), client_max_body_size_(1024 * 1024) {
-    host_ = "0.0.0.0";
+    : port_(DEFAULT_PORT), listen_specified_(false), client_max_body_size_(DEFAULT_MAX_BODY_SIZE) {
+    host_ = DEFAULT_HOST;
 }
 
 bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
@@ -32,7 +37,12 @@ bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
             if (!handleServerDirective(key, value, config)) {
                 return false;
             }
+        } else {
+            std::cerr << "Error: Invalid directive in server block: " << line
+                      << std::endl;
+            return false;
         }
+        
     }
 
     // Reached end of file without closing brace
@@ -124,7 +134,7 @@ bool ServerConfig::parseListen(const std::string& value, ServerConfig& config) {
             std::cerr << "Error parsing port in listen directive: " << value << std::endl;
             return false;
         }
-        config.host_ = "0.0.0.0";  // Default to all interfaces
+        config.host_ = DEFAULT_HOST;  // Default to all interfaces
     }
     return true;
 }
