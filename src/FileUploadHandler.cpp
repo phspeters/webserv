@@ -1,5 +1,7 @@
 #include "webserv.hpp"
 
+// curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
+
 FileUploadHandler::FileUploadHandler(const ServerConfig& config, ResponseWriter& writer)
     : config_(config), response_writer_(writer) {}
 
@@ -25,7 +27,11 @@ void FileUploadHandler::handle(Connection* conn) {
     std::string content_type;
     for (std::map<std::string, std::string>::const_iterator it = req->headers_.begin();
          it != req->headers_.end(); ++it) {
-        if (toLower(it->first) == "content-type") {
+        std::string header_name = it->first;
+        for (size_t i = 0; i < header_name.length(); i++) {
+            header_name[i] = std::tolower(header_name[i]);
+        }
+        if (header_name == "content-type") {
             content_type = it->second;
             break;
         }
@@ -190,8 +196,8 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn, const std::stri
 }
 
 bool FileUploadHandler::saveUploadedFile(const std::string& filename, 
-                                    const std::vector<char>& data,
-                                    const std::string& upload_dir) {
+                                   const std::vector<char>& data,
+                                   const std::string& upload_dir) {
     // Create upload directory if it doesn't exist
     struct stat st;
     if (stat(upload_dir.c_str(), &st) != 0) {
@@ -201,12 +207,8 @@ bool FileUploadHandler::saveUploadedFile(const std::string& filename,
         }
     }
     
-    // Sanitize filename (basic implementation)
-    std::string safe_filename = filename;
-    size_t last_slash = safe_filename.find_last_of("/\\");
-    if (last_slash != std::string::npos) {
-        safe_filename = safe_filename.substr(last_slash + 1);
-    }
+    // Sanitize filename
+    std::string safe_filename = sanitizeFilename(filename);
     
     // Open file for writing
     std::string full_path = upload_dir + safe_filename;
@@ -227,6 +229,27 @@ bool FileUploadHandler::saveUploadedFile(const std::string& filename,
     
     file.close();
     return true;
+}
+
+
+std::string FileUploadHandler::sanitizeFilename(const std::string& filename) {
+    // Remove path information
+    std::string safe_filename = filename;
+    size_t last_slash = safe_filename.find_last_of("/\\");
+    if (last_slash != std::string::npos) {
+        safe_filename = safe_filename.substr(last_slash + 1);
+    }
+    
+    // Remove potentially dangerous characters
+    for (size_t i = 0; i < safe_filename.length(); ++i) {
+        char c = safe_filename[i];
+        // Keep alphanumeric, dash, underscore, dot
+        if (!isalnum(c) && c != '-' && c != '_' && c != '.') {
+            safe_filename[i] = '_';
+        }
+    }
+    
+    return safe_filename;
 }
 
 std::string FileUploadHandler::extractBoundary(const std::string& content_type) {
@@ -253,13 +276,4 @@ std::string FileUploadHandler::extractBoundary(const std::string& content_type) 
         }
         return content_type.substr(boundary_pos, end_pos - boundary_pos);
     }
-}
-
-// Helper function to convert string to lowercase
-std::string FileUploadHandler::toLower(const std::string& str) {
-    std::string result = str;
-    for (size_t i = 0; i < result.length(); i++) {
-        result[i] = std::tolower(result[i]);
-    }
-    return result;
 }

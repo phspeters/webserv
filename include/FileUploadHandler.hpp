@@ -32,7 +32,9 @@ private:
     bool saveUploadedFile(const std::string& filename, const std::vector<char>& data, 
                           const std::string& upload_dir);
     std::string extractBoundary(const std::string& content_type);
-    
+    std::string sanitizeFilename(const std::string& filename);
+
+
     // Prevent copying
     FileUploadHandler(const FileUploadHandler&);
     FileUploadHandler& operator=(const FileUploadHandler&);
