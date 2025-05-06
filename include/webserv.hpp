@@ -8,6 +8,7 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -39,6 +40,7 @@
 #include "ServerManager.hpp"
 #include "StaticFileHandler.hpp"
 #include "ServerConfig.hpp"
+#include "FileUploadHandler.hpp"
 
 // utils
 std::string trim(const std::string& str);
