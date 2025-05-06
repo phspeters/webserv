@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello, World!</title>
+    <link rel="stylesheet" href="styles.css">
+    <title>Meow</title>
     <style>
         * {
             margin: 0;
@@ -25,6 +26,9 @@
         .container {
             text-align: center;
             z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         
         h1 {
@@ -32,25 +36,7 @@
             color: white;
             text-shadow: 2px 2px 8px rgba(0,0,0,0.2);
             letter-spacing: -1px;
-            transform: translateY(20px);
-            opacity: 0;
-            animation: fadeInUp 1s forwards 0.5s;
-        }
-        
-        .subtitle {
-            color: rgba(255,255,255,0.8);
-            margin-top: 1rem;
-            font-weight: 300;
-            opacity: 0;
-            transform: translateY(20px);
-            animation: fadeInUp 1s forwards 0.8s;
-        }
-        
-        @keyframes fadeInUp {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            margin-bottom: 20px;
         }
         
         .circle {
@@ -111,29 +97,15 @@
             text-decoration: none;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             transition: all 0.3s ease;
-            opacity: 0;
-            transform: translateY(20px);
-            animation: fadeInUp 1s forwards 1.1s;
         }
         
         .btn:hover {
             transform: translateY(-3px);
             box-shadow: 0 8px 20px rgba(0,0,0,0.15);
         }
-        
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 3rem;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            h1 {
-                font-size: 2.5rem;
-            }
-        }
     </style>
 </head>
+
 <body>
     <div class="circle circle-1"></div>
     <div class="circle circle-2"></div>
@@ -141,9 +113,35 @@
     <div class="circle circle-4"></div>
     
     <div class="container">
-        <h1>Hello World!</h1>
-        <p class="subtitle">Designed by Bia, Carol and Pedro.</p>
-        <a href="cat-css/cat.html"  class="btn">Explore More</a>
+        <h1>Meow!</h1>
+        
+        <div name="cat" class="cat">
+            <div class="between_ears">
+                <div class="ears" name="right" style="transform: rotate(150deg);"></div>
+                <div class="ears" name="left" style="transform: rotate(210deg);"></div>
+            </div>
+            <div class="face">
+                <div class="between_eyes">
+                    <div class="eyes" name="right_eye"></div>
+                    <div class="eyes" name="left_eye"></div>
+                </div>
+                <div class="lowerface">
+                    <div class="whiskers_right">
+                        <div class="cheek_top_right" name="right"></div>
+                        <div class="cheek_bottom_right" name="right"></div>
+                    </div>
+                    <div class="nose">
+                        <div class="nose_detail"></div>
+                    </div>
+                    <div class="whiskers_left">
+                        <div class="cheek_top_left" name="left"></div>
+                        <div class="cheek_bottom_left" name="left"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <a href="../index.html" class="btn">Back to Home</a>
     </div>
 </body>
 </html>
