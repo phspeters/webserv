@@ -1,0 +1,144 @@
+:root {
+    --corFocinho: #FFFFFF;
+    --corNariz: #F6C3E8;
+    --corOlhos: #54221C;
+    --corPrimariaPelagem: #FCAD3B;
+    --corSecundariaPelagem: #F78A1D;
+  }
+  
+  .cat {
+      justify-content: center; 
+      display: flex; 
+      flex-direction: column;
+      align-items: center;
+  }
+  .eyes {
+      width: 18px;
+      height: 35px;
+      background: var(--corOlhos);
+      border-radius: 50px;
+    }
+  
+  .between_eyes {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+  }
+  
+  .face {
+      width: 234px;
+      height: 134px;
+      background: var(--corPrimariaPelagem);
+      border-radius: 100px 100px 30px 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+  }
+  
+  .nose {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 92px;
+      height: 53px;
+      background: var(--corFocinho);
+      border-radius: 100px;
+      margin-top: 4px;
+  }
+  
+  .nose_detail
+  {
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      border-top: 12px solid var(--corNariz);
+  }
+  
+  .between_ears {
+      margin-top: 50px;
+      margin-bottom: -20px;
+      flex-direction: row;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 85px;
+  }
+  
+  .ears {
+      width: 0;
+      height: 0;
+      border-left: 25px solid transparent;
+      border-right: 25px solid transparent;
+      border-top: 50px solid var(--corPrimariaPelagem);
+  }
+  
+  
+  .lowerface {
+      width: 234px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+  }
+  
+  .cheek_top_right{
+      margin-bottom: 5px;
+      width: 40px;
+      height: 16px;
+      background: var(--corSecundariaPelagem);
+  
+      border-top-right-radius: 20px;
+      border-bottom-right-radius: 20px;
+  
+      border-top-left-radius: 30px;
+      border-bottom-left-radius: 10px;
+  }
+  
+  .cheek_bottom_right {
+      width: 28px;
+      height: 16px;
+      background: var(--corSecundariaPelagem);
+      border-top-right-radius: 20px;
+      border-bottom-right-radius: 20px;
+  
+      border-top-left-radius: 10px;
+  
+  }
+  
+  .cheek_top_left{
+      margin-bottom: 5px;
+      width: 40px;
+      height: 16px;
+      background: var(--corSecundariaPelagem);
+  
+      border-top-left-radius: 20px;
+      border-bottom-left-radius: 20px;
+  
+      border-top-right-radius: 30px;
+      border-bottom-right-radius: 10px;
+  }
+  
+  .cheek_bottom_left {
+      width: 28px;
+      height: 16px;
+      background: var(--corSecundariaPelagem);
+      border-top-left-radius: 20px;
+      border-bottom-left-radius: 20px;
+  }
+  
+  .whiskers_right
+  {
+      display: flex;
+      flex-direction: column;
+      justify-content: right;
+      align-items: start;
+      
+  }
+  
+  .whiskers_left
+  {
+      display: flex;
+      flex-direction: column;
+      align-items: end;
+  }

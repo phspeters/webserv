@@ -12,7 +12,9 @@ FILES = main.cpp \
 		RequestParser.cpp \
 		Server.cpp \
 		ServerConfig.cpp \
-		ServerManager.cpp
+		ServerManager.cpp \
+		FileUploadHandler.cpp \
+		ResponseWriter.cpp 
 		
 OBJS = $(FILES:%.cpp=$(OBJ_DIR)/%.o)
 OBJ_DIR = obj

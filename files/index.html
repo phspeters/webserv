@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello, World!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #74ebd5, #ACB6E5);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .container {
+            text-align: center;
+            z-index: 1;
+        }
+        
+        h1 {
+            font-size: 4rem;
+            color: white;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+            letter-spacing: -1px;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: fadeInUp 1s forwards 0.5s;
+        }
+        
+        .subtitle {
+            color: rgba(255,255,255,0.8);
+            margin-top: 1rem;
+            font-weight: 300;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 1s forwards 0.8s;
+        }
+        
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .circle {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .circle-1 {
+            width: 300px;
+            height: 300px;
+            top: -100px;
+            left: -100px;
+            animation: float 8s infinite ease-in-out;
+        }
+        
+        .circle-2 {
+            width: 200px;
+            height: 200px;
+            bottom: -50px;
+            right: 100px;
+            animation: float 12s infinite ease-in-out;
+        }
+        
+        .circle-3 {
+            width: 400px;
+            height: 400px;
+            bottom: -200px;
+            left: 10%;
+            animation: float 15s infinite ease-in-out;
+        }
+        
+        .circle-4 {
+            width: 100px;
+            height: 100px;
+            top: 20%;
+            right: 10%;
+            animation: float 10s infinite ease-in-out;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) rotate(0deg);
+            }
+            50% {
+                transform: translateY(-20px) rotate(5deg);
+            }
+        }
+        
+        .btn {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 12px 28px;
+            background: white;
+            color: #74ebd5;
+            border-radius: 30px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 1s forwards 1.1s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 3rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="circle circle-1"></div>
+    <div class="circle circle-2"></div>
+    <div class="circle circle-3"></div>
+    <div class="circle circle-4"></div>
+    
+    <div class="container">
+        <h1>Hello World!</h1>
+        <p class="subtitle">Designed by Bia, Carol and Pedro.</p>
+        <a href="cat-css/cat.html"  class="btn">Explore More</a>
+    </div>
+</body>
+</html>

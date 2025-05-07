@@ -81,6 +81,15 @@ bool ServerManager::register_server(Server* server) {
 }
 
 bool ServerManager::parse_config_file(const std::string& filename) {
+    // check file extension
+    std::string::size_type pos = filename.find_last_of(".");
+    if (pos == std::string::npos || filename.substr(pos) != ".conf") {
+        std::cerr << "Error: Invalid configuration file extension: " << filename
+                  << std::endl;
+        return false;
+    }
+
+    // Open the configuration file
     std::ifstream file(filename.c_str());
     if (!file.is_open()) {
         std::cerr << "Error: Could not open configuration file: " << filename
@@ -108,9 +117,8 @@ bool ServerManager::parse_config_file(const std::string& filename) {
                 std::string error_msg;
                 if (!config.isValid(error_msg)) {
                     std::cerr << "Error: Invalid server configuration: " << error_msg << std::endl;
-                    return false; // Exit with failure - don't continue processing
+                    return false; 
                 }
-                // std::cout << "DEBUG: Server configuration validated successfully" << std::endl;
                 configs.push_back(config);
                 // Print the parsed configuration
                 std::cout << "\n===== PARSED SERVER CONFIGURATION =====\n"
@@ -120,7 +128,7 @@ bool ServerManager::parse_config_file(const std::string& filename) {
                           << std::endl;
             } else {
                 std::cerr << "Error parsing server block" << std::endl;
-                return false; // Exit
+                return false; 
             }
         }
     }
