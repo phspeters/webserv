@@ -166,6 +166,23 @@ void Server::handle_read(Connection* conn) {
                         conn->request_data_->body_.size());
         std::cout << "\n====================================\n" << std::endl;
 
+        // TEMP - Calling router and handler
+         // Check if the request parsing is complete // PARSE_SUCCESS = 0
+        if (conn->request_data_->parse_status_ == 0) {
+            // Create a Router instance
+            Router router(config_);
+            // Route the request to the appropriate handler
+            IHandler* handler = router.route(conn->request_data_);
+            // If a handler was found, handle the request
+            if (handler) {
+                handler->handle(conn);
+                // delete handler;  // Don't forget to clean up the handler
+            } else {
+                std::cerr << "No handler found for the request" << std::endl;
+            }
+        }
+
+
         update_epoll_events(conn->client_fd_, EPOLLOUT);
     } else if (bytes_read == 0) {
         // Connection closed by client

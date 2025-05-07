@@ -12,7 +12,7 @@ IHandler* Router::route(const HttpRequest* req) {
     const std::string& request_path = req->path_;
 
     // Iterate through locations in config_ to find a match
-    const LocationConfig* matching_location = nullptr;
+    const LocationConfig* matching_location = NULL;
 
     for (std::vector<LocationConfig>::const_iterator it = config_.locations.begin(); 
         it != config_.locations.end(); ++it) {
@@ -24,7 +24,7 @@ IHandler* Router::route(const HttpRequest* req) {
             // For example, /blog should match / but not match /blogs
             if (loc.path == "/" || // Root always matches
                 request_path == loc.path || // Exact match
-                request_path.length() > loc.path.length() && request_path[loc.path.length()] == '/') {
+                (request_path.length() > loc.path.length() && request_path[loc.path.length()] == '/')) {
                 // If we haven't found a match yet, or this match is more specific
                 if (!matching_location || loc.path.length() > matching_location->path.length()) {
                     matching_location = &loc;
@@ -35,16 +35,29 @@ IHandler* Router::route(const HttpRequest* req) {
 
     // If no matching location found, send to StaticFileHandler? CHECK
     if (!matching_location) {
-        return nullptr;
+        std::cout << "\n==== ROUTER INFO ====\n";
+        std::cout << "Request path: " << request_path << std::endl;
+        std::cout << "Matching location: NONE" << std::endl;
+        std::cout << "======================\n" << std::endl;
+        return NULL;
     }
+
+    // Print router info when a location is matched
+    std::cout << "\n==== ROUTER INFO ====\n";
+    std::cout << "Request path: " << request_path << std::endl;
+    std::cout << "Matching location: " << matching_location->path << std::endl;
+    std::cout << "Autoindex: " << (matching_location->autoindex ? "true" : "false") << std::endl;
+    std::cout << "CGI enabled: " << (matching_location->cgi_enabled ? "true" : "false") << std::endl;
+    std::cout << "Root: " << matching_location->root << std::endl;
+    std::cout << "======================\n" << std::endl;
 
     // Determine which handler to use based on the matching location's configuration
     ResponseWriter* writer = new ResponseWriter(config_);
     if (matching_location->cgi_enabled) {
-        return new CgiHandler(config_, *writer); // Dereference to pass as reference
+        // return new CgiHandler(config_, *writer); // 
+        return new StaticFileHandler(config_, *writer);   
     } else if (matching_location->autoindex) {
-        // return new UploadHandler(config_, *writer); 
-        return new StaticFileHandler(config_, *writer);
+        return new FileUploadHandler(config_, *writer); 
     } else {
         return new StaticFileHandler(config_, *writer);
     }
