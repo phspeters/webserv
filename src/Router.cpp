@@ -8,8 +8,8 @@ Router::~Router() {
 
 IHandler* Router::route(const HttpRequest* req) {
 
-    // Get the path from the request (already without query part)
-    const std::string& request_path = req->path_;
+    // Get the path from the request (already without query part) --- CHECK req->uri
+    const std::string& request_path = req->uri_;
 
     // Iterate through locations in config_ to find a match
     const LocationConfig* matching_location = NULL;

@@ -7,64 +7,65 @@ StaticFileHandler::~StaticFileHandler() {}
 
 void StaticFileHandler::handle(Connection* conn) {
 
-    // Extract the request path
-    const std::string& request_path = conn->request_data_->path_;
+    // Extract the request path ---CHECK req->uri
+    const std::string& request_path = conn->request_data_->uri_;
     
     // Debug information
     std::cout << "\n==== STATIC FILE HANDLER ====\n";
     std::cout << "Handling request for path: " << request_path << std::endl;
     
-    // Find the matching location to determine the file path
-    const LocationConfig* loc = NULL;
-    for (std::vector<LocationConfig>::const_iterator it = config_.locations.begin(); 
-         it != config_.locations.end(); ++it) {
-        if (request_path.find(it->path) == 0) {
-            if (it->path == "/" || 
-                request_path == it->path || 
-                (request_path.length() > it->path.length() && request_path[it->path.length()] == '/')) {
-                if (!loc || it->path.length() > loc->path.length()) {
-                    loc = &(*it);
-                }
+     //Check the variable LOCATION NOT FOUND ---CHECK
+    // ADD HERE
+    
+    // Build the file path by joining the location's root with the relative path
+    std::string root;   // Get the ROOT --CHECK from where
+    std::string location_path; // Get the location path --CHECK from where
+
+    // Calculate the relative path
+    std::string relative_path;
+    if (location_path == "/") {
+        // If location is root, use the entire request path (minus the leading slash)
+        if (!request_path.empty() && request_path[0] == '/') {
+            relative_path = request_path.substr(1);
+        } else {
+            relative_path = request_path;
+        }
+    } else {
+        // Remove the location prefix to get the file path relative to the root
+        // Example: location /blog with request /blog/post.html -> relative_path = post.html
+        if (request_path.find(location_path) == 0) {
+            relative_path = request_path.substr(location_path.length());
+            // Remove leading slash if present
+            if (!relative_path.empty() && relative_path[0] == '/') {
+                relative_path = relative_path.substr(1);
+            }
+        } else {
+            // Fallback (shouldn't happen with proper routing)
+            if (!request_path.empty() && request_path[0] == '/') {
+                relative_path = request_path.substr(1);
+            } else {
+                relative_path = request_path;
             }
         }
     }
     
-    if (!loc) {
-        std::cout << "No matching location found\n";
-        std::cout << "============================\n" << std::endl;
-        conn->response_data_->status_code_ = 404;
-        conn->response_data_->status_message_ = "Not Found";
-        conn->state_ = Connection::CONN_WRITING;;
-        return;
-    }
-    
-    // Build the file path
-    std::string file_path = loc->root;
-    if (!file_path.empty() && file_path[file_path.size() - 1] != '/') {
-        file_path += '/';
-    }
-    
-    // Translate URL path to file path
-    std::string relative_path = request_path;
-    if (loc->path != "/") {
-        // Remove the location prefix from the path
-        relative_path = request_path.substr(loc->path.length());
-    }
-    
-    // If path ends with /, look for index file
+    // If the path is empty or ends with /, append the default index file
     if (relative_path.empty() || 
-    (!relative_path.empty() && relative_path[relative_path.size() - 1] == '/')) {
-    relative_path += loc->index;
-    }   
-    
-    // Remove leading / from relative_path if present
-    if (!relative_path.empty() && relative_path[0] == '/') {
-        relative_path = relative_path.substr(1);
+        (!relative_path.empty() && relative_path[relative_path.size() - 1] == '/')) {
+        if (!loc->index.empty()) {
+            relative_path += loc->index;
+        } else {
+            relative_path += "index.html";  // Default index if not specified
+        }
     }
     
-    file_path += relative_path;
+    // Combine root and relative path to get the complete file path
+    std::string file_path = root + relative_path;
     
-    std::cout << "File path: " << file_path << std::endl;
+    std::cout << "Location path: " << location_path << std::endl;
+    std::cout << "Root directory: " << root << std::endl;
+    std::cout << "Relative path: " << relative_path << std::endl;
+    std::cout << "Complete file path: " << file_path << std::endl;
     std::cout << "============================\n" << std::endl;
     
     // Try to open the file
@@ -83,7 +84,7 @@ void StaticFileHandler::handle(Connection* conn) {
             conn->response_data_->status_code_ = 500;
             conn->response_data_->status_message_ = "Internal Server Error";
         }
-        conn->state_ = Connection::CONN_WRITING;;
+        conn->state_ = Connection::CONN_WRITING;
         return;
     }
     
@@ -93,7 +94,7 @@ void StaticFileHandler::handle(Connection* conn) {
         close(fd);
         conn->response_data_->status_code_ = 500;
         conn->response_data_->status_message_ = "Internal Server Error";
-        conn->state_ = Connection::CONN_WRITING;;
+        conn->state_ = Connection::CONN_WRITING;
         return;
     }
     
@@ -102,8 +103,28 @@ void StaticFileHandler::handle(Connection* conn) {
         close(fd);
         conn->response_data_->status_code_ = 403;
         conn->response_data_->status_message_ = "Forbidden";
-        conn->state_ = Connection::CONN_WRITING;;
+        conn->state_ = Connection::CONN_WRITING;
         return;
+    }
+    
+    // Check if method is allowed
+    if (loc->allowed_methods.size() > 0) {
+        bool method_allowed = false;
+        for (std::vector<std::string>::const_iterator it = loc->allowed_methods.begin();
+             it != loc->allowed_methods.end(); ++it) {
+            if (conn->request_data_->method_ == *it) {
+                method_allowed = true;
+                break;
+            }
+        }
+        
+        if (!method_allowed) {
+            close(fd);
+            conn->response_data_->status_code_ = 405;
+            conn->response_data_->status_message_ = "Method Not Allowed";
+            conn->state_ = Connection::CONN_WRITING;
+            return;
+        }
     }
     
     // Determine content type
@@ -127,30 +148,36 @@ void StaticFileHandler::handle(Connection* conn) {
             content_type = "image/gif";
         } else if (extension == "txt") {
             content_type = "text/plain";
+        } else if (extension == "pdf") {
+            content_type = "application/pdf";
+        } else if (extension == "mp4") {
+            content_type = "video/mp4";
+        } else if (extension == "mp3") {
+            content_type = "audio/mpeg";
         }
     }
     
     // Read the file content
     std::vector<char> file_content(file_info.st_size);
-    ssize_t bytes_read = read(fd, file_content.data(), file_info.st_size);
+    ssize_t bytes_read = read(fd, &file_content[0], file_info.st_size);
     close(fd);
     
     if (bytes_read != file_info.st_size) {
         conn->response_data_->status_code_ = 500;
         conn->response_data_->status_message_ = "Internal Server Error";
-        conn->state_ = Connection::CONN_WRITING;;
+        conn->state_ = Connection::CONN_WRITING;
         return;
     }
     
-   // Prepare response headers
-std::map<std::string, std::string> headers;
-headers["Content-Type"] = content_type;
-
+    // Prepare response headers
+    std::map<std::string, std::string> headers;
+    headers["Content-Type"] = content_type;
+    
     // Use stringstream instead of std::to_string (C++11 feature)
     std::ostringstream ss;
     ss << file_info.st_size;
     headers["Content-Length"] = ss.str();
-
+    
     // Send the response
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
@@ -158,5 +185,5 @@ headers["Content-Type"] = content_type;
     conn->response_data_->body_.assign(file_content.begin(), file_content.end());
     
     // Update connection state
-    conn->state_ = Connection::CONN_WRITING;;
+    conn->state_ = Connection::CONN_WRITING; 
 }
