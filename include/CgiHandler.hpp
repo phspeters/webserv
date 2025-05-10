@@ -7,13 +7,13 @@
 struct Connection;
 struct ServerConfig;
 class ResponseWriter;
-class IHandler;
+class AHandler;
 
 // Handles requests by executing CGI scripts.
-class CgiHandler : public IHandler {
+class CgiHandler : public AHandler {
    public:
     // Constructor takes dependencies
-    CgiHandler(const ServerConfig& config, ResponseWriter& writer);
+    CgiHandler(const ServerConfig& config);
     virtual ~CgiHandler();
 
     // Implementation of the handle method for CGI.
@@ -35,8 +35,6 @@ class CgiHandler : public IHandler {
 
    private:
     const ServerConfig& config_;  // Reference to server configuration
-    ResponseWriter&
-        response_writer_;  // Reference to the response writer utility
 
     // Helper methods for setting up environment, parsing CGI headers etc. go in
     // .cpp

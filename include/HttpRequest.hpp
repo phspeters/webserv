@@ -25,6 +25,8 @@ struct HttpRequest {
     std::string path_;          // Path part of the URI (e.g., "/index.html")
     std::string query_string_;  // Query part of the UR  I (e.g., "a=1&b=2")
 
+    LocationConfig* location_match_;  // Best matching location for the request
+
     RequestParser::ParseResult parse_status_;  // Status of request parsing
 
     //--------------------------------------

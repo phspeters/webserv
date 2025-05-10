@@ -1,7 +1,7 @@
 #ifndef STATICFILEHANDLER_HPP
 #define STATICFILEHANDLER_HPP
 
-#include "webserv.hpp" 
+#include "webserv.hpp"
 
 // Forward declarations
 struct Connection;
@@ -9,7 +9,7 @@ struct ServerConfig;
 class ResponseWriter;
 
 // Handles requests for static files.
-class StaticFileHandler : public IHandler {
+class StaticFileHandler : public AHandler {
    public:
     // Constructor takes dependencies
     StaticFileHandler(const ServerConfig& config, ResponseWriter& writer);

@@ -116,8 +116,10 @@ bool ServerManager::parse_config_file(const std::string& filename) {
             if (ServerConfig::parseServerBlock(file, config)) {
                 std::string error_msg;
                 if (!config.isValid(error_msg)) {
-                    std::cerr << "Error: Invalid server configuration: " << error_msg << std::endl;
-                    return false; 
+                    std::cerr
+                        << "Error: Invalid server configuration: " << error_msg
+                        << std::endl;
+                    return false;
                 }
                 configs.push_back(config);
                 // Print the parsed configuration
@@ -128,7 +130,7 @@ bool ServerManager::parse_config_file(const std::string& filename) {
                           << std::endl;
             } else {
                 std::cerr << "Error parsing server block" << std::endl;
-                return false; 
+                return false;
             }
         }
     }

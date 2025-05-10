@@ -1,5 +1,5 @@
-#ifndef HANDLER_HPP
-#define HANDLER_HPP
+#ifndef AHANDLER_HPP
+#define AHANDLER_HPP
 
 #include "webserv.hpp"
 
@@ -7,11 +7,11 @@
 struct Connection;
 
 // Abstract base class for all request handlers.
-class IHandler {
+class AHandler {
    public:
     // Virtual destructor is essential for classes intended for polymorphic
     // deletion
-    virtual ~IHandler() {}
+    virtual ~AHandler() {}
 
     // Main method to handle a request associated with a connection.
     // The handler is responsible for:

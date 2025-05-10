@@ -4,7 +4,7 @@
 #include "webserv.hpp"
 
 // Forward declarations
-class IHandler;
+class AHandler;
 struct HttpRequest;
 struct HttpResponse;
 struct ServerConfig;
@@ -69,7 +69,7 @@ struct Connection {
     //--------------------------------------
     // Handler Association
     //--------------------------------------
-    IHandler* active_handler_ptr_;  // Pointer to the handler responsible (set
+    AHandler* active_handler_ptr_;  // Pointer to the handler responsible (set
                                     // by Router)
 
     //--------------------------------------

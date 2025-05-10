@@ -25,7 +25,7 @@
 #include <string>
 #include <vector>
 
-#include "IHandler.hpp"
+#include "AHandler.hpp"
 #include "ServerConfig.hpp"
 #include "RequestParser.hpp"
 

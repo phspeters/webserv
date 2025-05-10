@@ -3,13 +3,13 @@
 // Server defaults
 static const int DEFAULT_PORT = 80;
 static const std::string DEFAULT_HOST = "0.0.0.0";
-static const size_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024; // 1MB
+static const size_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024;  // 1MB
 static const std::string DEFAULT_SERVER_NAME = "default_server";
 
 // Error page defaults
 static const int DEFAULT_404_ERROR_CODE = 404;
 static const std::string DEFAULT_404_ERROR_PAGE = "/error/404.html";
-static const int DEFAULT_500_ERROR_CODE = 500; 
+static const int DEFAULT_500_ERROR_CODE = 500;
 static const std::string DEFAULT_500_ERROR_PAGE = "/error/500.html";
 
 // Location defaults
@@ -25,17 +25,22 @@ static std::vector<std::string> createDefaultAllowedMethods() {
     return methods;
 }
 
-static const std::vector<std::string> DEFAULT_ALLOWED_METHODS = createDefaultAllowedMethods();
+static const std::vector<std::string> DEFAULT_ALLOWED_METHODS =
+    createDefaultAllowedMethods();
 
 // Constructor for LocationConfig with defaults
 LocationConfig::LocationConfig()
-    : autoindex(DEFAULT_AUTOINDEX), cgi_enabled(DEFAULT_CGI_ENABLED), index(DEFAULT_INDEX) {
+    : autoindex(DEFAULT_AUTOINDEX),
+      cgi_enabled(DEFAULT_CGI_ENABLED),
+      index(DEFAULT_INDEX) {
     allowed_methods = DEFAULT_ALLOWED_METHODS;
 }
 
 // Default constructor implementation
 ServerConfig::ServerConfig()
-    : port_(DEFAULT_PORT), listen_specified_(false), client_max_body_size_(DEFAULT_MAX_BODY_SIZE) {
+    : port_(DEFAULT_PORT),
+      listen_specified_(false),
+      client_max_body_size_(DEFAULT_MAX_BODY_SIZE) {
     host_ = DEFAULT_HOST;
 }
 
@@ -70,14 +75,14 @@ bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
                       << std::endl;
             return false;
         }
-        
     }
 
     // Reached end of file without closing brace
     return false;
 }
 
-bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line, ServerConfig& config) {
+bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line,
+                                      ServerConfig& config) {
     // Extract location path
     size_t pathStart = line.find_first_not_of(" \t", 8);  // Skip "location"
     if (pathStart == std::string::npos) return false;
@@ -86,7 +91,7 @@ bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line, Ser
     if (pathEnd == std::string::npos) return false;
 
     std::string path = line.substr(pathStart, pathEnd - pathStart);
-    
+
     // Find opening brace
     size_t bracePos = line.find('{', pathEnd);
     if (bracePos == std::string::npos) {
@@ -117,30 +122,28 @@ bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line, Ser
         std::string key, value;
         if (parseDirective(locLine, key, value)) {
             if (!addDirectiveValue(location, key, value)) {
-                return false; // Reject if directive isn't recognized
+                return false;  // Reject if directive isn't recognized
             }
         }
     }
-    
+
     return false;
 }
 
 // Handle server directives with a separate method
-bool ServerConfig::handleServerDirective(const std::string& key, const std::string& value, ServerConfig& config) {
+bool ServerConfig::handleServerDirective(const std::string& key,
+                                         const std::string& value,
+                                         ServerConfig& config) {
     if (key == "listen") {
         config.listen_specified_ = true;
         return parseListen(value, config);
-    } 
-    else if (key == "server_name") {
+    } else if (key == "server_name") {
         return parseServerName(value, config);
-    }
-    else if (key == "error_page") {
+    } else if (key == "error_page") {
         return parseErrorPage(value, config);
-    }
-    else if (key == "client_max_body_size") {
+    } else if (key == "client_max_body_size") {
         return parseClientMaxBodySize(value, config);
-    }
-    else {
+    } else {
         std::cerr << "Error: Unknown directive '" << key << "'" << std::endl;
         return false;
     }
@@ -152,14 +155,16 @@ bool ServerConfig::parseListen(const std::string& value, ServerConfig& config) {
         config.host_ = value.substr(0, colonPos);
         std::istringstream iss(value.substr(colonPos + 1));
         if (!(iss >> config.port_)) {
-            std::cerr << "Error parsing port in listen directive: " << value << std::endl;
+            std::cerr << "Error parsing port in listen directive: " << value
+                      << std::endl;
             return false;
         }
     } else {
         // Just a port number
         std::istringstream iss(value);
         if (!(iss >> config.port_)) {
-            std::cerr << "Error parsing port in listen directive: " << value << std::endl;
+            std::cerr << "Error parsing port in listen directive: " << value
+                      << std::endl;
             return false;
         }
         config.host_ = DEFAULT_HOST;  // Default to all interfaces
@@ -167,16 +172,17 @@ bool ServerConfig::parseListen(const std::string& value, ServerConfig& config) {
     return true;
 }
 
-bool ServerConfig::parseClientMaxBodySize(const std::string& value, ServerConfig& config) {
+bool ServerConfig::parseClientMaxBodySize(const std::string& value,
+                                          ServerConfig& config) {
     if (value.empty()) {
         std::cerr << "Error: client_max_body_size cannot be empty" << std::endl;
         return false;
     }
-    
+
     size_t size = 0;
     std::string numPart;
     char unit = '\0';
-    
+
     // Check if last character is a unit
     if (isalpha(value[value.length() - 1])) {
         unit = value[value.length() - 1];
@@ -184,22 +190,24 @@ bool ServerConfig::parseClientMaxBodySize(const std::string& value, ServerConfig
     } else {
         numPart = value;
     }
-    
+
     // Check that numPart contains only digits
     for (size_t i = 0; i < numPart.length(); i++) {
         if (!isdigit(numPart[i])) {
-            std::cerr << "Error: client_max_body_size must contain only digits" << std::endl;
+            std::cerr << "Error: client_max_body_size must contain only digits"
+                      << std::endl;
             return false;
         }
     }
-    
+
     // Parse the numeric part
     std::istringstream iss(numPart);
     if (!(iss >> size)) {
-        std::cerr << "Error: invalid number format in client_max_body_size" << std::endl;
+        std::cerr << "Error: invalid number format in client_max_body_size"
+                  << std::endl;
         return false;
     }
-    
+
     // Apply unit multiplier if present
     if (unit != '\0') {
         switch (toupper(unit)) {
@@ -213,22 +221,24 @@ bool ServerConfig::parseClientMaxBodySize(const std::string& value, ServerConfig
                 size *= 1024 * 1024 * 1024;
                 break;
             default:
-                std::cerr << "Error: unknown size unit '" << unit << "'" << std::endl;
+                std::cerr << "Error: unknown size unit '" << unit << "'"
+                          << std::endl;
                 return false;
         }
     }
-    
+
     // Check for zero
     if (size == 0) {
         std::cerr << "Error: client_max_body_size cannot be zero" << std::endl;
         return false;
     }
-    
+
     config.client_max_body_size_ = size;
     return true;
 }
 
-bool ServerConfig::parseServerName(const std::string& value, ServerConfig& config) {
+bool ServerConfig::parseServerName(const std::string& value,
+                                   ServerConfig& config) {
     std::istringstream iss(value);
     std::string name;
     while (iss >> name) {
@@ -237,7 +247,8 @@ bool ServerConfig::parseServerName(const std::string& value, ServerConfig& confi
     return true;
 }
 
-bool ServerConfig::parseErrorPage(const std::string& value, ServerConfig& config) {
+bool ServerConfig::parseErrorPage(const std::string& value,
+                                  ServerConfig& config) {
     std::istringstream iss(value);
     int code;
     std::string path;
@@ -249,7 +260,9 @@ bool ServerConfig::parseErrorPage(const std::string& value, ServerConfig& config
     return false;
 }
 
-bool ServerConfig::addDirectiveValue(LocationConfig& location, const std::string& key, const std::string& value) {
+bool ServerConfig::addDirectiveValue(LocationConfig& location,
+                                     const std::string& key,
+                                     const std::string& value) {
     if (key == "root") {
         location.root = value;
     } else if (key == "autoindex") {
@@ -257,7 +270,7 @@ bool ServerConfig::addDirectiveValue(LocationConfig& location, const std::string
     } else if (key == "allow_methods") {
         // Clear default methods first
         location.allowed_methods.clear();
-        
+
         // Split and add methods
         std::istringstream iss(value);
         std::string method;
@@ -271,7 +284,8 @@ bool ServerConfig::addDirectiveValue(LocationConfig& location, const std::string
     } else if (key == "redirect") {
         location.redirect = value;
     } else {
-        std::cerr << "Unknown directive in location block: " << key << std::endl;
+        std::cerr << "Unknown directive in location block: " << key
+                  << std::endl;
         return false;
     }
     return true;
@@ -281,7 +295,7 @@ bool ServerConfig::addDirectiveValue(LocationConfig& location, const std::string
 bool ServerConfig::parseDirective(const std::string& line, std::string& key,
                                   std::string& value) {
     size_t pos = line.find_first_of(" \t");
-    
+
     if (pos == std::string::npos) return false;
 
     key = line.substr(0, pos);
@@ -494,7 +508,8 @@ void ServerConfig::print() const {
     if (error_pages.empty()) {
         std::cout << "  (none)" << std::endl;
     } else {
-        for (std::map<int, std::string>::const_iterator it = error_pages.begin();
+        for (std::map<int, std::string>::const_iterator it =
+                 error_pages.begin();
              it != error_pages.end(); ++it) {
             std::cout << "  " << it->first << " -> " << it->second << std::endl;
         }
@@ -504,12 +519,14 @@ void ServerConfig::print() const {
     std::cout << "Location Blocks (" << locations.size() << "):" << std::endl;
     for (size_t i = 0; i < locations.size(); ++i) {
         const LocationConfig& loc = locations[i];
-        std::cout << "  ---------- LOCATION: " << loc.path << " ----------" << std::endl;
-        
+        std::cout << "  ---------- LOCATION: " << loc.path << " ----------"
+                  << std::endl;
+
         std::cout << "    root: " << loc.root << std::endl;
-        
-        std::cout << "    autoindex: " << (loc.autoindex ? "on" : "off") << std::endl;
-        
+
+        std::cout << "    autoindex: " << (loc.autoindex ? "on" : "off")
+                  << std::endl;
+
         std::cout << "    allowed_methods: ";
         for (size_t j = 0; j < loc.allowed_methods.size(); ++j) {
             std::cout << loc.allowed_methods[j];
@@ -518,11 +535,12 @@ void ServerConfig::print() const {
             }
         }
         std::cout << std::endl;
-        
-        std::cout << "    cgi: " << (loc.cgi_enabled ? "on" : "off") << std::endl;
-        
+
+        std::cout << "    cgi: " << (loc.cgi_enabled ? "on" : "off")
+                  << std::endl;
+
         std::cout << "    index: " << loc.index << std::endl;
-        
+
         if (!loc.redirect.empty()) {
             std::cout << "    redirect: " << loc.redirect << std::endl;
         }
