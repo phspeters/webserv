@@ -6,13 +6,12 @@
 // Forward declarations
 struct Connection;
 struct ServerConfig;
-class ResponseWriter;
 
 // Handles requests for static files.
 class StaticFileHandler : public AHandler {
    public:
     // Constructor takes dependencies
-    StaticFileHandler(const ServerConfig& config, ResponseWriter& writer);
+    StaticFileHandler(const ServerConfig& config);
     virtual ~StaticFileHandler();
 
     // Implementation of the handle method for static files.
@@ -29,8 +28,6 @@ class StaticFileHandler : public AHandler {
 
    private:
     const ServerConfig& config_;  // Reference to server configuration
-    ResponseWriter&
-        response_writer_;  // Reference to the response writer utility
 
     // Helper methods for path resolution, MIME type lookup etc. go in .cpp
 

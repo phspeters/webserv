@@ -6,13 +6,12 @@
 // Forward declarations
 struct Connection;
 struct ServerConfig;
-class ResponseWriter;
 
 // Handles file upload requests
 class FileUploadHandler : public AHandler {
    public:
     // Constructor takes dependencies
-    FileUploadHandler(const ServerConfig& config, ResponseWriter& writer);
+    FileUploadHandler(const ServerConfig& config);
     virtual ~FileUploadHandler();
 
     // Implementation of handle method for file uploads
@@ -25,7 +24,6 @@ class FileUploadHandler : public AHandler {
 
    private:
     const ServerConfig& config_;
-    ResponseWriter& response_writer_;
 
     // Helper methods
     bool parseMultipartFormData(Connection* conn, const std::string& boundary);
