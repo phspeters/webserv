@@ -14,7 +14,7 @@ class ServerManager {
     // Initialize epoll and prepare for accepting servers
     bool init();
 
-    void run();
+    void run(std::vector<ServerConfig>& configs);
 
     // Set the running flag to false and exit the event loop
     void shutdown();
@@ -25,7 +25,7 @@ class ServerManager {
     Server* get_server_by_fd(int fd) const;
 
     bool register_server(Server* server);
-    bool parse_config_file(
+    std::vector<ServerConfig> parse_config_file(
         const std::string& filename);  // Parses the config file and initializes
                                        // servers
 

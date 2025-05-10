@@ -29,11 +29,34 @@ bool ServerManager::init() {
     return true;  // Successfully initialized
 }
 
-void ServerManager::run() {
-    if (!ready_) {
-        std::cerr << "Exiting..." << std::endl;
+void ServerManager::run(std::vector<ServerConfig>& configs) {
+    try {
+        for (std::vector<ServerConfig>::iterator it = configs.begin();
+             it != configs.end(); it++) {
+            // Create and initialize a new server
+            Server* server = new Server(*it, this);
+            if (!server->init()) {
+                // Handle error
+                std::cerr << "Failed to initialize server "
+                          << server->get_server_name() << "on port "
+                          << server->get_port() << std::endl;
+                delete server;
+                return;
+            }
+
+            if (!register_server(server)) {
+                // Handle error
+                delete server;
+                return;
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: Failed to create server instances" << std::endl;
+        std::cerr << e.what() << std::endl;
         return;
     }
+
+    ready_ = true;
 
     // Start the event loop
     std::cout << "ServerManager is ready and waiting for connections"
@@ -80,13 +103,16 @@ bool ServerManager::register_server(Server* server) {
     return true;
 }
 
-bool ServerManager::parse_config_file(const std::string& filename) {
+std::vector<ServerConfig> ServerManager::parse_config_file(
+    const std::string& filename) {
+    // Parse the configuration file and return a vector of ServerConfig objects
+
     // check file extension
     std::string::size_type pos = filename.find_last_of(".");
     if (pos == std::string::npos || filename.substr(pos) != ".conf") {
         std::cerr << "Error: Invalid configuration file extension: " << filename
                   << std::endl;
-        return false;
+        return std::vector<ServerConfig>();  // Empty vector indicates failure
     }
 
     // Open the configuration file
@@ -94,11 +120,11 @@ bool ServerManager::parse_config_file(const std::string& filename) {
     if (!file.is_open()) {
         std::cerr << "Error: Could not open configuration file: " << filename
                   << std::endl;
-        return false;
+        return std::vector<ServerConfig>();  // Empty vector indicates failure
     }
 
-    std::string line;
     std::vector<ServerConfig> configs;
+    std::string line;
     while (std::getline(file, line)) {
         line = trim(line);
 
@@ -119,7 +145,8 @@ bool ServerManager::parse_config_file(const std::string& filename) {
                     std::cerr
                         << "Error: Invalid server configuration: " << error_msg
                         << std::endl;
-                    return false;
+                    return std::vector<ServerConfig>();  // Empty vector
+                                                         // indicates failure
                 }
                 configs.push_back(config);
                 // Print the parsed configuration
@@ -130,39 +157,13 @@ bool ServerManager::parse_config_file(const std::string& filename) {
                           << std::endl;
             } else {
                 std::cerr << "Error parsing server block" << std::endl;
-                return false;
+                return std::vector<ServerConfig>();  // Empty vector indicates
+                                                     // failure
             }
         }
     }
 
-    try {
-        for (std::vector<ServerConfig>::iterator it = configs.begin();
-             it != configs.end(); it++) {
-            // Create and initialize a new server
-            Server* server = new Server(*it, this);
-            if (!server->init()) {
-                // Handle error
-                std::cerr << "Failed to initialize server "
-                          << server->get_server_name() << "on port "
-                          << server->get_port() << std::endl;
-                delete server;
-                return false;
-            }
-
-            if (!register_server(server)) {
-                // Handle error
-                delete server;
-                return false;
-            }
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Error: Failed to create server instances" << std::endl;
-        std::cerr << e.what() << std::endl;
-        return false;
-    }
-
-    ready_ = true;
-    return !servers_.empty();
+    return configs;
 }
 
 void ServerManager::unregister_fd(int fd) {
