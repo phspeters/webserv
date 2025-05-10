@@ -57,31 +57,19 @@ RequestParser::ParseResult RequestParser::parse_request_line(Connection* conn) {
     if (line_end == buffer.end()) {
         // Not enough data yet
         if (buffer.size() > HttpConfig::MAX_REQUEST_LINE_LENGTH) {
-            return PARSE_URI_TOO_LONG;
+            return PARSE_REQUEST_TOO_LONG;
         }
         return PARSE_INCOMPLETE;
     }
 
     // Get the complete request line
     std::string request_line(buffer.begin(), line_end);
-
-    // Parse method, URI, and version
-    size_t first_space = request_line.find(' ');
-    size_t last_space = request_line.rfind(' ');
-
-    if (first_space == std::string::npos || last_space == first_space) {
-        return PARSE_ERROR;
+    if (!split_request_line(request, request_line)) {
+        return PARSE_INVALID_REQUEST_LINE;
     }
 
-    // Extract components
-    request->method_ = request_line.substr(0, first_space);
-    request->uri_ =
-        request_line.substr(first_space + 1, last_space - first_space - 1);
-    request->version_ = request_line.substr(last_space + 1);
-
     // Validate components
-    ParseResult validation_result = validate_request_line(
-        request->method_, request->uri_, request->version_);
+    ParseResult validation_result = validate_request_line(request);
     if (validation_result != PARSE_SUCCESS) {
         return validation_result;
     }
@@ -94,31 +82,138 @@ RequestParser::ParseResult RequestParser::parse_request_line(Connection* conn) {
     return PARSE_INCOMPLETE;
 }
 
+bool RequestParser::split_request_line(HttpRequest* request,
+                                       std::string& request_line) {
+    // Parse method, URI, and version
+    size_t first_space = request_line.find(' ');
+    size_t last_space = request_line.rfind(' ');
+
+    if (first_space == std::string::npos || last_space == first_space) {
+        return false;
+    }
+
+    // Extract components
+    request->method_ = request_line.substr(0, first_space);
+    request->uri_ =
+        request_line.substr(first_space + 1, last_space - first_space - 1);
+    request->version_ = request_line.substr(last_space + 1);
+
+    if (!split_uri_components(request)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool RequestParser::split_uri_components(HttpRequest* request) {
+    std::string uri = request->uri_;
+
+    // Check for fragment identifier ('#' delimiter)
+    size_t fragment_pos = uri.find('#');
+    if (fragment_pos != std::string::npos) {
+        request->fragment_ =
+            decode_uri(request->path_.substr(fragment_pos + 1));
+        if (request->fragment_.empty()) {
+            return false;  // Invalid fragment
+        }
+        uri.erase(fragment_pos);
+    } else {
+        request->fragment_.clear();
+    }
+
+    // Check for query string ('?' delimiter)
+    size_t query_pos = uri.find('?');
+    if (query_pos != std::string::npos) {
+        request->path_ = decode_uri(uri.substr(0, query_pos));
+        if (request->path_.empty()) {
+            return false;  // Invalid path
+        }
+        request->query_string_ =
+            decode_uri(request->uri_.substr(query_pos + 1));
+        if (request->query_string_.empty()) {
+            return false;  // Invalid query string
+        }
+    } else {
+        request->path_ = decode_uri(request->uri_);
+        if (request->path_.empty()) {
+            return false;  // Invalid path
+        }
+        request->query_string_.clear();
+    }
+
+    return true;
+}
+
+std::string RequestParser::decode_uri(const std::string& uri) {
+    std::string result;
+
+    for (size_t i = 0; i < uri.length(); i++) {
+        if (uri[i] == '%') {
+            // Check for valid percent-encoding
+            if (i + 2 >= uri.length() || !isxdigit(uri[i + 1]) ||
+                !isxdigit(uri[i + 2])) {
+                return "";
+            }
+
+            // Convert hex value
+            std::string hex = uri.substr(i + 1, 2);
+            int value;
+            std::istringstream(hex) >> std::hex >> value;
+
+            // Check for control characters (which are not allowed)
+            if (value < 32 || value == 127) {
+                return "";
+            }
+
+            result += static_cast<char>(value);
+            i += 2;  // Skip the two hex digits
+        } else if (uri[i] == '+') {
+            // In query strings, '+' becomes space
+            result += ' ';
+        } else {
+            // Direct character (also check for control characters)
+            if (static_cast<unsigned char>(uri[i]) < 32 ||
+                static_cast<unsigned char>(uri[i]) == 127) {
+                return "";
+            }
+            result += uri[i];
+        }
+    }
+
+    return result;
+}
+
 RequestParser::ParseResult RequestParser::validate_request_line(
-    const std::string& method, const std::string& uri,
-    const std::string& version) {
-    if (!validate_method(method)) {
+    const HttpRequest* request) {
+    if (!validate_method(request->method_)) {
         return PARSE_METHOD_NOT_ALLOWED;
     }
 
-    if (!validate_http_version(version)) {
+    if (!validate_path(request->path_)) {
+        return PARSE_INVALID_PATH;
+    }
+
+    if (!validate_query_string(request->query_string_)) {
+        return PARSE_INVALID_QUERY_STRING;
+    }
+
+    if (!validate_fragment(request->fragment_)) {
+        return PARSE_INVALID_FRAGMENT;
+    }
+
+    if (!validate_http_version(request->version_)) {
         return PARSE_VERSION_NOT_SUPPORTED;
-    }
-
-    if (uri.length() > HttpConfig::MAX_URI_LENGTH) {
-        return PARSE_URI_TOO_LONG;
-    }
-
-    if (!validate_uri(uri)) {
-        return PARSE_ERROR;
     }
 
     return PARSE_SUCCESS;
 }
 
 bool RequestParser::validate_method(const std::string& method) {
-    static const std::string methods[] = {"GET", "POST", "PUT", "DELETE",
-                                          "HEAD"};
+    static const std::string methods[] = {
+        "GET",
+        "POST",
+        "DELETE",
+    };
     static const std::vector<std::string> valid_methods(
         methods, methods + sizeof(methods) / sizeof(methods[0]));
 
@@ -126,28 +221,122 @@ bool RequestParser::validate_method(const std::string& method) {
            valid_methods.end();
 }
 
-bool RequestParser::validate_uri(const std::string& uri) {
-    // Reject directory traversal
-    if (uri.find("..") != std::string::npos) {
+bool RequestParser::validate_path(const std::string& path) {
+    // If path is empty, it's invalid
+    if (path.empty()) {
         return false;
     }
 
-    // Check for invalid characters
-    for (size_t i = 0; i < uri.length(); i++) {
-        unsigned char c = static_cast<unsigned char>(uri[i]);
-        if (c < 32 || c == 127) {
+    // Check for length limit
+    if (path.size() > HttpConfig::MAX_PATH_LENGTH) {
+        return false;
+    }
+
+    // Must start with a slash
+    if (path[0] != '/') {
+        return false;
+    }
+
+    // Check for multiple consecutive slashes (e.g. "//home")
+    if (path.find("//") != std::string::npos) {
+        return false;
+    }
+
+    // Check each path segment for path traversal
+    std::string segment;
+    std::istringstream path_stream(path.substr(1));  // Skip leading '/'
+    while (std::getline(path_stream, segment, '/')) {
+        if (segment == ".." || segment == "." || segment.empty()) {
             return false;
         }
     }
 
-    // Basic percent-encoding validation
-    size_t pos = 0;
-    while ((pos = uri.find('%', pos)) != std::string::npos) {
-        if (pos + 2 >= uri.length() || !isxdigit(uri[pos + 1]) ||
-            !isxdigit(uri[pos + 2])) {
-            return false;
+    // According to RFC 3986, path should only contain:
+    // - path = *( pchar / "/" )
+    // - pchar = unreserved / pct-encoded / sub-delims / ":" / "@"
+    // This means we should check that characters are limited to:
+    // - Alphanumeric: a-z, A-Z, 0-9
+    // - Unreserved: -, ., _, ~
+    // - Sub-delimiters: !, $, &, ', (, ), *, +, ,, ;, =
+    // - Additional characters: :, @, /
+    for (size_t i = 0; i < path.length(); ++i) {
+        unsigned char c = static_cast<unsigned char>(path[i]);
+
+        // Allow these characters
+        if (isalnum(c) || strchr("-._~!$&'()*+,;=:@/", c)) {
+            continue;
         }
-        pos += 3;
+
+        // Reject any other characters
+        return false;
+    }
+
+    return true;
+}
+
+bool RequestParser::validate_query_string(const std::string& query_string) {
+    // If query string is empty, it's valid
+    if (query_string.empty()) {
+        return true;
+    }
+
+    // Check for length limit
+    if (query_string.size() > HttpConfig::MAX_QUERY_LENGTH) {
+        return false;
+    }
+
+    // According to RFC 3986, query strings should only contain:
+    // - query string = *( pchar / "/" / "?" )
+    // - pchar = unreserved / pct-encoded / sub-delims / ":" / "@"
+    // This means we should check that characters are limited to:
+    // - Alphanumeric: a-z, A-Z, 0-9
+    // - Unreserved: -, ., _, ~
+    // - Sub-delimiters: !, $, &, ', (, ), *, +, ,, ;, =
+    // - Additional characters: :, @, /, ?
+    for (size_t i = 0; i < query_string.length(); ++i) {
+        unsigned char c = static_cast<unsigned char>(query_string[i]);
+
+        // Allow these characters
+        if (isalnum(c) || strchr("-._~!$&'()*+,;=:@/?", c)) {
+            continue;
+        }
+
+        // Reject any other characters
+        return false;
+    }
+
+    return true;
+}
+
+bool RequestParser::validate_fragment(const std::string& fragment) {
+    // If fragment is empty, it's valid
+    if (fragment.empty()) {
+        return true;
+    }
+
+    // Check for length limit
+    if (fragment.size() > HttpConfig::MAX_FRAGMENT_LENGTH) {
+        return false;
+    }
+
+    // According to RFC 3986, fragments should only contain:
+    // - fragment = *( pchar / "/" / "?" )
+    // - pchar = unreserved / pct-encoded / sub-delims / ":" / "@"
+    // This means we should check that characters are limited to:
+    // - Alphanumeric: a-z, A-Z, 0-9
+    // - Unreserved: -, ., _, ~
+    // - Sub-delimiters: !, $, &, ', (, ), *, +, ,, ;, =
+    // - Additional characters: :, @, /, ?
+    for (size_t i = 0; i < fragment.length(); ++i) {
+        unsigned char c = static_cast<unsigned char>(fragment[i]);
+
+        // Allow these characters
+        if (isalnum(c) || strchr("-._~!$&'()*+,;=:@/?", c)) {
+            continue;
+        }
+
+        // Reject any other characters
+        return false;
     }
 
     return true;

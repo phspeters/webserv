@@ -13,13 +13,15 @@ struct ServerConfig;
 // In RequestParser.hpp or a separate config.hpp
 namespace HttpConfig {
 const size_t MAX_METHOD_LENGTH = 8;
-const size_t MAX_URI_LENGTH = 8192;
+const size_t MAX_REQUEST_LINE_LENGTH = 8192;  // 8KB
+const size_t MAX_PATH_LENGTH = 2048;      // Path component
+const size_t MAX_QUERY_LENGTH = 2048;     // Query string
+const size_t MAX_FRAGMENT_LENGTH = 1024;  // Fragment identifier
 const size_t MAX_HEADER_NAME_LENGTH = 256;
 const size_t MAX_HEADER_VALUE_LENGTH = 8192;
 const size_t MAX_HEADERS = 100;
 const size_t MAX_CONTENT_LENGTH = 10485760;  // 10MB
 // temp
-const size_t MAX_REQUEST_LINE_LENGTH = 8192;  // 8KB
 const size_t MAX_BODY_SIZE = 10485760;        // 10MB
 const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 const char SPACE = ' ';                       // Space character
@@ -35,9 +37,13 @@ class RequestParser {
         PARSE_SUCCESS,                 // Request fully parsed
         PARSE_INCOMPLETE,              // Need more data
         PARSE_ERROR,                   // General parsing error
-        PARSE_METHOD_NOT_ALLOWED,      // Unsupported HTTP method
-        PARSE_VERSION_NOT_SUPPORTED,   // Unsupported HTTP version
-        PARSE_URI_TOO_LONG,            // URI exceeds maximum length
+        PARSE_INVALID_REQUEST_LINE,    // Invalid request line
+		PARSE_METHOD_NOT_ALLOWED,      // Unsupported HTTP method
+        PARSE_INVALID_PATH,            // Invalid path in URI
+		PARSE_INVALID_QUERY_STRING,    // Invalid query string in URI
+		PARSE_INVALID_FRAGMENT,        // Invalid fragment in URI
+		PARSE_VERSION_NOT_SUPPORTED,   // Unsupported HTTP version
+        PARSE_REQUEST_TOO_LONG,        // Request exceeds maximum length
         PARSE_HEADER_TOO_LONG,         // Header exceeds maximum length
         PARSE_TOO_MANY_HEADERS,        // Too many headers
         PARSE_INVALID_CONTENT_LENGTH,  // Content-Length header is invalid
@@ -70,11 +76,14 @@ class RequestParser {
 
     // Request line parsing methods
     ParseResult parse_request_line(Connection* conn);
-    ParseResult validate_request_line(const std::string& method,
-                                      const std::string& uri,
-                                      const std::string& version);
+    bool split_request_line(HttpRequest* request, std::string& request_line);
+    bool split_uri_components(HttpRequest* request);
+    std::string decode_uri(const std::string& uri);
+    ParseResult validate_request_line(const HttpRequest* request);
     bool validate_method(const std::string& method);
-    bool validate_uri(const std::string& uri);
+    bool validate_path(const std::string& path);
+    bool validate_query_string(const std::string& query_string);
+    bool validate_fragment(const std::string& fragment);
     bool validate_http_version(const std::string& version);
 
     // Header parsing methods
