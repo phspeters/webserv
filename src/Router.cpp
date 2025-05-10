@@ -47,7 +47,7 @@ IHandler* Router::route(const HttpRequest* req) {
     }
 
     // Create appropriate handler based on location config
-    ResponseWriter* writer = new ResponseWriter(config_);
+    // ResponseWriter* writer = new ResponseWriter(config_);
     if (matching_location->cgi_enabled) {
         // CGI handler for CGI-enabled locations
         return new CgiHandler(config_, *writer);
