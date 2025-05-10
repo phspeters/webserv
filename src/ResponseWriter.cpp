@@ -1,3 +1,11 @@
+/*
+* verify the possibility of writing in chunks (bytes streamming) 
+    - is it necessary to split in parts or can everything be sent at once?
+* write_buffer_offset_ and then clear everything already sent from buffer
+* verify what headers should be in the response and if itś influenced by the response 
+* errors code in utils function 
+*/
+
 #include "webserv.hpp"
 
 ResponseWriter::ResponseWriter(const ServerConfig& config) : config_(config) {}

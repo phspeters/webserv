@@ -261,7 +261,7 @@ std::string FileUploadHandler::extractBoundary(const std::string& content_type) 
     boundary_pos += 9;  // Length of "boundary="
     
     // Check if boundary is quoted
-    if (content_type[boundary_pos] == '"') {
+    if (content_type[boundary_pos] == '"') {Connection* conn
         boundary_pos++;  // Skip opening quote
         size_t end_quote = content_type.find("\"", boundary_pos);
         if (end_quote == std::string::npos) {
