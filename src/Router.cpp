@@ -8,20 +8,17 @@ Router::~Router() {
 
 IHandler* Router::route(const HttpRequest* req) {
 
-    // Get the path from the request (already without query part) --- CHECK req->uri
+    // Get the path from the request (already without query part)
     const std::string& request_path = req->uri_;
 
     // Iterate through locations in config_ to find a match
     const LocationConfig* matching_location = NULL;
 
-    for (std::vector<LocationConfig>::const_iterator it = config_.locations.begin(); 
-        it != config_.locations.end(); ++it) {
+    for (std::vector<LocationConfig>::const_iterator it = config_.locations.begin(); it != config_.locations.end(); ++it) {
         const LocationConfig& loc = *it;
-        
         // Check if the request path starts with the location path
         if (request_path.find(loc.path) == 0) {
             // Make sure we match complete segments
-            // For example, /blog should match / but not match /blogs
             if (loc.path == "/" || // Root always matches
                 request_path == loc.path || // Exact match
                 (request_path.length() > loc.path.length() && request_path[loc.path.length()] == '/')) {
@@ -33,15 +30,6 @@ IHandler* Router::route(const HttpRequest* req) {
         }
     }
 
-    // If no matching location found, send to StaticFileHandler? CHECK
-    if (!matching_location) {
-        std::cout << "\n==== ROUTER INFO ====\n";
-        std::cout << "Request path: " << request_path << std::endl;
-        std::cout << "Matching location: NONE" << std::endl;
-        std::cout << "======================\n" << std::endl;
-        return NULL;
-    }
-
     // Print router info when a location is matched
     std::cout << "\n==== ROUTER INFO ====\n";
     std::cout << "Request path: " << request_path << std::endl;
@@ -51,14 +39,23 @@ IHandler* Router::route(const HttpRequest* req) {
     std::cout << "Root: " << matching_location->root << std::endl;
     std::cout << "======================\n" << std::endl;
 
-    // Determine which handler to use based on the matching location's configuration
+    // Check if this is a directory path
+    bool is_directory_request = false;
+    // Path ending with / typically indicates a directory, but exclude the root path (/)
+    if (!request_path.empty() && request_path[request_path.size() - 1] == '/' && request_path != "/") {
+        is_directory_request = true;
+    }
+
+    // Create appropriate handler based on location config
     ResponseWriter* writer = new ResponseWriter(config_);
     if (matching_location->cgi_enabled) {
-        // return new CgiHandler(config_, *writer); // 
-        return new StaticFileHandler(config_, *writer);   
-    } else if (matching_location->autoindex) {
-        return new FileUploadHandler(config_, *writer); 
+        // CGI handler for CGI-enabled locations
+        return new CgiHandler(config_, *writer);
+    } else if (is_directory_request) {
+        // FileUploadHandler for directory requests with autoindex enabled
+        return new FileUploadHandler(config_, *writer);
     } else {
+        // Default to StaticFileHandler for regular files
         return new StaticFileHandler(config_, *writer);
     }
 }

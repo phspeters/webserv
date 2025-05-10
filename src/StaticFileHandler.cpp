@@ -1,26 +1,32 @@
 #include "webserv.hpp"
 
-StaticFileHandler::StaticFileHandler(const ServerConfig& config, ResponseWriter& writer) : config_(config), response_writer_(writer) {
+StaticFileHandler::StaticFileHandler(const ServerConfig& config, ResponseWriter& writer) 
+    : config_(config), response_writer_(writer) {
 }
 
 StaticFileHandler::~StaticFileHandler() {}
 
 void StaticFileHandler::handle(Connection* conn) {
-
-    // Extract the request path ---CHECK req->uri
+    
+    // Extract the request path
     const std::string& request_path = conn->request_data_->uri_;
     
     // Debug information
     std::cout << "\n==== STATIC FILE HANDLER ====\n";
     std::cout << "Handling request for path: " << request_path << std::endl;
     
-     //Check the variable LOCATION NOT FOUND ---CHECK
-    // ADD HERE
+    // Pointer to matching location in the config
+    const LocationConfig* loc = NULL; // Pointer to the matching location --CHECK
     
-    // Build the file path by joining the location's root with the relative path
-    std::string root;   // Get the ROOT --CHECK from where
-    std::string location_path; // Get the location path --CHECK from where
-
+    // Get the root and location path from the matched location
+    std::string root = loc->root;
+    std::string location_path = loc->path;
+    
+    // Ensure root ends with / --CHECK IF NEEDS
+    if (!root.empty() && root[root.size() - 1] != '/') {
+        root += '/';
+    }
+    
     // Calculate the relative path
     std::string relative_path;
     if (location_path == "/") {
@@ -49,7 +55,7 @@ void StaticFileHandler::handle(Connection* conn) {
         }
     }
     
-    // If the path is empty or ends with /, append the default index file
+    // If the path is empty or ends with /, append the index file
     if (relative_path.empty() || 
         (!relative_path.empty() && relative_path[relative_path.size() - 1] == '/')) {
         if (!loc->index.empty()) {
@@ -62,11 +68,30 @@ void StaticFileHandler::handle(Connection* conn) {
     // Combine root and relative path to get the complete file path
     std::string file_path = root + relative_path;
     
-    std::cout << "Location path: " << location_path << std::endl;
-    std::cout << "Root directory: " << root << std::endl;
+    std::cout << "Root: " << root << std::endl;
     std::cout << "Relative path: " << relative_path << std::endl;
     std::cout << "Complete file path: " << file_path << std::endl;
     std::cout << "============================\n" << std::endl;
+    
+    // Check if method is allowed (if allowed_methods is specified)
+    if (!loc->allowed_methods.empty()) {
+        bool method_allowed = false;
+        for (std::vector<std::string>::const_iterator it = loc->allowed_methods.begin();
+             it != loc->allowed_methods.end(); ++it) {
+            if (conn->request_data_->method_ == *it) {
+                method_allowed = true;
+                break;
+            }
+        }
+        
+        if (!method_allowed) {
+            std::cout << "Method not allowed: " << conn->request_data_->method_ << std::endl;
+            conn->response_data_->status_code_ = 405;
+            conn->response_data_->status_message_ = "Method Not Allowed";
+            conn->state_ = Connection::CONN_WRITING;
+            return;
+        }
+    }
     
     // Try to open the file
     int fd = open(file_path.c_str(), O_RDONLY);
@@ -107,27 +132,7 @@ void StaticFileHandler::handle(Connection* conn) {
         return;
     }
     
-    // Check if method is allowed
-    if (loc->allowed_methods.size() > 0) {
-        bool method_allowed = false;
-        for (std::vector<std::string>::const_iterator it = loc->allowed_methods.begin();
-             it != loc->allowed_methods.end(); ++it) {
-            if (conn->request_data_->method_ == *it) {
-                method_allowed = true;
-                break;
-            }
-        }
-        
-        if (!method_allowed) {
-            close(fd);
-            conn->response_data_->status_code_ = 405;
-            conn->response_data_->status_message_ = "Method Not Allowed";
-            conn->state_ = Connection::CONN_WRITING;
-            return;
-        }
-    }
-    
-    // Determine content type
+    // Determine content type --CHECK UNDERSTAND BETTER
     std::string content_type = "application/octet-stream"; // Default type
     size_t dot_pos = file_path.find_last_of('.');
     if (dot_pos != std::string::npos) {
@@ -148,12 +153,6 @@ void StaticFileHandler::handle(Connection* conn) {
             content_type = "image/gif";
         } else if (extension == "txt") {
             content_type = "text/plain";
-        } else if (extension == "pdf") {
-            content_type = "application/pdf";
-        } else if (extension == "mp4") {
-            content_type = "video/mp4";
-        } else if (extension == "mp3") {
-            content_type = "audio/mpeg";
         }
     }
     
@@ -173,10 +172,10 @@ void StaticFileHandler::handle(Connection* conn) {
     std::map<std::string, std::string> headers;
     headers["Content-Type"] = content_type;
     
-    // Use stringstream instead of std::to_string (C++11 feature)
-    std::ostringstream ss;
-    ss << file_info.st_size;
-    headers["Content-Length"] = ss.str();
+    // Convert file size to string using ostringstream (C++98 compatible)
+    std::ostringstream size_stream;
+    size_stream << file_info.st_size;
+    headers["Content-Length"] = size_stream.str();
     
     // Send the response
     conn->response_data_->status_code_ = 200;
@@ -185,5 +184,5 @@ void StaticFileHandler::handle(Connection* conn) {
     conn->response_data_->body_.assign(file_content.begin(), file_content.end());
     
     // Update connection state
-    conn->state_ = Connection::CONN_WRITING; 
+    conn->state_ = Connection::CONN_WRITING;
 }
