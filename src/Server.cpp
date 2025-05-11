@@ -240,7 +240,8 @@ void Server::handle_error(Connection* conn) {
 
 bool Server::setup_listener_socket() {
     // Create the listener socket
-    // AF_INET for IPv4, SOCK_STREAM for TCP, 0 for default protocol
+    // AF_INET for IPv4, SOCK_STREAM for TCP, SOCK_NONBLOCK for making it non
+    // blocking, 0 for default protocol
     listener_fd_ = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (listener_fd_ < 0) {
         // Handle error
@@ -295,6 +296,10 @@ bool Server::setup_listener_socket() {
     }
 
     return true;
+}
+
+int Server::close_timed_out_connections() {
+    return conn_manager_->close_timed_out_connections();
 }
 
 bool Server::set_non_blocking(int fd) {

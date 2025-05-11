@@ -54,6 +54,7 @@ class ServerManager {
 
     // Internal methods
     void event_loop();
+	int cleanup_timed_out_connections();
     void cleanup_servers();
     bool check_server_health();
     void handle_error(const std::string& message);

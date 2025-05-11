@@ -32,6 +32,8 @@ class Server {
 
     void close_client_connection(Connection* conn);
 
+    int close_timed_out_connections();
+
     void handle_client_event(int fd,
                              uint32_t event);  // Handles client socket events
 

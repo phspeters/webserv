@@ -3,6 +3,8 @@
 
 #include "webserv.hpp"
 
+#define TIMEOUT 60  // Timeout in seconds
+
 // Forward declarations
 struct Connection;
 struct ServerConfig;
@@ -32,7 +34,9 @@ struct ConnectionManager {
 
     // Iterates through connections and closes those inactive beyond timeout.
     // Returns the number of connections closed due to timeout.
-    int check_timeouts();
+    int close_timed_out_connections();
+
+	bool is_timed_out(Connection* conn);
 
     // Get the number of active connections
     size_t get_active_connection_count() const;

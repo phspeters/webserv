@@ -209,6 +209,9 @@ void ServerManager::event_loop() {
     struct epoll_event events[MAX_EPOLL_EVENTS];
 
     while (ready_) {
+        cleanup_timed_out_connections();
+
+        // Wait for events on the epoll instance
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS, -1);
 
         for (int i = 0; i < ready_events; i++) {
@@ -239,6 +242,15 @@ void ServerManager::event_loop() {
             }
         }
     }
+}
+
+int ServerManager::cleanup_timed_out_connections() {
+    int total_closed = 0;
+    for (std::vector<Server*>::iterator it = servers_.begin();
+         it != servers_.end(); ++it) {
+        total_closed += (*it)->close_timed_out_connections();
+    }
+    return total_closed;
 }
 
 void ServerManager::cleanup_servers() {

@@ -21,11 +21,7 @@ const size_t MAX_HEADER_NAME_LENGTH = 256;
 const size_t MAX_HEADER_VALUE_LENGTH = 8192;
 const size_t MAX_HEADERS = 100;
 const size_t MAX_CONTENT_LENGTH = 10485760;  // 10MB
-// temp
 const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
-const char SPACE = ' ';                       // Space character
-const char COLON = ':';                       // Colon character
-const char SEMICOLON = ';';                   // Semicolon character
 }  // namespace HttpConfig
 
 // Parses HTTP requests incrementally from a Connection's read buffer.

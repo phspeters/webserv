@@ -61,8 +61,29 @@ Connection* ConnectionManager::get_connection(int client_fd) {
     return NULL;  // Not found
 }
 
-// TODO
-int ConnectionManager::check_timeouts() { return 0; }
+int ConnectionManager::close_timed_out_connections() {
+    // Check for timeouts and close connections if necessary
+    int closed = 0;
+    for (std::map<int, Connection*>::iterator it = active_connections_.begin();
+         it != active_connections_.end();) {
+        Connection* conn = it->second;
+        it++;
+        if (is_timed_out(conn)) {
+            std::cerr << "Connection timed out (fd: " << conn->client_fd_ << ")"
+                      << "on server " << config_.server_names_[0] << "on port "
+                      << config_.port_ << std::endl;
+            close_connection(conn);
+            closed++;
+        }
+    }
+    return closed;
+}
+
+bool ConnectionManager::is_timed_out(Connection* conn) {
+    // Check if the connection is timed out
+    time_t current_time = time(NULL);
+    return (current_time - conn->last_activity_) > TIMEOUT;
+}
 
 size_t ConnectionManager::get_active_connection_count() const {
     return active_connections_.size();
