@@ -465,7 +465,7 @@ RequestParser::ParseResult RequestParser::determine_request_body_handling(
                 return PARSE_INVALID_CONTENT_LENGTH;
             }
 
-            if (body_size > HttpConfig::MAX_BODY_SIZE) {
+            if (body_size > config_.client_max_body_size_) {
                 return PARSE_CONTENT_TOO_LARGE;
             }
 
@@ -608,7 +608,7 @@ RequestParser::ParseResult RequestParser::read_chunk_data(
     }
 
     // Validate total body size
-    if (request->body_.size() + bytes_to_read > HttpConfig::MAX_BODY_SIZE) {
+    if (request->body_.size() + bytes_to_read > config_.client_max_body_size_) {
         return PARSE_CONTENT_TOO_LARGE;
     }
 
