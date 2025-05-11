@@ -1,12 +1,17 @@
 #include "webserv.hpp"
 
-Router::Router(const ServerConfig& config) : config_(config) {}
+Router::Router(const ServerConfig& config, StaticFileHandler* static_handler,
+               CgiHandler* cgi_handler, FileUploadHandler* file_upload_handler)
+    : config_(config),
+      static_handler_(static_handler),
+      cgi_handler_(cgi_handler),
+      file_upload_handler_(file_upload_handler) {}
 
 Router::~Router() {
     // Clean up owned components
 }
 
-AHandler* Router::route(const HttpRequest* req) {
+AHandler* Router::route(HttpRequest* req) {
     // Get the path from the request (already without query part)
     const std::string& request_path = req->uri_;
 
@@ -55,16 +60,22 @@ AHandler* Router::route(const HttpRequest* req) {
         is_directory_request = true;
     }
 
-    // Create appropriate handler based on location config
-    // ResponseWriter* writer = new ResponseWriter(config_);
+	// TEMP - Print error if no matching location found
+	if (matching_location == NULL) {
+		std::cerr << "No matching location found for request path: "
+				  << request_path << std::endl;
+		return NULL;  // No matching location found
+	}
+
+    // Return appropriate handler based on location config
     if (matching_location->cgi_enabled) {
         // CGI handler for CGI-enabled locations
-        return new CgiHandler(config_, *writer);
+        return cgi_handler_;
     } else if (is_directory_request) {
-        // FileUploadHandler for directory requests with autoindex enabled
-        return new FileUploadHandler(config_, *writer);
+        // FileUploadHandler for file uploads
+        return file_upload_handler_;
     } else {
         // Default to StaticFileHandler for regular files
-        return new StaticFileHandler(config_, *writer);
+        return static_handler_;
     }
 }

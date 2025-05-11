@@ -1,8 +1,7 @@
 #include "webserv.hpp"
 
-StaticFileHandler::StaticFileHandler(const ServerConfig& config,
-                                     ResponseWriter& writer)
-    : config_(config), response_writer_(writer) {}
+StaticFileHandler::StaticFileHandler(const ServerConfig& config)
+    : config_(config) {}
 
 StaticFileHandler::~StaticFileHandler() {}
 

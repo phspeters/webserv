@@ -22,7 +22,6 @@ const size_t MAX_HEADER_VALUE_LENGTH = 8192;
 const size_t MAX_HEADERS = 100;
 const size_t MAX_CONTENT_LENGTH = 10485760;  // 10MB
 // temp
-const size_t MAX_BODY_SIZE = 10485760;        // 10MB
 const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 const char SPACE = ' ';                       // Space character
 const char COLON = ':';                       // Colon character
@@ -65,7 +64,7 @@ class RequestParser {
     ~RequestParser();
 
     // Parses data currently in the connection's read buffer.
-    // - Allocates/populates conn->request_data if successful (PARSE_SUCCESS).
+    // - Populates conn->request_data if successful (PARSE_SUCCESS).
     // - Updates conn->read_buffer (removing parsed data).
     // - Returns the result status.
     ParseResult parse(Connection* conn);

@@ -6,26 +6,22 @@ Server::Server(const ServerConfig& config, ServerManager* manager)
       listener_fd_(-1),
       initialized_(false),
       conn_manager_(NULL),
-      request_parser_(NULL) {}
-/*
-router_(NULL),
-response_writer_(NULL),
-static_file_handler_(NULL),
-cgi_handler_(NULL),
-file_upload_handler_ {}
-*/
+      request_parser_(NULL),
+      router_(NULL),
+      response_writer_(NULL),
+      static_file_handler_(NULL),
+      //  cgi_handler_(NULL),
+      file_upload_handler_(NULL) {}
 
 Server::~Server() {
     // Clean up owned components
     delete conn_manager_;
     delete request_parser_;
-    /*
-     delete router_;
-     delete response_writer_;
-     delete static_file_handler_;
-     delete cgi_handler_;
-     delete file_upload_handler_;
-     */
+    delete router_;
+    delete response_writer_;
+    delete static_file_handler_;
+    // delete cgi_handler_;
+    delete file_upload_handler_;
 
     // Close listener socket if it's open
     if (listener_fd_ != -1) {
@@ -41,18 +37,16 @@ bool Server::init() {
     // Initialize components
     conn_manager_ = new ConnectionManager(config_);
     request_parser_ = new RequestParser(config_);
-    /*
     response_writer_ = new ResponseWriter(config_);
 
     // Initialize handlers
-    static_file_handler_ = new StaticFileHandler(config_, *response_writer_);
-    cgi_handler_ = new CgiHandler(config_, *response_writer_);
-    file_upload_handler_ = new FileUploadHandler(config_, *response_writer_);
+    static_file_handler_ = new StaticFileHandler(config_);
+    // cgi_handler_ = new CgiHandler(config_);
+    file_upload_handler_ = new FileUploadHandler(config_);
 
     // Initialize the router with the handlers
     router_ = new Router(config_, static_file_handler_, cgi_handler_,
-                          file_upload_handler_);
-    */
+                         file_upload_handler_);
 
     // Set up the listener socket and epoll instance
     if (!setup_listener_socket()) {
@@ -138,9 +132,12 @@ void Server::handle_read(Connection* conn) {
 
     // Read data from the client socket
     ssize_t bytes_read =
-        read(conn->client_fd_, &conn->read_buffer_[original_size], 4096);
+        recv(conn->client_fd_, &conn->read_buffer_[original_size], 4096, 0);
 
     if (bytes_read > 0) {
+        // Update the last activity timestamp
+        conn->last_activity_ = time(NULL);
+
         // Resize the buffer to the actual size read
         conn->read_buffer_.resize(original_size + bytes_read);
 
@@ -166,20 +163,19 @@ void Server::handle_read(Connection* conn) {
                         conn->request_data_->body_.size());
         std::cout << "\n====================================\n" << std::endl;
 
-        // TEMP - Calling router and handler
-        // Check if the request parsing is complete // PARSE_SUCCESS = 0
-        if (conn->request_data_->parse_status_ == 0) {
-            // Create a Router instance
-            Router router(config_);
-            // Route the request to the appropriate handler
-            AHandler* handler = router.route(conn->request_data_);
-            // If a handler was found, handle the request
-            if (handler) {
-                handler->handle(conn);
-                // delete handler;  // Don't forget to clean up the handler
-            } else {
-                std::cerr << "No handler found for the request" << std::endl;
-            }
+        // Check the parse status and update connection state
+        if (conn->request_data_->parse_status_ ==
+            RequestParser::PARSE_SUCCESS) {
+            conn->state_ = Connection::CONN_PROCESSING;
+        } else if (conn->request_data_->parse_status_ ==
+                   RequestParser::PARSE_INCOMPLETE) {
+            conn->state_ = Connection::CONN_READING;
+        } else {
+            conn->state_ = Connection::CONN_ERROR;
+            std::cerr << "Error parsing request (fd: " << conn->client_fd_
+                      << ")" << std::endl;
+            handle_error(conn);
+            return;
         }
 
         update_epoll_events(conn->client_fd_, EPOLLOUT);
@@ -198,14 +194,25 @@ void Server::handle_read(Connection* conn) {
 
 // TODO
 void Server::handle_write(Connection* conn) {
-    // TODO write response
+    // Route the request to the appropriate handler
+    AHandler* handler = router_->route(conn->request_data_);
+
+    // If a handler was found, handle the request
+    if (handler) {
+        handler->handle(conn);
+    } else {
+        std::cerr << "No handler found for the request" << std::endl;
+    }
 
     // TEMP For now, just echo back the data
     std::cout << "Writing response to client (fd: " << conn->client_fd_ << ")"
               << std::endl;
-    ssize_t bytes_written = write(conn->client_fd_, conn->write_buffer_.data(),
-                                  conn->write_buffer_.size());
-    if (bytes_written < 0) {
+    ssize_t bytes_written =
+        send(conn->client_fd_, conn->write_buffer_.data(),
+             conn->write_buffer_.size(),
+             MSG_NOSIGNAL);  // MSG_NOSIGNAL prevents SIGPIPE signal if the
+                             // client has closed the connection
+    if (bytes_written <= 0) {
         // Handle error
         std::cerr << "Write error on socket (fd: " << conn->client_fd_ << ")"
                   << "on server " << config_.server_names_[0] << "on port "
@@ -214,7 +221,9 @@ void Server::handle_write(Connection* conn) {
         return;
     }
 
-    // After writing response, for keep-alive:
+    // Write the response to the client
+    bool writing_complete = response_writer_->write_response(conn);
+
     if (conn->is_keep_alive()) {
         conn->reset_for_keep_alive();
         update_epoll_events(conn->client_fd_, EPOLLIN);

@@ -2,9 +2,8 @@
 
 // curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
 
-FileUploadHandler::FileUploadHandler(const ServerConfig& config,
-                                     ResponseWriter& writer)
-    : config_(config), response_writer_(writer) {}
+FileUploadHandler::FileUploadHandler(const ServerConfig& config)
+    : config_(config) {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
@@ -20,7 +19,6 @@ void FileUploadHandler::handle(Connection* conn) {
     if (req->method_ != "POST") {
         resp->status_code_ = 405;
         resp->status_message_ = "Method Not Allowed";
-        response_writer_.write_headers(conn, resp);
         return;
     }
 
@@ -43,7 +41,6 @@ void FileUploadHandler::handle(Connection* conn) {
     if (content_type.find("multipart/form-data") != 0) {
         resp->status_code_ = 415;
         resp->status_message_ = "Unsupported Media Type";
-        response_writer_.write_headers(conn, resp);
         return;
     }
 
@@ -52,7 +49,6 @@ void FileUploadHandler::handle(Connection* conn) {
     if (boundary.empty()) {
         resp->status_code_ = 400;
         resp->status_message_ = "Bad Request - Invalid Boundary";
-        response_writer_.write_headers(conn, resp);
         return;
     }
 
@@ -76,7 +72,6 @@ void FileUploadHandler::handle(Connection* conn) {
     if (!location) {
         resp->status_code_ = 500;
         resp->status_message_ = "Internal Server Error - No Location";
-        response_writer_.write_headers(conn, resp);
         return;
     }
 
@@ -100,9 +95,6 @@ void FileUploadHandler::handle(Connection* conn) {
         resp->content_length_ = resp->body_.size();
     }
 
-    response_writer_.write_headers(conn, resp);
-    conn->write_buffer_.insert(conn->write_buffer_.end(), resp->body_.begin(),
-                               resp->body_.end());
 }
 
 bool FileUploadHandler::parseMultipartFormData(Connection* conn,

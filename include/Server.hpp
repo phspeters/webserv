@@ -13,7 +13,7 @@ class Router;
 struct ServerConfig;
 class ServerManager;
 class StaticFileHandler;
-// class FileUploadHandler;
+class FileUploadHandler;
 
 // Main server class - orchestrates setup, event loop, and component
 // interactions.
@@ -56,12 +56,12 @@ class Server {
     //--------------------------------------
     ConnectionManager* conn_manager_;
     RequestParser* request_parser_;
-    // Router* router_;
-    // ResponseWriter* response_writer_;
+    Router* router_;
+    ResponseWriter* response_writer_;
     //// Handler instances (owned by Server)
-    // StaticFileHandler* static_file_handler_;
-    // CgiHandler* cgi_handler_;
-    // FileUploadHandler* file_upload_handler_;
+    StaticFileHandler* static_file_handler_;
+    CgiHandler* cgi_handler_;
+    FileUploadHandler* file_upload_handler_;
 
     //--------------------------------------
     // Internal Methods

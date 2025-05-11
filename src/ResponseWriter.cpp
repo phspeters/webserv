@@ -4,10 +4,55 @@ ResponseWriter::ResponseWriter(const ServerConfig& config) : config_(config) {}
 
 ResponseWriter::~ResponseWriter() {}
 
-bool ResponseWriter::write_headers(Connection* conn, HttpResponse* resp) {
-    if (!conn || !resp) {
+bool ResponseWriter::write_response(Connection* conn) {
+    // TODO - Write the response to the client
+    // 1. Write the headers to the write buffer
+    // 2. Write the body to the write buffer
+    // 3. Send the response to the client
+    // 4. Erase the write buffer after sending
+    // 5. Update the last activity timestamp
+    if (!conn) {
+        return -1;
+    }
+
+    // Check if the connection is valid
+    if (conn->client_fd_ < 0) {
+        return -1;
+    }
+
+    // Write headers
+    if (!write_headers(conn)) {
+        return -1;
+    }
+
+    // Write body
+    if (!write_body(conn)) {
+        return -1;
+    }
+
+    // Send the response
+    ssize_t bytes_written =
+        send(conn->client_fd_, conn->write_buffer_.data(),
+             conn->write_buffer_.size(),
+             MSG_NOSIGNAL);  // MSG_NOSIGNAL prevents SIGPIPE signal if the
+                             // client has closed the connection
+
+    // Remove the written data from the buffer
+    conn->write_buffer_.erase(conn->write_buffer_.begin(),
+                              conn->write_buffer_.begin() + bytes_written);
+
+    // Update the last activity timestamp
+    conn->last_activity_ = time(NULL);
+
+    return conn->write_buffer_.empty();
+}
+
+bool ResponseWriter::write_headers(Connection* conn) {
+    if (!conn) {
         return false;
     }
+
+    HttpResponse* resp = conn->response_data_;
 
     // Format the response status line and headers
     std::stringstream headers;
@@ -52,7 +97,12 @@ bool ResponseWriter::write_headers(Connection* conn, HttpResponse* resp) {
     return true;
 }
 
-void ResponseWriter::write_error_response(Connection* conn, int status_code) {
+bool ResponseWriter::write_body(Connection* conn) {
+    (void)conn;
+    return true;
+}
+
+void ResponseWriter::write_error_response(Connection* conn) {
     if (!conn) {
         return;
     }
@@ -63,12 +113,11 @@ void ResponseWriter::write_error_response(Connection* conn, int status_code) {
         return;
     }
 
-    resp->status_code_ = status_code;
-    resp->status_message_ = get_status_message(status_code);
+    resp->status_message_ = get_status_message(resp->status_code_);
     resp->content_type_ = "text/html";
 
     std::ostringstream ss;
-    ss << status_code;
+    ss << resp->status_code_;
 
     std::string body = "<html><body><h1>" + ss.str() + " " +
                        resp->status_message_ + "</h1></body></html>";
@@ -76,7 +125,7 @@ void ResponseWriter::write_error_response(Connection* conn, int status_code) {
     resp->body_.assign(body.begin(), body.end());
     resp->content_length_ = resp->body_.size();
 
-    write_headers(conn, resp);
+    write_headers(conn);
 
     // Add body to write buffer
     conn->write_buffer_.insert(conn->write_buffer_.end(), resp->body_.begin(),
