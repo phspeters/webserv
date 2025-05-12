@@ -60,12 +60,12 @@ AHandler* Router::route(HttpRequest* req) {
         is_directory_request = true;
     }
 
-	// TEMP - Print error if no matching location found
-	if (matching_location == NULL) {
-		std::cerr << "No matching location found for request path: "
-				  << request_path << std::endl;
-		return NULL;  // No matching location found
-	}
+    // TEMP - Print error if no matching location found
+    if (matching_location == NULL) {
+        std::cerr << "No matching location found for request path: "
+                  << request_path << std::endl;
+        return NULL;  // No matching location found
+    }
 
     // Return appropriate handler based on location config
     if (matching_location->cgi_enabled) {

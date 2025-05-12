@@ -7,8 +7,8 @@
 #include <signal.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -19,15 +19,15 @@
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <set> 
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "AHandler.hpp"
-#include "ServerConfig.hpp"
 #include "RequestParser.hpp"
+#include "ServerConfig.hpp"
 
 #include "CgiHandler.hpp"
 #include "Connection.hpp"
@@ -41,7 +41,6 @@
 #include "Server.hpp"
 #include "ServerManager.hpp"
 #include "StaticFileHandler.hpp"
-#include "ServerConfig.hpp"
 
 // utils
 std::string trim(const std::string& str);

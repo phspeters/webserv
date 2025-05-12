@@ -14,14 +14,14 @@ struct ServerConfig;
 namespace HttpConfig {
 const size_t MAX_METHOD_LENGTH = 8;
 const size_t MAX_REQUEST_LINE_LENGTH = 8192;  // 8KB
-const size_t MAX_PATH_LENGTH = 2048;      // Path component
-const size_t MAX_QUERY_LENGTH = 2048;     // Query string
-const size_t MAX_FRAGMENT_LENGTH = 1024;  // Fragment identifier
+const size_t MAX_PATH_LENGTH = 2048;          // Path component
+const size_t MAX_QUERY_LENGTH = 2048;         // Query string
+const size_t MAX_FRAGMENT_LENGTH = 1024;      // Fragment identifier
 const size_t MAX_HEADER_NAME_LENGTH = 256;
 const size_t MAX_HEADER_VALUE_LENGTH = 8192;
 const size_t MAX_HEADERS = 100;
 const size_t MAX_CONTENT_LENGTH = 10485760;  // 10MB
-const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
+const size_t MAX_CHUNK_SIZE = 1048576;       // 1MB
 }  // namespace HttpConfig
 
 // Parses HTTP requests incrementally from a Connection's read buffer.
@@ -33,11 +33,11 @@ class RequestParser {
         PARSE_INCOMPLETE,              // Need more data
         PARSE_ERROR,                   // General parsing error
         PARSE_INVALID_REQUEST_LINE,    // Invalid request line
-		PARSE_METHOD_NOT_ALLOWED,      // Unsupported HTTP method
+        PARSE_METHOD_NOT_ALLOWED,      // Unsupported HTTP method
         PARSE_INVALID_PATH,            // Invalid path in URI
-		PARSE_INVALID_QUERY_STRING,    // Invalid query string in URI
-		PARSE_INVALID_FRAGMENT,        // Invalid fragment in URI
-		PARSE_VERSION_NOT_SUPPORTED,   // Unsupported HTTP version
+        PARSE_INVALID_QUERY_STRING,    // Invalid query string in URI
+        PARSE_INVALID_FRAGMENT,        // Invalid fragment in URI
+        PARSE_VERSION_NOT_SUPPORTED,   // Unsupported HTTP version
         PARSE_REQUEST_TOO_LONG,        // Request exceeds maximum length
         PARSE_HEADER_TOO_LONG,         // Header exceeds maximum length
         PARSE_TOO_MANY_HEADERS,        // Too many headers
@@ -59,12 +59,12 @@ class RequestParser {
         const ServerConfig& config);  // Takes config for limits etc.
     ~RequestParser();
 
-	// Reads data from the socket into the connection's read buffer.
-	// - Returns true if data was read successfully.
-	// - Returns false if the connection is closed or an error occurs.
-	// - If false, the connection should be closed.
-	// - If true, the read buffer is updated with the new data.
-	bool read_from_socket(Connection* conn);
+    // Reads data from the socket into the connection's read buffer.
+    // - Returns true if data was read successfully.
+    // - Returns false if the connection is closed or an error occurs.
+    // - If false, the connection should be closed.
+    // - If true, the read buffer is updated with the new data.
+    bool read_from_socket(Connection* conn);
 
     // Parses data currently in the connection's read buffer.
     // - Populates conn->request_data if successful (PARSE_SUCCESS).

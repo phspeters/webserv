@@ -94,7 +94,6 @@ void FileUploadHandler::handle(Connection* conn) {
         resp->body_.assign(body.begin(), body.end());
         resp->content_length_ = resp->body_.size();
     }
-
 }
 
 bool FileUploadHandler::parseMultipartFormData(Connection* conn,

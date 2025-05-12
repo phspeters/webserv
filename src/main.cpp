@@ -26,12 +26,13 @@ int main(int argc, char* argv[]) {
     }
 
     // Parse configuration file
-	std::vector<ServerConfig> configs = serverManager.parse_config_file(config_file);
+    std::vector<ServerConfig> configs =
+        serverManager.parse_config_file(config_file);
     if (configs.empty()) {
         return EXIT_FAILURE;
     }
 
-	// Spin up servers and start event loop
+    // Spin up servers and start event loop
     serverManager.run(configs);
 
     return EXIT_SUCCESS;

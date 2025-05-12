@@ -53,7 +53,7 @@ void print_response(const Connection* conn) {
 int print_and_erase_buffer(std::vector<char>& buffer) {
     std::cout << "Buffer content: " << std::endl;
     int bytes_written = write(1, buffer.data(), buffer.size());
-	buffer.erase(buffer.begin(), buffer.begin() + bytes_written);
+    buffer.erase(buffer.begin(), buffer.begin() + bytes_written);
 
     if (bytes_written < 0) {
         std::cerr << "Error writing to buffer" << std::endl;
@@ -63,6 +63,6 @@ int print_and_erase_buffer(std::vector<char>& buffer) {
     if (bytes_written == 0) {
         std::cerr << "Buffer is empty" << std::endl;
     }
-	
+
     return bytes_written;
 }
