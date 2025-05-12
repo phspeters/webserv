@@ -48,10 +48,10 @@ class Server {
     //--------------------------------------
     // Server State & Configuration
     //--------------------------------------
-    ServerManager* manager_;  // Reference to owner
-    ServerConfig config_;     // Loaded server configuration
-    int listener_fd_;         // FD for the listening socket;
-    bool initialized_;        // Flag for server running state
+    ServerManager* server_manager_;  // Reference to owner
+    ServerConfig config_;            // Loaded server configuration
+    int listener_fd_;                // FD for the listening socket;
+    bool initialized_;               // Flag for server running state
 
     //--------------------------------------
     // Owned Components (Composition)

@@ -32,15 +32,16 @@
 #include "CgiHandler.hpp"
 #include "Connection.hpp"
 #include "ConnectionManager.hpp"
+#include "FileUploadHandler.hpp"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
+#include "Logger.hpp"
 #include "ResponseWriter.hpp"
 #include "Router.hpp"
 #include "Server.hpp"
 #include "ServerManager.hpp"
 #include "StaticFileHandler.hpp"
 #include "ServerConfig.hpp"
-#include "FileUploadHandler.hpp"
 
 // utils
 std::string trim(const std::string& str);

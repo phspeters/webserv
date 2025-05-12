@@ -7,13 +7,45 @@ RequestParser::RequestParser(const ServerConfig& config)
 
 RequestParser::~RequestParser() {}
 
+bool RequestParser::read_from_socket(Connection* conn) {
+    // Resize the read buffer to accommodate incoming data
+    size_t original_size = conn->read_buffer_.size();
+    conn->read_buffer_.resize(original_size + 4096);
+
+    // Read data from the client socket
+    ssize_t bytes_read =
+        recv(conn->client_fd_, &conn->read_buffer_[original_size], 4096, 0);
+
+    if (bytes_read == 0) {
+        // Connection closed by client
+        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")"
+                  << std::endl;
+        return false;
+    }
+
+    if (bytes_read < 0) {
+        // Handle error
+        std::cerr << "Read error on socket (fd: " << conn->client_fd_ << ")"
+                  << std::endl;
+        return false;
+    }
+
+    // Update the last activity timestamp
+    conn->last_activity_ = time(NULL);
+
+    // Resize the buffer to the actual size read
+    conn->read_buffer_.resize(original_size + bytes_read);
+
+    return true;
+}
+
 RequestParser::ParseResult RequestParser::parse(Connection* conn) {
     // Reset parser state if we are starting a new request
     if (current_state_ == PARSING_COMPLETE) {
         reset_parser_state();
     }
 
-    RequestParser::ParseResult result = PARSE_INCOMPLETE;
+    RequestParser::ParseResult& result = conn->request_data_->parse_status_;
 
     // Process as much as possible in one call
     while (!conn->read_buffer_.empty()) {
@@ -33,7 +65,8 @@ RequestParser::ParseResult RequestParser::parse(Connection* conn) {
                 result = parse_chunked_body(conn);
                 break;
             case PARSING_COMPLETE:
-                return PARSE_SUCCESS;
+                result = PARSE_SUCCESS;
+                break;
         }
 
         if (result != PARSE_INCOMPLETE) {

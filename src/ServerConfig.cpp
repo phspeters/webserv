@@ -50,7 +50,9 @@ bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
     while (std::getline(file, line)) {
         line = trim(line);
 
-        if (line.empty() || line[0] == '#') continue;
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
 
         // Check for block end
         if (line == "}") {
@@ -112,7 +114,9 @@ bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line,
     while (std::getline(file, locLine)) {
         locLine = trim(locLine);
 
-        if (locLine.empty() || locLine[0] == '#') continue;
+        if (locLine.empty() || locLine[0] == '#') {
+            continue;
+        }
 
         if (locLine == "}") {
             config.locations.push_back(location);
@@ -296,7 +300,9 @@ bool ServerConfig::parseDirective(const std::string& line, std::string& key,
                                   std::string& value) {
     size_t pos = line.find_first_of(" \t");
 
-    if (pos == std::string::npos) return false;
+    if (pos == std::string::npos) {
+        return false;
+    }
 
     key = line.substr(0, pos);
 

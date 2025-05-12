@@ -1,7 +1,7 @@
 #include "webserv.hpp"
 
 Server::Server(const ServerConfig& config, ServerManager* manager)
-    : manager_(manager),
+    : server_manager_(manager),
       config_(config),
       listener_fd_(-1),
       initialized_(false),
@@ -26,7 +26,7 @@ Server::~Server() {
     // Close listener socket if it's open
     if (listener_fd_ != -1) {
         // Unregister from epoll first
-        manager_->unregister_fd(listener_fd_);
+        server_manager_->unregister_fd(listener_fd_);
         // Then close the socket
         close(listener_fd_);
         listener_fd_ = -1;
@@ -99,7 +99,7 @@ void Server::close_client_connection(Connection* conn) {
     int client_fd = conn->client_fd_;
 
     // First unregister from epoll (must happen before socket closure)
-    manager_->unregister_fd(client_fd);
+    server_manager_->unregister_fd(client_fd);
 
     // Then let connection manager handle the rest
     conn_manager_->close_connection(conn);
@@ -124,111 +124,56 @@ void Server::handle_client_event(int client_fd, uint32_t events) {
     }
 }
 
-// TODO - Temporary printing data implementation
 void Server::handle_read(Connection* conn) {
-    // Resize the read buffer to accommodate incoming data
-    size_t original_size = conn->read_buffer_.size();
-    conn->read_buffer_.resize(original_size + 4096);
-
-    // Read data from the client socket
-    ssize_t bytes_read =
-        recv(conn->client_fd_, &conn->read_buffer_[original_size], 4096, 0);
-
-    if (bytes_read > 0) {
-        // Update the last activity timestamp
-        conn->last_activity_ = time(NULL);
-
-        // Resize the buffer to the actual size read
-        conn->read_buffer_.resize(original_size + bytes_read);
-
-        // Parse the request
-        conn->request_data_->parse_status_ = request_parser_->parse(conn);
-
-        // TEMP - Print request to console
-        std::cout << "\n==== INCOMING REQUEST (fd: " << conn->client_fd_ << ", "
-                  << bytes_read << " bytes) ====\n\n";
-        std::cout << "Parse status: " << conn->request_data_->parse_status_
-                  << std::endl;
-        std::cout << "method: " << conn->request_data_->method_ << std::endl;
-        std::cout << "uri: " << conn->request_data_->uri_ << std::endl;
-        std::cout << "version: " << conn->request_data_->version_ << std::endl;
-        std::cout << "headers: " << std::endl;
-        for (std::map<std::string, std::string>::const_iterator it =
-                 conn->request_data_->headers_.begin();
-             it != conn->request_data_->headers_.end(); ++it) {
-            std::cout << "  " << it->first << ": " << it->second << std::endl;
-        }
-        std::cout << "body: " << std::endl;
-        std::cout.write(conn->request_data_->body_.data(),
-                        conn->request_data_->body_.size());
-        std::cout << "\n====================================\n" << std::endl;
-
-        // Check the parse status and update connection state
-        if (conn->request_data_->parse_status_ ==
-            RequestParser::PARSE_SUCCESS) {
-            conn->state_ = Connection::CONN_PROCESSING;
-        } else if (conn->request_data_->parse_status_ ==
-                   RequestParser::PARSE_INCOMPLETE) {
-            conn->state_ = Connection::CONN_READING;
-        } else {
-            conn->state_ = Connection::CONN_ERROR;
-            std::cerr << "Error parsing request (fd: " << conn->client_fd_
-                      << ")" << std::endl;
-            handle_error(conn);
-            return;
-        }
-
-        update_epoll_events(conn->client_fd_, EPOLLOUT);
-    } else if (bytes_read == 0) {
-        // Connection closed by client
-        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")"
-                  << std::endl;
-        handle_error(conn);
-    } else {
-        // Read error (bytes_read < 0)
-        std::cout << "Read error on socket (fd: " << conn->client_fd_ << ")"
-                  << std::endl;
-        handle_error(conn);
-    }
-}
-
-// TODO
-void Server::handle_write(Connection* conn) {
-    // Route the request to the appropriate handler
-    AHandler* handler = router_->route(conn->request_data_);
-
-    // If a handler was found, handle the request
-    if (handler) {
-        handler->handle(conn);
-    } else {
-        std::cerr << "No handler found for the request" << std::endl;
-    }
-
-    // TEMP For now, just echo back the data
-    std::cout << "Writing response to client (fd: " << conn->client_fd_ << ")"
-              << std::endl;
-    ssize_t bytes_written =
-        send(conn->client_fd_, conn->write_buffer_.data(),
-             conn->write_buffer_.size(),
-             MSG_NOSIGNAL);  // MSG_NOSIGNAL prevents SIGPIPE signal if the
-                             // client has closed the connection
-    if (bytes_written <= 0) {
-        // Handle error
-        std::cerr << "Write error on socket (fd: " << conn->client_fd_ << ")"
-                  << "on server " << config_.server_names_[0] << "on port "
-                  << config_.port_ << std::endl;
+    // Read data from the socket
+    if (!request_parser_->read_from_socket(conn)) {
         handle_error(conn);
         return;
     }
 
+    // Try to parse the buffer into a full request
+    RequestParser::ParseResult status = request_parser_->parse(conn);
+
+    // If request parsing is incomplete, return and wait for more data
+    if (status == RequestParser::PARSE_INCOMPLETE) {
+        return;
+    }
+
+    // TEMP - Print request to console
+    print_request(conn);
+    // TEMP
+
+    // Change epoll interest event to EPOLLOUT for writing
+    update_epoll_events(conn->client_fd_, EPOLLOUT);
+}
+
+void Server::handle_write(Connection* conn) {
+    // Route the request to the appropriate handler
+    AHandler* handler = router_->route(conn->request_data_);
+
+    // Call the handler to process the request and generate a response
+    handler->handle(conn);
+
+    // TEMP For now, just echo back the data on the buffer
+    if (print_and_erase_buffer(conn->write_buffer_) < 0) {
+        handle_error(conn);
+        return;
+    }
+    // TEMP
+
     // Write the response to the client
+    // TEMP - change boolean to status enum because we should close the
+    // connection on some cases (like Bad Request) even if it is keep-alive
     bool writing_complete = response_writer_->write_response(conn);
+    if (!writing_complete) {
+        // If writing is not complete, we need to wait for next EPOLLOUT event
+        return;
+    }
 
     if (conn->is_keep_alive()) {
         conn->reset_for_keep_alive();
         update_epoll_events(conn->client_fd_, EPOLLIN);
     } else {
-        // Close connection if not keep-alive
         close_client_connection(conn);
     }
 }
@@ -331,7 +276,8 @@ bool Server::register_epoll_events(int fd, uint32_t events) {
     event.events = events;
     event.data.fd = fd;
 
-    if (epoll_ctl(manager_->get_epoll_fd(), EPOLL_CTL_ADD, fd, &event) < 0) {
+    if (epoll_ctl(server_manager_->get_epoll_fd(), EPOLL_CTL_ADD, fd, &event) <
+        0) {
         // Handle error
         std::cerr << "Failed to register fd: " << fd << "on server "
                   << config_.server_names_[0] << "on port " << config_.port_
@@ -348,7 +294,8 @@ bool Server::update_epoll_events(int fd, uint32_t events) {
     event.events = events;
     event.data.fd = fd;
 
-    if (epoll_ctl(manager_->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) < 0) {
+    if (epoll_ctl(server_manager_->get_epoll_fd(), EPOLL_CTL_MOD, fd, &event) <
+        0) {
         // Handle error
         std::cerr << "Failed to up epoll events for fd: " << fd << "on server "
                   << config_.server_names_[0] << "on port " << config_.port_

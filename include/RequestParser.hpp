@@ -59,6 +59,13 @@ class RequestParser {
         const ServerConfig& config);  // Takes config for limits etc.
     ~RequestParser();
 
+	// Reads data from the socket into the connection's read buffer.
+	// - Returns true if data was read successfully.
+	// - Returns false if the connection is closed or an error occurs.
+	// - If false, the connection should be closed.
+	// - If true, the read buffer is updated with the new data.
+	bool read_from_socket(Connection* conn);
+
     // Parses data currently in the connection's read buffer.
     // - Populates conn->request_data if successful (PARSE_SUCCESS).
     // - Updates conn->read_buffer (removing parsed data).
