@@ -141,19 +141,6 @@ bool RequestParser::split_request_line(HttpRequest* request,
 bool RequestParser::split_uri_components(HttpRequest* request) {
     std::string uri = request->uri_;
 
-    // Check for fragment identifier ('#' delimiter)
-    size_t fragment_pos = uri.find('#');
-    if (fragment_pos != std::string::npos) {
-        request->fragment_ =
-            decode_uri(request->path_.substr(fragment_pos + 1));
-        if (request->fragment_.empty()) {
-            return false;  // Invalid fragment
-        }
-        uri.erase(fragment_pos);
-    } else {
-        request->fragment_.clear();
-    }
-
     // Check for query string ('?' delimiter)
     size_t query_pos = uri.find('?');
     if (query_pos != std::string::npos) {
@@ -228,10 +215,6 @@ RequestParser::ParseResult RequestParser::validate_request_line(
 
     if (!validate_query_string(request->query_string_)) {
         return PARSE_INVALID_QUERY_STRING;
-    }
-
-    if (!validate_fragment(request->fragment_)) {
-        return PARSE_INVALID_FRAGMENT;
     }
 
     if (!validate_http_version(request->version_)) {
@@ -328,40 +311,6 @@ bool RequestParser::validate_query_string(const std::string& query_string) {
     // - Additional characters: :, @, /, ?
     for (size_t i = 0; i < query_string.length(); ++i) {
         unsigned char c = static_cast<unsigned char>(query_string[i]);
-
-        // Allow these characters
-        if (isalnum(c) || strchr("-._~!$&'()*+,;=:@/?", c)) {
-            continue;
-        }
-
-        // Reject any other characters
-        return false;
-    }
-
-    return true;
-}
-
-bool RequestParser::validate_fragment(const std::string& fragment) {
-    // If fragment is empty, it's valid
-    if (fragment.empty()) {
-        return true;
-    }
-
-    // Check for length limit
-    if (fragment.size() > HttpConfig::MAX_FRAGMENT_LENGTH) {
-        return false;
-    }
-
-    // According to RFC 3986, fragments should only contain:
-    // - fragment = *( pchar / "/" / "?" )
-    // - pchar = unreserved / pct-encoded / sub-delims / ":" / "@"
-    // This means we should check that characters are limited to:
-    // - Alphanumeric: a-z, A-Z, 0-9
-    // - Unreserved: -, ., _, ~
-    // - Sub-delimiters: !, $, &, ', (, ), *, +, ,, ;, =
-    // - Additional characters: :, @, /, ?
-    for (size_t i = 0; i < fragment.length(); ++i) {
-        unsigned char c = static_cast<unsigned char>(fragment[i]);
 
         // Allow these characters
         if (isalnum(c) || strchr("-._~!$&'()*+,;=:@/?", c)) {

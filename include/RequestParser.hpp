@@ -36,7 +36,6 @@ class RequestParser {
         PARSE_METHOD_NOT_ALLOWED,      // Unsupported HTTP method
         PARSE_INVALID_PATH,            // Invalid path in URI
         PARSE_INVALID_QUERY_STRING,    // Invalid query string in URI
-        PARSE_INVALID_FRAGMENT,        // Invalid fragment in URI
         PARSE_VERSION_NOT_SUPPORTED,   // Unsupported HTTP version
         PARSE_REQUEST_TOO_LONG,        // Request exceeds maximum length
         PARSE_HEADER_TOO_LONG,         // Header exceeds maximum length
@@ -85,7 +84,6 @@ class RequestParser {
     bool validate_method(const std::string& method);
     bool validate_path(const std::string& path);
     bool validate_query_string(const std::string& query_string);
-    bool validate_fragment(const std::string& fragment);
     bool validate_http_version(const std::string& version);
 
     // Header parsing methods
