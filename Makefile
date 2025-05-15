@@ -17,7 +17,8 @@ FILES = main.cpp \
 		ResponseWriter.cpp \
 		Router.cpp \
 		StaticFileHandler.cpp \
-		Logger.cpp
+		Logger.cpp \
+		AHandler.cpp \
 
 		
 OBJS = $(FILES:%.cpp=$(OBJ_DIR)/%.o)

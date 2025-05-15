@@ -12,32 +12,30 @@ Router::~Router() {
 }
 
 AHandler* Router::route(HttpRequest* req) {
+    
     // Get the path from the request (already without query part)
     const std::string& request_path = req->uri_;
+    const std::string& request_method = req->method_;
 
     // Iterate through locations in config_ to find a match
     const LocationConfig* matching_location = NULL;
 
-    for (std::vector<LocationConfig>::const_iterator it =
-             config_.locations.begin();
-         it != config_.locations.end(); ++it) {
-        const LocationConfig& loc = *it;
+    for (std::vector<LocationConfig>::const_iterator it = config_.locations.begin(); it != config_.locations.end(); ++it) {
+        const LocationConfig& location = *it;
         // Check if the request path starts with the location path
-        if (request_path.find(loc.path) == 0) {
+        if (request_path.find(location.path) == 0) {
             // Make sure we match complete segments
-            if (loc.path == "/" ||           // Root always matches
-                request_path == loc.path ||  // Exact match
-                (request_path.length() > loc.path.length() &&
-                 request_path[loc.path.length()] == '/')) {
-                // If we haven't found a match yet, or this match is more
-                // specific
-                if (!matching_location ||
-                    loc.path.length() > matching_location->path.length()) {
-                    matching_location = &loc;
+            if (location.path == "/" ||           // Root always matches
+                request_path == location.path ||  // Exact match
+                (request_path.length() > location.path.length() && (request_path[location.path.length()] == '/' || request_path[location.path.length() - 1] == '/'))) { 
+                if (!matching_location || location.path.length() > matching_location->path.length()) { 
+                    matching_location = &location;
                 }
             }
         }
     }
+
+    req->location_match_ = matching_location;
 
     // Print router info when a location is matched
     std::cout << "\n==== ROUTER INFO ====\n";
@@ -51,27 +49,11 @@ AHandler* Router::route(HttpRequest* req) {
     std::cout << "Root: " << matching_location->root << std::endl;
     std::cout << "======================\n" << std::endl;
 
-    // Check if this is a directory path
-    bool is_directory_request = false;
-    // Path ending with / typically indicates a directory, but exclude the root
-    // path (/)
-    if (!request_path.empty() && request_path[request_path.size() - 1] == '/' &&
-        request_path != "/") {
-        is_directory_request = true;
-    }
-
-    // TEMP - Print error if no matching location found
-    if (matching_location == NULL) {
-        std::cerr << "No matching location found for request path: "
-                  << request_path << std::endl;
-        return NULL;  // No matching location found
-    }
-
     // Return appropriate handler based on location config
     if (matching_location->cgi_enabled) {
         // CGI handler for CGI-enabled locations
         return cgi_handler_;
-    } else if (is_directory_request) {
+    } else if (request_method == "POST") {
         // FileUploadHandler for file uploads
         return file_upload_handler_;
     } else {
