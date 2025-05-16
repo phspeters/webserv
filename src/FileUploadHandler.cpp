@@ -15,23 +15,10 @@ void FileUploadHandler::handle(Connection* conn) {
         return;
     }
 
-    // Check for Content-Type header
-    std::string content_type;
-    for (std::map<std::string, std::string>::const_iterator it =
-             req->headers_.begin();
-         it != req->headers_.end(); ++it) {
-        std::string header_name = it->first;
-        for (size_t i = 0; i < header_name.length(); i++) {
-            header_name[i] = std::tolower(header_name[i]);
-        }
-        if (header_name == "content-type") {
-            content_type = it->second;
-            break;
-        }
-    }
-
+    std::string content_type = req->get_header("content-type");
+    
     // Check that it's multipart/form-data
-    if (content_type.find("multipart/form-data") != 0) {
+    if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
         resp->status_code_ = 415;
         resp->status_message_ = "Unsupported Media Type";
         return;
@@ -45,7 +32,7 @@ void FileUploadHandler::handle(Connection* conn) {
         return;
     }
 
-    // Verify location_match_ 
+    // Verify location_match_ is set by the router
     if (!req->location_match_) {
         resp->status_code_ = 500;
         resp->status_message_ = "Internal Server Error - No Location Match";
