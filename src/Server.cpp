@@ -171,22 +171,36 @@ void Server::handle_write(Connection* conn) {
     std::cout << "=====================\n" << std::endl;
 
     // TEMP For now, just echo back the data on the buffer
-    if (print_and_erase_buffer(conn->write_buffer_) < 0) {
-        handle_error(conn);
-        return;
-    }
+    // if (print_and_erase_buffer(conn->write_buffer_) < 0) {
+    //     handle_error(conn);
+    //     return;
+    // }
     // TEMP
 
     // Write the response to the client
-    // TEMP - change boolean to status enum because we should close the
-    // connection on some cases (like Bad Request) even if it is keep-alive
-    bool writing_complete = response_writer_->write_response(conn);
-    if (!writing_complete) {
-        // If writing is not complete, we need to wait for next EPOLLOUT event
-        return;
+    ResponseWriter::ResponseStatus status = response_writer_->write_response(conn);
+
+    switch (status) {
+        case ResponseWriter::RESPONSE_INCOMPLETE:
+            return;
+            
+        case ResponseWriter::RESPONSE_ERROR:
+            handle_error(conn);
+            return;
+            
+        case ResponseWriter::RESPONSE_COMPLETE:
+            break;
     }
 
-    if (conn->is_keep_alive()) {
+    // Check for error status codes that should close the connection
+    bool force_close = false;
+    int status_code = conn->response_data_->status_code_;
+    if (status_code >= 400) {
+        // Close connections for client and server errors
+        force_close = true;
+    }
+
+    if (!force_close && conn->is_keep_alive()) {
         conn->reset_for_keep_alive();
         update_epoll_events(conn->client_fd_, EPOLLIN);
     } else {

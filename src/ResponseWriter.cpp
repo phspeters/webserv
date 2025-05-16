@@ -4,30 +4,28 @@ ResponseWriter::ResponseWriter(const ServerConfig& config) : config_(config) {}
 
 ResponseWriter::~ResponseWriter() {}
 
-bool ResponseWriter::write_response(Connection* conn) {
-    // TODO - Write the response to the client
-    // 1. Write the headers to the write buffer
-    // 2. Write the body to the write buffer
-    // 3. Send the response to the client
-    // 4. Erase the write buffer after sending
-    // 5. Update the last activity timestamp
-    if (!conn) {
-        return -1;
+ResponseWriter::ResponseStatus ResponseWriter::write_response(Connection* conn) {
+    // Validate connection
+    if (!conn || conn->client_fd_ < 0) {
+        return RESPONSE_ERROR;
     }
 
-    // Check if the connection is valid
-    if (conn->client_fd_ < 0) {
-        return -1;
+    // If buffer is empty, prepare the response data first
+    if (conn->write_buffer_.empty()) {
+        // Write headers
+        if (!write_headers(conn)) {
+            return RESPONSE_ERROR;
+        }
+
+        // Write body
+        if (!write_body(conn)) {
+            return RESPONSE_ERROR;
+        }
     }
 
-    // Write headers
-    if (!write_headers(conn)) {
-        return -1;
-    }
-
-    // Write body
-    if (!write_body(conn)) {
-        return -1;
+    // Nothing to send
+    if (conn->write_buffer_.empty()) {
+        return RESPONSE_COMPLETE;
     }
 
     // Send the response
@@ -38,13 +36,16 @@ bool ResponseWriter::write_response(Connection* conn) {
                              // client has closed the connection
 
     // Check for errors or closed connection
-    if (bytes_written <= 0) {
+    if (bytes_written < 0) {
         // If EAGAIN/EWOULDBLOCK, it means the socket buffer is full, try again later
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return false;
+            return RESPONSE_INCOMPLETE;
         }
         // For other errors, the connection is probably broken
-        return false;
+        return RESPONSE_ERROR;
+    } else if (bytes_written == 0) {
+        // Connection closed by client
+        return RESPONSE_ERROR;
     }
 
     // Remove the written data from the buffer
@@ -54,7 +55,13 @@ bool ResponseWriter::write_response(Connection* conn) {
     // Update the last activity timestamp
     conn->last_activity_ = time(NULL);
 
-    return conn->write_buffer_.empty();
+    // If buffer is empty, we're done
+    if (conn->write_buffer_.empty()) {
+        return RESPONSE_COMPLETE;
+    }
+    
+    // More data to send
+    return RESPONSE_INCOMPLETE;
 }
 
 bool ResponseWriter::write_headers(Connection* conn) {

@@ -11,10 +11,16 @@ struct ServerConfig;
 // Utility class to help format HTTP responses.
 class ResponseWriter {
    public:
+    enum ResponseStatus {
+        RESPONSE_COMPLETE,     // Response fully sent
+        RESPONSE_INCOMPLETE,   // Partial write, needs another EPOLLOUT event
+        RESPONSE_ERROR         // Error occurred during writing
+    };
+
     explicit ResponseWriter(const ServerConfig& config);
     ~ResponseWriter();
 
-    bool write_response(Connection* conn);
+    ResponseStatus write_response(Connection* conn);
 
     // Prepares the initial part of the response (status line + headers)
     // and places it into the Connection's write buffer.
