@@ -12,30 +12,22 @@ Router::~Router() {
 }
 
 AHandler* Router::route(HttpRequest* req) {
-    
     // Get the path from the request (already without query part)
     const std::string& request_path = req->uri_;
     const std::string& request_method = req->method_;
 
-    // Iterate through locations in config_ to find a match
-    const LocationConfig* matching_location = NULL;
-
-    for (std::vector<LocationConfig>::const_iterator it = config_.locations.begin(); it != config_.locations.end(); ++it) {
-        const LocationConfig& location = *it;
-        // Check if the request path starts with the location path
-        if (request_path.find(location.path) == 0) {
-            // Make sure we match complete segments
-            if (location.path == "/" ||           // Root always matches
-                request_path == location.path ||  // Exact match
-                (request_path.length() > location.path.length() && (request_path[location.path.length()] == '/' || request_path[location.path.length() - 1] == '/'))) { 
-                if (!matching_location || location.path.length() > matching_location->path.length()) { 
-                    matching_location = &location;
-                }
-            }
-        }
-    }
-
+    // Use centralized location matching from config
+    const LocationConfig* matching_location = config_.findMatchingLocation(request_path);
     req->location_match_ = matching_location;
+
+    // Check if a matching location was found
+    if (!matching_location) {
+        std::cout << "\n==== ROUTER ERROR ====\n";
+        std::cout << "No matching location for path: " << request_path << std::endl;
+        std::cout << "======================\n" << std::endl;
+        // Return default handler or handle error case
+        return static_handler_; // Usually you'd return an error handler instead
+    }
 
     // Print router info when a location is matched
     std::cout << "\n==== ROUTER INFO ====\n";

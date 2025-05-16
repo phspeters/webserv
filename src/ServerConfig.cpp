@@ -478,23 +478,21 @@ bool LocationConfig::isValid(std::string& error_msg) const {
 }
 
 const LocationConfig* ServerConfig::findMatchingLocation(const std::string& uri) const {
-    std::string path = uri;
-    
-    // Remove query string if present
-    size_t query_pos = path.find('?');
-    if (query_pos != std::string::npos) {
-        path = path.substr(0, query_pos);
-    }
-
-    // Find best matching location
     const LocationConfig* best_match = NULL;
-    size_t best_match_length = 0;
     
-    for (size_t i = 0; i < locations.size(); ++i) {
-        const LocationConfig& loc = locations[i];
-        if (path.find(loc.path) == 0 && loc.path.length() > best_match_length) {
-            best_match = &locations[i];
-            best_match_length = loc.path.length();
+    for (std::vector<LocationConfig>::const_iterator it = locations.begin(); it != locations.end(); ++it) {
+        const LocationConfig& location = *it;
+        // Check if the request path starts with the location path
+        if (uri.find(location.path) == 0) {
+            // Make sure we match complete segments
+            if (location.path == "/" ||           // Root always matches
+                uri == location.path ||          // Exact match
+                (uri.length() > location.path.length() && 
+                (uri[location.path.length()] == '/' || location.path[location.path.length() - 1] == '/'))) { 
+                if (!best_match || location.path.length() > best_match->path.length()) { 
+                    best_match = &location;
+                }
+            }
         }
     }
     
