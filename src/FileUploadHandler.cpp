@@ -82,7 +82,7 @@ void FileUploadHandler::handle(Connection* conn) {
 bool FileUploadHandler::parseMultipartFormData(Connection* conn,
                                                const std::string& boundary) {
     HttpRequest* req = conn->request_data_;
- 
+
     // Full boundary string in the content
     std::string full_boundary = "--" + boundary;
     std::string end_boundary = "--" + boundary + "--";
@@ -162,7 +162,7 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn,
                                     body.begin() + content_end);
 
         // Save the file
-        if (!saveUploadedFile(filename, file_data)) {
+        if (!saveUploadedFile(req, filename, file_data)) {
             return false;
         }
 
@@ -174,13 +174,41 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn,
     return success;
 }
 
-bool FileUploadHandler::saveUploadedFile(const std::string& filename,
+std::string FileUploadHandler::getUploadDirectory(HttpRequest* req) {
+    // Get root from location 
+    std::string upload_dir = req->location_match_->root;
+    
+    // Ensure path ends with a slash
+    if (!upload_dir.empty() && upload_dir[upload_dir.length() - 1] != '/') {
+        upload_dir += '/';
+    }
+    
+    // Add uploads subdirectory
+    upload_dir += "uploads/";
+    
+    return upload_dir;
+}
+
+bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
+                                         const std::string& filename,
                                          const std::vector<char>& data) {
+    // Get the upload directory using root directive
+    std::string upload_dir = getUploadDirectory(req);
+    
     // Create upload directory if it doesn't exist
     struct stat st;
-    if (stat(DEFAULT_UPLOAD_DIR.c_str(), &st) != 0) {
-        // Directory doesn't exist, try to create it
-        if (mkdir(DEFAULT_UPLOAD_DIR.c_str(), 0755) != 0) {
+    if (stat(upload_dir.c_str(), &st) != 0) {
+        // Directory doesn't exist, try to create it (recursively)
+        size_t pos = 0;
+        while ((pos = upload_dir.find('/', pos + 1)) != std::string::npos) {
+            if (pos > 0) {
+                std::string parent_dir = upload_dir.substr(0, pos);
+                mkdir(parent_dir.c_str(), 0755);  // Ignore errors for existing dirs
+            }
+        }
+        
+        // Create final directory
+        if (mkdir(upload_dir.c_str(), 0755) != 0 && errno != EEXIST) {
             return false;
         }
     }
@@ -188,11 +216,8 @@ bool FileUploadHandler::saveUploadedFile(const std::string& filename,
     // Sanitize filename
     std::string safe_filename = sanitizeFilename(filename);
     if (safe_filename.empty()) {
-        return false;  
+        return false;
     }
-
-    // Construct full path
-    std::string full_path = DEFAULT_UPLOAD_DIR + safe_filename
 
     // Open file for writing
     std::string full_path = upload_dir + safe_filename;

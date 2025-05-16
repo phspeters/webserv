@@ -14,16 +14,10 @@ class FileUploadHandler : public AHandler {
     FileUploadHandler(const ServerConfig& config);
     virtual ~FileUploadHandler();
 
-    // Implementation of handle method for file uploads
-    // - Checks Content-Type (must be multipart/form-data)
-    // - Parses multipart form data to extract files
-    // - Saves files to appropriate directory
-    // - Creates response (success or error)
     virtual void handle(Connection* conn);
 
    private:
     const ServerConfig& config_;
-    static const std::string DEFAULT_UPLOAD_DIR; 
 
     // Helper methods
     bool parseMultipartFormData(Connection* conn, const std::string& boundary);
@@ -37,4 +31,4 @@ class FileUploadHandler : public AHandler {
     FileUploadHandler& operator=(const FileUploadHandler&);
 };
 
-#endif  // UPLOADHANDLER_HPP
+#endif // FILEUPLOADHANDLER_HPP
