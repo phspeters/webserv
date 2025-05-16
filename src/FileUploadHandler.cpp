@@ -2,6 +2,8 @@
 
 // curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
 
+const std::string FileUploadHandler::DEFAULT_UPLOAD_DIR = "/tmp/uploads/";
+
 FileUploadHandler::FileUploadHandler(const ServerConfig& config)
     : config_(config) {}
 
@@ -12,13 +14,6 @@ void FileUploadHandler::handle(Connection* conn) {
     HttpResponse* resp = conn->response_data_;
 
     if (!req || !resp) {
-        return;
-    }
-
-    // Verify it's a POST request
-    if (req->method_ != "POST") {
-        resp->status_code_ = 405;
-        resp->status_message_ = "Method Not Allowed";
         return;
     }
 
@@ -52,28 +47,16 @@ void FileUploadHandler::handle(Connection* conn) {
         return;
     }
 
-    // Find the upload directory from location config
-    const LocationConfig* location = NULL;
-    std::string path = req->uri_;
-    size_t query_pos = path.find('?');
-    if (query_pos != std::string::npos) {
-        path = path.substr(0, query_pos);
-    }
-
-    size_t best_match_length = 0;
-    for (size_t i = 0; i < config_.locations.size(); ++i) {
-        const LocationConfig& loc = config_.locations[i];
-        if (path.find(loc.path) == 0 && loc.path.length() > best_match_length) {
-            location = &loc;
-            best_match_length = loc.path.length();
-        }
-    }
+    const LocationConfig* location = config_.findMatchingLocation(req->uri_);
 
     if (!location) {
         resp->status_code_ = 500;
         resp->status_message_ = "Internal Server Error - No Location";
         return;
     }
+
+    // Set the location_match_ for use with parse_absolute_path
+    req->location_match_ = location;
 
     // Process the multipart form data
     if (parseMultipartFormData(conn, boundary)) {
@@ -99,7 +82,7 @@ void FileUploadHandler::handle(Connection* conn) {
 bool FileUploadHandler::parseMultipartFormData(Connection* conn,
                                                const std::string& boundary) {
     HttpRequest* req = conn->request_data_;
-
+ 
     // Full boundary string in the content
     std::string full_boundary = "--" + boundary;
     std::string end_boundary = "--" + boundary + "--";
@@ -179,7 +162,7 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn,
                                     body.begin() + content_end);
 
         // Save the file
-        if (!saveUploadedFile(filename, file_data, "/tmp/uploads/")) {
+        if (!saveUploadedFile(filename, file_data)) {
             return false;
         }
 
@@ -192,19 +175,24 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn,
 }
 
 bool FileUploadHandler::saveUploadedFile(const std::string& filename,
-                                         const std::vector<char>& data,
-                                         const std::string& upload_dir) {
+                                         const std::vector<char>& data) {
     // Create upload directory if it doesn't exist
     struct stat st;
-    if (stat(upload_dir.c_str(), &st) != 0) {
+    if (stat(DEFAULT_UPLOAD_DIR.c_str(), &st) != 0) {
         // Directory doesn't exist, try to create it
-        if (mkdir(upload_dir.c_str(), 0755) != 0) {
+        if (mkdir(DEFAULT_UPLOAD_DIR.c_str(), 0755) != 0) {
             return false;
         }
     }
 
     // Sanitize filename
     std::string safe_filename = sanitizeFilename(filename);
+    if (safe_filename.empty()) {
+        return false;  
+    }
+
+    // Construct full path
+    std::string full_path = DEFAULT_UPLOAD_DIR + safe_filename
 
     // Open file for writing
     std::string full_path = upload_dir + safe_filename;

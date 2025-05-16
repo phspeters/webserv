@@ -477,6 +477,30 @@ bool LocationConfig::isValid(std::string& error_msg) const {
     return true;
 }
 
+const LocationConfig* ServerConfig::findMatchingLocation(const std::string& uri) const {
+    std::string path = uri;
+    
+    // Remove query string if present
+    size_t query_pos = path.find('?');
+    if (query_pos != std::string::npos) {
+        path = path.substr(0, query_pos);
+    }
+
+    // Find best matching location
+    const LocationConfig* best_match = NULL;
+    size_t best_match_length = 0;
+    
+    for (size_t i = 0; i < locations.size(); ++i) {
+        const LocationConfig& loc = locations[i];
+        if (path.find(loc.path) == 0 && loc.path.length() > best_match_length) {
+            best_match = &locations[i];
+            best_match_length = loc.path.length();
+        }
+    }
+    
+    return best_match;
+}
+
 void ServerConfig::print() const {
     std::cout << "---------- SERVER CONFIG ----------" << std::endl;
     std::cout << "Host: " << host_ << std::endl;

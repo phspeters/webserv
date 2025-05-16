@@ -55,7 +55,7 @@ struct ServerConfig {
     static bool addDirectiveValue(LocationConfig& location,
                                   const std::string& key,
                                   const std::string& value);
-
+    const LocationConfig* findMatchingLocation(const std::string& uri) const;
     bool applyDefaults();
 
     // Validation methods
