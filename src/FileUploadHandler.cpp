@@ -3,7 +3,7 @@
 // curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
 
 FileUploadHandler::FileUploadHandler(const ServerConfig& config)
-    : config_(config) {}
+    : AHandler(), config_(config) {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
