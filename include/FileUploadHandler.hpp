@@ -25,6 +25,7 @@ class FileUploadHandler : public AHandler {
                           const std::vector<char>& data);
     std::string extractBoundary(const std::string& content_type);
     std::string sanitizeFilename(const std::string& filename);
+    std::string getUploadDirectory(HttpRequest* req);
 
     // Prevent copying
     FileUploadHandler(const FileUploadHandler&);

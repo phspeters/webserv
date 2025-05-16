@@ -2,8 +2,6 @@
 
 // curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
 
-const std::string FileUploadHandler::DEFAULT_UPLOAD_DIR = "/tmp/uploads/";
-
 FileUploadHandler::FileUploadHandler(const ServerConfig& config)
     : config_(config) {}
 
@@ -47,16 +45,12 @@ void FileUploadHandler::handle(Connection* conn) {
         return;
     }
 
-    const LocationConfig* location = config_.findMatchingLocation(req->uri_);
-
-    if (!location) {
+    // Verify location_match_ 
+    if (!req->location_match_) {
         resp->status_code_ = 500;
-        resp->status_message_ = "Internal Server Error - No Location";
+        resp->status_message_ = "Internal Server Error - No Location Match";
         return;
     }
-
-    // Set the location_match_ for use with parse_absolute_path
-    req->location_match_ = location;
 
     // Process the multipart form data
     if (parseMultipartFormData(conn, boundary)) {
@@ -175,16 +169,19 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn,
 }
 
 std::string FileUploadHandler::getUploadDirectory(HttpRequest* req) {
-    // Get root from location 
-    std::string upload_dir = req->location_match_->root;
+    std::string base_path = parse_absolute_path(req);
     
-    // Ensure path ends with a slash
-    if (!upload_dir.empty() && upload_dir[upload_dir.length() - 1] != '/') {
-        upload_dir += '/';
+    // Extract just the directory part (remove any filename component)
+    size_t last_slash = base_path.find_last_of('/');
+    if (last_slash != std::string::npos) {
+        base_path = base_path.substr(0, last_slash + 1);
+    } else {
+        // If no slash found, add one
+        base_path += '/';
     }
     
     // Add uploads subdirectory
-    upload_dir += "uploads/";
+    std::string upload_dir = base_path + "uploads/";
     
     return upload_dir;
 }
