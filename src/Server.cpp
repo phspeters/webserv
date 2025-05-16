@@ -39,6 +39,9 @@ bool Server::init() {
     request_parser_ = new RequestParser(config_);
     response_writer_ = new ResponseWriter(config_);
 
+    // Initialize the error handler
+    error_handler_ = new ErrorHandler(config_);
+
     // Initialize handlers
     static_file_handler_ = new StaticFileHandler(config_);
     // cgi_handler_ = new CgiHandler(config_);

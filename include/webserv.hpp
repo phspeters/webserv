@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "AHandler.hpp"
+#include "ErrorHandler.hpp"
 #include "RequestParser.hpp"
 #include "ServerConfig.hpp"
 
