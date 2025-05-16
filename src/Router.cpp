@@ -53,7 +53,7 @@ AHandler* Router::route(HttpRequest* req) {
     if (matching_location->cgi_enabled) {
         // CGI handler for CGI-enabled locations
         return cgi_handler_;
-    } else if (request_method == "POST") {
+    } else if (request_method == "POST" || request_method == "DELETE") {
         // FileUploadHandler for file uploads
         return file_upload_handler_;
     } else {

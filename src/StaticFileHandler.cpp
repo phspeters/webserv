@@ -7,11 +7,13 @@ StaticFileHandler::~StaticFileHandler() {}
 
 void StaticFileHandler::handle(Connection* conn) {
 
+    //--CHECK Check if the request has errors to return an error response
+
     std::string absolute_path = parse_absolute_path(conn->request_data_);
-    
-    // ENDS SAME METHODS FOR ALL HANDLERS
-    
-    /* // Try to open the file --CHECK EPOLL
+
+    //--CHECK Handle better the error responses
+
+    // Try to open the file 
     int fd = open(absolute_path.c_str(), O_RDONLY);
     if (fd == -1) {
         if (errno == ENOENT) {
@@ -102,5 +104,5 @@ void StaticFileHandler::handle(Connection* conn) {
     conn->response_data_->body_.assign(file_content.begin(), file_content.end());
     
     // Update connection state
-    conn->state_ = Connection::CONN_WRITING; */
+    conn->state_ = Connection::CONN_WRITING;
 }

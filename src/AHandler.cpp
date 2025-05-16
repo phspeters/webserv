@@ -6,6 +6,11 @@ std::string AHandler::parse_absolute_path(HttpRequest* req) {
     const std::string& request_path = req->uri_;
     const LocationConfig* request_location = req->location_match_;
     std::string request_root = request_location->root;
+
+    // --CHECK If the root starts with /, removed it 
+    if (request_root[0] == '/') {
+        request_root = request_root.substr(1);
+    }
     
     std::cout << "\n==== STATIC FILE HANDLER ====\n";
     std::cout << "Request URI: " << request_path << std::endl;

@@ -154,6 +154,19 @@ void Server::handle_write(Connection* conn) {
     // Call the handler to process the request and generate a response
     handler->handle(conn);
 
+    // TEMP print the http response managed by the handler
+    std::cout << "\n==== HTTP RESPONSE ====\n";
+    std::cout << "Status: " << conn->response_data_->status_code_ << " " 
+              << conn->response_data_->status_message_ << std::endl;
+    std::cout << "Headers: ";
+    for (std::map<std::string, std::string>::const_iterator it = conn->response_data_->headers_.begin();
+         it != conn->response_data_->headers_.end(); ++it) {
+        std::cout << it->first << "=" << it->second << "; ";
+    }
+    std::cout << std::endl;
+    std::cout << "Body size: " << conn->response_data_->body_.size() << " bytes" << std::endl;
+    std::cout << "=====================\n" << std::endl;
+
     // TEMP For now, just echo back the data on the buffer
     if (print_and_erase_buffer(conn->write_buffer_) < 0) {
         handle_error(conn);
