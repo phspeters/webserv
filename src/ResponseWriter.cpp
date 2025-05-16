@@ -37,6 +37,16 @@ bool ResponseWriter::write_response(Connection* conn) {
              MSG_NOSIGNAL);  // MSG_NOSIGNAL prevents SIGPIPE signal if the
                              // client has closed the connection
 
+    // Check for errors or closed connection
+    if (bytes_written <= 0) {
+        // If EAGAIN/EWOULDBLOCK, it means the socket buffer is full, try again later
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return false;
+        }
+        // For other errors, the connection is probably broken
+        return false;
+    }
+
     // Remove the written data from the buffer
     conn->write_buffer_.erase(conn->write_buffer_.begin(),
                               conn->write_buffer_.begin() + bytes_written);
@@ -98,7 +108,17 @@ bool ResponseWriter::write_headers(Connection* conn) {
 }
 
 bool ResponseWriter::write_body(Connection* conn) {
-    (void)conn;
+    if (!conn || !conn->response_data_) {
+        return false;
+    }
+    
+    HttpResponse* resp = conn->response_data_;
+    
+    // Add body to write buffer if it's not empty
+    if (resp->content_length_ > 0) {
+        conn->write_buffer_.insert(conn->write_buffer_.end(), resp->body_.begin(),
+                                  resp->body_.end());
+    }
     return true;
 }
 
