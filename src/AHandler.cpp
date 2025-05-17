@@ -1,52 +1,31 @@
 #include "webserv.hpp"
 
-std::string AHandler::parse_absolute_path(HttpRequest* req) {
+bool AHandler::process_redirect(Connection* conn) {
+    
+    if (!conn || !conn->request_data_ || !conn->response_data_) {
+        return false; // Invalid connection
+    }
 
-    // Extract request data
-    const std::string& request_path = req->uri_;
-    const LocationConfig* request_location = req->location_match_;
-    std::string request_root = request_location->root;
-
-    // --CHECK If the root starts with /, removed it 
-    if (request_root[0] == '/') {
-        request_root = request_root.substr(1);
+    const LocationConfig* location = conn->request_data_->location_match_;
+    
+    if (!location) {
+        return false; // No location match, can't check for redirect
     }
     
-    std::cout << "\n==== STATIC FILE HANDLER ====\n";
-    std::cout << "Request URI: " << request_path << std::endl;
-    std::cout << "Matched location: " << request_location->path << std::endl;
-    std::cout << "Root: " << request_location->root << std::endl;
-
-    // Calculate the path relative to the location
-    std::string relative_path = "";
-    
-    // Calculate where the relative part starts
-    size_t location_len = request_location->path.length();
-    
-    // If location path ends with /, exclude it from length calculation
-    if (!request_location->path.empty() && request_location->path[location_len - 1] == '/') {
-        location_len--;
+    // Check if this location has a redirect
+    if (location->redirect.empty()) {
+        return false; // No redirect
     }
     
-    // Extract the relative part (starting after the location path)
-    if (request_path.length() > location_len) {
-        relative_path = request_path.substr(location_len + 1);
-        if(relative_path[0] != '/') {
-            relative_path = "/" + relative_path;
-        }
-    }
-   
-    std::string absolute_path;
+    std::cout << "\n==== REDIRECT ====\n";
+    std::cout << "Redirecting to: " << location->redirect << std::endl;
+    std::cout << "=================\n" << std::endl;
     
-    if (!relative_path.empty() && relative_path[relative_path.size() - 1] == '/') {
-        relative_path += "index.html"; // --TEMP --CHECK
-    }
-    absolute_path = request_root + relative_path;
-
-    std::cout << "Relative path: " << relative_path << std::endl;
-    std::cout << "Absolute path: " << absolute_path << std::endl;
-    std::cout << "============================\n" << std::endl;
-
-    return (absolute_path);
+    // Set up redirect response
+    conn->response_data_->status_code_ = 301; // Moved Permanently
+    conn->response_data_->status_message_ = "Moved Permanently";
+    conn->response_data_->headers_["Location"] = location->redirect;
+    conn->state_ = Connection::CONN_WRITING;
+    
+    return true; // Redirect was processed
 }
-

@@ -20,6 +20,7 @@ FILES = main.cpp \
 		Logger.cpp \
 		AHandler.cpp \
 		ErrorHandler.cpp 
+		CgiHandler.cpp \
 
 		
 OBJS = $(FILES:%.cpp=$(OBJ_DIR)/%.o)

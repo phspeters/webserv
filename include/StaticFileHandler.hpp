@@ -34,6 +34,7 @@ class StaticFileHandler : public AHandler {
     // Prevent copying
     StaticFileHandler(const StaticFileHandler&);
     StaticFileHandler& operator=(const StaticFileHandler&);
+    std::string parse_absolute_path(HttpRequest* req);
 
 };  // class StaticFileHandler
 

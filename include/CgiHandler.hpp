@@ -36,6 +36,10 @@ class CgiHandler : public AHandler {
    private:
     const ServerConfig& config_;  // Reference to server configuration
 
+    std::string script_path_;  // Path to the CGI script
+    std::string path_info_;    // Path info for the CGI script
+    std::string query_string_;  // Query string for the CGI script
+
     // Helper methods for setting up environment, parsing CGI headers etc. go in
     // .cpp
     bool setup_cgi_environment(Connection* conn);
@@ -46,6 +50,9 @@ class CgiHandler : public AHandler {
     // Prevent copying
     CgiHandler(const CgiHandler&);
     CgiHandler& operator=(const CgiHandler&);
+
+    std::string parse_absolute_path(HttpRequest* req);
+    bool extract_script_info(HttpRequest* req);
 
 };  // class CgiHandler
 
