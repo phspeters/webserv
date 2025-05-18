@@ -1,14 +1,18 @@
 #include "webserv.hpp"
 
-Connection::Connection(int fd, const ServerConfig& config)
+Connection::Connection(int fd, const VirtualServer* default_virtual_server)
     : client_fd_(fd),
-      server_config_(config),
+      default_virtual_server_(default_virtual_server),
+      virtual_server_(NULL),
       last_activity_(time(NULL)),
+      chunk_remaining_bytes_(0),
       write_buffer_offset_(0),
       request_data_(new HttpRequest()),
       response_data_(new HttpResponse()),
-      state_(CONN_READING),
-      active_handler_ptr_(NULL),
+      conn_state_(codes::CONN_READING),
+      parser_state_(codes::PARSING_REQUEST_LINE),
+      parse_status_(codes::PARSE_INCOMPLETE),
+      response_status_(codes::RESPONSE_INCOMPLETE),
       cgi_pid_(-1),
       cgi_pipe_stdin_fd_(-1),
       cgi_pipe_stdout_fd_(-1),
@@ -32,7 +36,8 @@ Connection::~Connection() {
 
 // TODO implement cleanup for file_upload_handler
 void Connection::reset_for_keep_alive() {
-    // Reset write buffers
+    // Reset write buffer and offsets
+    chunk_remaining_bytes_ = 0;
     write_buffer_.clear();
     write_buffer_offset_ = 0;
 
@@ -43,6 +48,12 @@ void Connection::reset_for_keep_alive() {
     if (response_data_) {
         response_data_->clear();
     }
+
+    // Reset state variables
+    conn_state_ = codes::CONN_READING;
+    parser_state_ = codes::PARSING_REQUEST_LINE;
+    parse_status_ = codes::PARSE_INCOMPLETE;
+    response_status_ = codes::RESPONSE_INCOMPLETE;
 
     // Close any open file descriptors
     if (static_file_fd_ >= 0) {
@@ -58,9 +69,7 @@ void Connection::reset_for_keep_alive() {
         cgi_pipe_stdout_fd_ = -1;
     }
 
-    // Reset state variables
-    state_ = CONN_READING;
-    active_handler_ptr_ = NULL;
+    // Reset Handler-Specific State
     static_file_offset_ = 0;
     static_file_bytes_to_send_ = 0;
     cgi_pid_ = -1;
@@ -70,18 +79,23 @@ void Connection::reset_for_keep_alive() {
 }
 
 bool Connection::is_readable() const {
-    return state_ == CONN_READING || state_ == CONN_PROCESSING;
+    return conn_state_ == codes::CONN_READING;
+}
+
+bool Connection::is_processing() const {
+    return conn_state_ == codes::CONN_PROCESSING ||
+           conn_state_ == codes::CONN_CGI_EXEC;
 }
 
 bool Connection::is_writable() const {
-    return state_ == CONN_WRITING || state_ == CONN_CGI_EXEC;
+    return conn_state_ == codes::CONN_WRITING;
 }
 
-bool Connection::is_error() const { return state_ == CONN_ERROR; }
+bool Connection::is_error() const { return conn_state_ == codes::CONN_ERROR; }
 
 bool Connection::is_keep_alive() const {
     if (!request_data_) {
-        std::cout << "Request data is invalid for fd: " << client_fd_
+        std::cout << "WARNING Request data is invalid for fd: " << client_fd_
                   << std::endl;
         return false;
     }

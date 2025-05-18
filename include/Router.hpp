@@ -5,7 +5,7 @@
 
 // Forward declarations
 class AHandler;
-struct ServerConfig;
+struct VirtualServer;
 class StaticFileHandler;
 class CgiHandler;
 class FileUploadHandler;
@@ -15,7 +15,7 @@ class Router {
    public:
     // Constructor takes references to the actual handler instances owned
     // by Server
-    Router(const ServerConfig& config, StaticFileHandler* static_handler,
+    Router(const VirtualServer& config, StaticFileHandler* static_handler,
            CgiHandler* cgi_handler, FileUploadHandler* file_upload_handler);
     ~Router();
 
@@ -25,7 +25,7 @@ class Router {
     AHandler* route(HttpRequest* req);
 
    private:
-    const ServerConfig&
+    const VirtualServer&
         config_;  // Reference to configuration for routing rules
 
     // Pointers to the handler instances (owned by Server, not Router)

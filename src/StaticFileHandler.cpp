@@ -1,7 +1,6 @@
 #include "webserv.hpp"
 
-StaticFileHandler::StaticFileHandler(const ServerConfig& config)
-    : config_(config) {}
+StaticFileHandler::StaticFileHandler() {}
 
 StaticFileHandler::~StaticFileHandler() {}
 
@@ -20,7 +19,7 @@ void StaticFileHandler::handle(Connection* conn) {
         conn->response_data_->status_code_ = 405;
         conn->response_data_->status_message_ = "Method Not Allowed";
         conn->response_data_->headers_["Allow"] = "GET";
-        conn->state_ = Connection::CONN_WRITING;
+        conn->conn_state_ = codes::CONN_WRITING;
         return;
     }
 
@@ -40,7 +39,7 @@ void StaticFileHandler::handle(Connection* conn) {
             conn->response_data_->status_code_ = 500;
             conn->response_data_->status_message_ = "Internal Server Error";
         }
-        conn->state_ = Connection::CONN_WRITING;
+        conn->conn_state_ = codes::CONN_WRITING;
         return;
     }
     
@@ -50,7 +49,7 @@ void StaticFileHandler::handle(Connection* conn) {
         close(fd);
         conn->response_data_->status_code_ = 500;
         conn->response_data_->status_message_ = "Internal Server Error";
-        conn->state_ = Connection::CONN_WRITING;
+        conn->conn_state_ = codes::CONN_WRITING;
         return;
     }
     
@@ -59,7 +58,7 @@ void StaticFileHandler::handle(Connection* conn) {
         close(fd);
         conn->response_data_->status_code_ = 403;
         conn->response_data_->status_message_ = "Forbidden";
-        conn->state_ = Connection::CONN_WRITING;
+        conn->conn_state_ = codes::CONN_WRITING;
         return;
     }
     
@@ -95,7 +94,7 @@ void StaticFileHandler::handle(Connection* conn) {
     if (bytes_read != file_info.st_size) {
         conn->response_data_->status_code_ = 500;
         conn->response_data_->status_message_ = "Internal Server Error";
-        conn->state_ = Connection::CONN_WRITING;
+        conn->conn_state_ = codes::CONN_WRITING;
         return;
     }
     
@@ -115,16 +114,16 @@ void StaticFileHandler::handle(Connection* conn) {
     conn->response_data_->body_.assign(file_content.begin(), file_content.end());
     
     // Update connection state
-    conn->state_ = Connection::CONN_WRITING;
+    conn->conn_state_ = codes::CONN_WRITING;
 }
 
 std::string StaticFileHandler::parse_absolute_path(HttpRequest* req) {
 
     // Extract request data
     const std::string& request_path = req->uri_;
-    const LocationConfig* request_location = req->location_match_;
-    std::string request_root = request_location->root;
-    std::string index = request_location->index;
+    const Location* request_location = req->location_match_;
+    std::string request_root = request_location->root_;
+    std::string index = request_location->index_;
 
     // --CHECK If the root starts with /, removed it 
     if (request_root[0] == '/') {
@@ -133,17 +132,17 @@ std::string StaticFileHandler::parse_absolute_path(HttpRequest* req) {
     
     std::cout << "\n==== STATIC FILE HANDLER ====\n";
     std::cout << "Request URI: " << request_path << std::endl;
-    std::cout << "Matched location: " << request_location->path << std::endl;
-    std::cout << "Root: " << request_location->root << std::endl;
+    std::cout << "Matched location: " << request_location->path_ << std::endl;
+    std::cout << "Root: " << request_location->root_ << std::endl;
 
     // Calculate the path relative to the location
     std::string relative_path = "";
     
     // Calculate where the relative part starts
-    size_t location_len = request_location->path.length();
+    size_t location_len = request_location->path_.length();
     
     // If location path ends with /, exclude it from length calculation
-    if (!request_location->path.empty() && request_location->path[location_len - 1] == '/') {
+    if (!request_location->path_.empty() && request_location->path_[location_len - 1] == '/') {
         location_len--;
     }
     

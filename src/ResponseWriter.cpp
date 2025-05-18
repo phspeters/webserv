@@ -1,67 +1,60 @@
 #include "webserv.hpp"
 
-ResponseWriter::ResponseWriter(const ServerConfig& config) : config_(config) {}
+ResponseWriter::ResponseWriter() {}
 
 ResponseWriter::~ResponseWriter() {}
 
-ResponseWriter::ResponseStatus ResponseWriter::write_response(Connection* conn) {
+codes::ResponseStatus ResponseWriter::write_response(Connection* conn) {
     // Validate connection
     if (!conn || conn->client_fd_ < 0) {
-        return RESPONSE_ERROR;
+        return codes::RESPONSE_ERROR;
     }
 
     // If buffer is empty, prepare the response data first
     if (conn->write_buffer_.empty()) {
         // Write headers
         if (!write_headers(conn)) {
-            return RESPONSE_ERROR;
+            return codes::RESPONSE_ERROR;
         }
 
         // Write body
         if (!write_body(conn)) {
-            return RESPONSE_ERROR;
+            return codes::RESPONSE_ERROR;
         }
     }
 
     // Nothing to send
     if (conn->write_buffer_.empty()) {
-        return RESPONSE_COMPLETE;
+        return codes::RESPONSE_COMPLETE;
     }
 
     // Send the response
     ssize_t bytes_written =
-        send(conn->client_fd_, conn->write_buffer_.data(),
-             conn->write_buffer_.size(),
-             MSG_NOSIGNAL);  // MSG_NOSIGNAL prevents SIGPIPE signal if the
-                             // client has closed the connection
+        send(conn->client_fd_,
+             conn->write_buffer_.data() + conn->write_buffer_offset_,
+             conn->write_buffer_.size() - conn->write_buffer_offset_,
+             MSG_NOSIGNAL);  // Prevents SIGPIPE
 
-    // Check for errors or closed connection
-    if (bytes_written < 0) {
-        // If EAGAIN/EWOULDBLOCK, it means the socket buffer is full, try again later
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return RESPONSE_INCOMPLETE;
-        }
-        // For other errors, the connection is probably broken
-        return RESPONSE_ERROR;
-    } else if (bytes_written == 0) {
-        // Connection closed by client
-        return RESPONSE_ERROR;
+    // Check for errors (any non positive return is an error)
+    if (bytes_written <= 0) {
+        // With level-triggered epoll, if we're here, it's a real error
+        // No need to check errno specifically
+        return codes::RESPONSE_ERROR;
     }
 
-    // Remove the written data from the buffer
-    conn->write_buffer_.erase(conn->write_buffer_.begin(),
-                              conn->write_buffer_.begin() + bytes_written);
+    // Update the offset instead of erasing
+    conn->write_buffer_offset_ += bytes_written;
 
     // Update the last activity timestamp
     conn->last_activity_ = time(NULL);
 
-    // If buffer is empty, we're done
-    if (conn->write_buffer_.empty()) {
-        return RESPONSE_COMPLETE;
+    // Check if we've written everything
+    if (conn->write_buffer_offset_ == conn->write_buffer_.size()) {
+        return codes::RESPONSE_COMPLETE;
     }
-    
+
     // More data to send
-    return RESPONSE_INCOMPLETE;
+    return codes::RESPONSE_INCOMPLETE;
 }
 
 bool ResponseWriter::write_headers(Connection* conn) {
@@ -118,13 +111,13 @@ bool ResponseWriter::write_body(Connection* conn) {
     if (!conn || !conn->response_data_) {
         return false;
     }
-    
+
     HttpResponse* resp = conn->response_data_;
-    
+
     // Add body to write buffer if it's not empty
     if (resp->content_length_ > 0) {
-        conn->write_buffer_.insert(conn->write_buffer_.end(), resp->body_.begin(),
-                                  resp->body_.end());
+        conn->write_buffer_.insert(conn->write_buffer_.end(),
+                                   resp->body_.begin(), resp->body_.end());
     }
     return true;
 }

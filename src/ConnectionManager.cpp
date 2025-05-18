@@ -1,7 +1,6 @@
 #include "webserv.hpp"
 
-ConnectionManager::ConnectionManager(const ServerConfig& config)
-    : config_(config) {}
+ConnectionManager::ConnectionManager() {}
 
 ConnectionManager::~ConnectionManager() {
     // Destructor implementation
@@ -11,17 +10,18 @@ ConnectionManager::~ConnectionManager() {
     }
 }
 
-Connection* ConnectionManager::create_connection(int client_fd) {
+Connection* ConnectionManager::create_connection(
+    int client_fd, const VirtualServer* default_virtual_server) {
     // Create a new Connection object and store it in the map
     try {
-        Connection* conn = new Connection(client_fd, config_);
+        Connection* conn = new Connection(client_fd, default_virtual_server);
         active_connections_[client_fd] = conn;
         return conn;
     } catch (const std::exception& e) {
         // Handle error
         std::cerr << "Failed to create connection for client (fd: " << client_fd
-                  << ")" << "on server " << config_.server_names_[0]
-                  << "on port " << config_.port_ << std::endl;
+                  << ")" << "on " << default_virtual_server->host_ << ":"
+                  << default_virtual_server->port_ << std::endl;
         return NULL;
     }
 }
@@ -56,8 +56,7 @@ Connection* ConnectionManager::get_connection(int client_fd) {
         return it->second;
     }
     std::cerr << "Connection not found for client (fd: " << client_fd << ")"
-              << "on server " << config_.server_names_[0] << "on port "
-              << config_.port_ << std::endl;
+              << std::endl;
     return NULL;  // Not found
 }
 
@@ -70,8 +69,7 @@ int ConnectionManager::close_timed_out_connections() {
         it++;
         if (is_timed_out(conn)) {
             std::cerr << "Connection timed out (fd: " << conn->client_fd_ << ")"
-                      << "on server " << config_.server_names_[0] << "on port "
-                      << config_.port_ << std::endl;
+                      << std::endl;
             close_connection(conn);
             closed++;
         }
@@ -82,7 +80,7 @@ int ConnectionManager::close_timed_out_connections() {
 bool ConnectionManager::is_timed_out(Connection* conn) {
     // Check if the connection is timed out
     time_t current_time = time(NULL);
-    return (current_time - conn->last_activity_) > TIMEOUT;
+    return (current_time - conn->last_activity_) > http_limits::TIMEOUT;
 }
 
 size_t ConnectionManager::get_active_connection_count() const {

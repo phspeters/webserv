@@ -2,8 +2,7 @@
 
 // curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
 
-FileUploadHandler::FileUploadHandler(const ServerConfig& config)
-    : AHandler(), config_(config) {}
+FileUploadHandler::FileUploadHandler() : AHandler() {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
@@ -16,7 +15,7 @@ void FileUploadHandler::handle(Connection* conn) {
     }
 
     std::string content_type = req->get_header("content-type");
-    
+
     // Check that it's multipart/form-data
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
         resp->status_code_ = 415;
@@ -25,7 +24,7 @@ void FileUploadHandler::handle(Connection* conn) {
     }
 
     // Extract boundary
-    std::string boundary = extractBoundary(content_type);
+    std::string boundary = extract_boundary(content_type);
     if (boundary.empty()) {
         resp->status_code_ = 400;
         resp->status_message_ = "Bad Request - Invalid Boundary";
@@ -40,7 +39,7 @@ void FileUploadHandler::handle(Connection* conn) {
     }
 
     // Process the multipart form data
-    if (parseMultipartFormData(conn, boundary)) {
+    if (parse_multipart_form_data(conn, boundary)) {
         // Success response
         resp->status_code_ = 201;
         resp->status_message_ = "Created";
@@ -60,8 +59,8 @@ void FileUploadHandler::handle(Connection* conn) {
     }
 }
 
-bool FileUploadHandler::parseMultipartFormData(Connection* conn,
-                                               const std::string& boundary) {
+bool FileUploadHandler::parse_multipart_form_data(Connection* conn,
+                                                  const std::string& boundary) {
     HttpRequest* req = conn->request_data_;
 
     // Full boundary string in the content
@@ -143,7 +142,7 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn,
                                     body.begin() + content_end);
 
         // Save the file
-        if (!saveUploadedFile(req, filename, file_data)) {
+        if (!save_uploaded_file(req, filename, file_data)) {
             return false;
         }
 
@@ -155,9 +154,9 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn,
     return success;
 }
 
-std::string FileUploadHandler::getUploadDirectory(HttpRequest* req) {
+std::string FileUploadHandler::get_upload_directory(HttpRequest* req) {
     std::string base_path = parse_absolute_path(req);
-    
+
     // Extract just the directory part (remove any filename component)
     size_t last_slash = base_path.find_last_of('/');
     if (last_slash != std::string::npos) {
@@ -166,19 +165,19 @@ std::string FileUploadHandler::getUploadDirectory(HttpRequest* req) {
         // If no slash found, add one
         base_path += '/';
     }
-    
+
     // Add uploads subdirectory
     std::string upload_dir = base_path + "uploads/";
-    
+
     return upload_dir;
 }
 
-bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
-                                         const std::string& filename,
-                                         const std::vector<char>& data) {
+bool FileUploadHandler::save_uploaded_file(HttpRequest* req,
+                                           const std::string& filename,
+                                           const std::vector<char>& data) {
     // Get the upload directory using root directive
-    std::string upload_dir = getUploadDirectory(req);
-    
+    std::string upload_dir = get_upload_directory(req);
+
     // Create upload directory if it doesn't exist
     struct stat st;
     if (stat(upload_dir.c_str(), &st) != 0) {
@@ -187,10 +186,11 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
         while ((pos = upload_dir.find('/', pos + 1)) != std::string::npos) {
             if (pos > 0) {
                 std::string parent_dir = upload_dir.substr(0, pos);
-                mkdir(parent_dir.c_str(), 0755);  // Ignore errors for existing dirs
+                mkdir(parent_dir.c_str(),
+                      0755);  // Ignore errors for existing dirs
             }
         }
-        
+
         // Create final directory
         if (mkdir(upload_dir.c_str(), 0755) != 0 && errno != EEXIST) {
             return false;
@@ -198,7 +198,7 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
     }
 
     // Sanitize filename
-    std::string safe_filename = sanitizeFilename(filename);
+    std::string safe_filename = sanitize_filename(filename);
     if (safe_filename.empty()) {
         return false;
     }
@@ -224,7 +224,7 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
     return true;
 }
 
-std::string FileUploadHandler::sanitizeFilename(const std::string& filename) {
+std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
     // Remove path information
     std::string safe_filename = filename;
     size_t last_slash = safe_filename.find_last_of("/\\");
@@ -244,7 +244,7 @@ std::string FileUploadHandler::sanitizeFilename(const std::string& filename) {
     return safe_filename;
 }
 
-std::string FileUploadHandler::extractBoundary(
+std::string FileUploadHandler::extract_boundary(
     const std::string& content_type) {
     size_t boundary_pos = content_type.find("boundary=");
     if (boundary_pos == std::string::npos) {

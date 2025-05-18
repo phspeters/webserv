@@ -7,7 +7,7 @@
 class AHandler;
 struct HttpRequest;
 struct HttpResponse;
-struct ServerConfig;
+struct VirtualServer;
 class Server;
 
 // Represents the state associated with a single client connection
@@ -15,15 +15,17 @@ struct Connection {
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    Connection(int fd, const ServerConfig& config);
+    Connection(int fd, const VirtualServer* default_virtual_server);
     ~Connection();  // Cleans up owned resources (Request, Response, FDs)
 
     //--------------------------------------
     // Core Connection Identification & I/O
     //--------------------------------------
     int client_fd_;  // File descriptor for the client socket
-    const ServerConfig&
-        server_config_;  // Pointer to server configuration/context (read-only)
+    const VirtualServer* const
+        default_virtual_server_;     // Pointer to default virtual server
+    VirtualServer* virtual_server_;  // Pointer to virtual server matching the
+                                     // Host header
     time_t
         last_activity_;  // Timestamp of last read/write activity (for timeouts)
 
@@ -31,9 +33,9 @@ struct Connection {
     // Buffers
     //--------------------------------------
     std::vector<char> read_buffer_;   // Buffer for incoming data from client
+    size_t chunk_remaining_bytes_;    // Remaining bytes in the current chunk
     std::vector<char> write_buffer_;  // Buffer for outgoing data to client
     size_t write_buffer_offset_;  // How much of the write_buffer has been sent
-
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)
     //--------------------------------------
@@ -43,39 +45,33 @@ struct Connection {
         response_data_;  // Pointer to the response info (NULL until allocated)
 
     //--------------------------------------
-    // State Management (Simplified - reflects overall stage)
+    // State Management
     //--------------------------------------
-    enum ConnectionState {
-        CONN_READING,     // Waiting for/reading request data
-        CONN_PROCESSING,  // Request received, handler is processing
-        CONN_WRITING,     // Handler generated response, sending data
-        CONN_CGI_EXEC,    // Special state for active CGI execution
-        CONN_ERROR        // Connection encountered an error
-    };
-    ConnectionState state_;
+
+    codes::ConnectionState conn_state_;  // Current state of the connection
+    codes::ParserState parser_state_;    // Current state of the parser
+
+    codes::ParseStatus parse_status_;  // Status of the last parsing attempt
+    codes::ResponseStatus
+        response_status_;  // Status of the last response attempt
 
     //--------------------------------------
     // Connection Management
     //--------------------------------------
     void reset_for_keep_alive();  // Resets state for handling another request
 
-    // Utility methods
-    bool is_readable() const;  // Checks if the connection is readable
-    bool is_writable() const;  // Checks if the connection is writable
-    bool is_error() const;     // Checks if the connection is in error state
-    bool is_keep_alive()
-        const;  // Checks if the connection should be kept alive
-
-    //--------------------------------------
-    // Handler Association
-    //--------------------------------------
-    AHandler* active_handler_ptr_;  // Pointer to the handler responsible (set
-                                    // by Router)
-
+    // Connection state checks
+    bool is_readable() const;
+    bool is_processing() const;
+    bool is_writable() const;
+    bool is_error() const;
+    bool is_keep_alive() const;
     //--------------------------------------
     // Handler-Specific State (Example for CGI - could be a union or void*)
     //--------------------------------------
-    // CGI State (Only relevant if active_handler is CgiHandler)
+    AHandler* active_handler_;  // Pointer to the currently active handler
+	
+	// CGI State (Only relevant if active_handler is CgiHandler)
     pid_t cgi_pid_;           // Process ID of the CGI script (-1 if none)
     int cgi_pipe_stdin_fd_;   // FD for writing request body TO CGI (-1 if none)
     int cgi_pipe_stdout_fd_;  // FD for reading response FROM CGI (-1 if none)

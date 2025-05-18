@@ -5,7 +5,7 @@
 
 // Forward declarations
 struct Connection;
-struct ServerConfig;
+struct VirtualServer;
 class ResponseWriter;
 class AHandler;
 
@@ -13,7 +13,7 @@ class AHandler;
 class CgiHandler : public AHandler {
    public:
     // Constructor takes dependencies
-    CgiHandler(const ServerConfig& config);
+    CgiHandler();
     virtual ~CgiHandler();
 
     // Implementation of the handle method for CGI.
@@ -34,8 +34,6 @@ class CgiHandler : public AHandler {
         Connection* conn);  // Called when CGI stdin pipe is writable
 
    private:
-    const ServerConfig& config_;  // Reference to server configuration
-
     std::string script_path_;  // Path to the CGI script
     std::string path_info_;    // Path info for the CGI script
     std::string query_string_;  // Query string for the CGI script

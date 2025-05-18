@@ -20,20 +20,18 @@ int main(int argc, char* argv[]) {
     std::string config_file = argv[1];
 
     // Initialize server manager
-    ServerManager serverManager;
-    if (!serverManager.init()) {
+    WebServer web_server;
+    if (!web_server.init()) {
         return EXIT_FAILURE;
     }
 
     // Parse configuration file
-    std::vector<ServerConfig> configs =
-        serverManager.parse_config_file(config_file);
-    if (configs.empty()) {
+    if (web_server.parse_config_file(config_file)) {
         return EXIT_FAILURE;
     }
 
     // Spin up servers and start event loop
-    serverManager.run(configs);
+    web_server.run();
 
     return EXIT_SUCCESS;
 }

@@ -5,13 +5,13 @@
 
 // Forward declarations
 struct Connection;
-struct ServerConfig;
+struct VirtualServer;
 
 // Handles requests for static files.
 class StaticFileHandler : public AHandler {
    public:
     // Constructor takes dependencies
-    StaticFileHandler(const ServerConfig& config);
+    StaticFileHandler();
     virtual ~StaticFileHandler();
 
     // Implementation of the handle method for static files.
@@ -27,8 +27,6 @@ class StaticFileHandler : public AHandler {
     // but often the main Server write loop can handle simple file sending.
 
    private:
-    const ServerConfig& config_;  // Reference to server configuration
-
     // Helper methods for path resolution, MIME type lookup etc. go in .cpp
 
     // Prevent copying

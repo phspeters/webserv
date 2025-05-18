@@ -6,13 +6,13 @@
 // Forward declarations
 struct Connection;
 struct HttpResponse;
-struct ServerConfig;
+struct VirtualServer;
 
 // Centralized error handling for HTTP responses
 class ErrorHandler {
 public:
     // Constructor
-    explicit ErrorHandler(const ServerConfig& config);
+    ErrorHandler();
     ~ErrorHandler();
     
     // Main error handling method - applies error to the response
@@ -33,10 +33,8 @@ public:
     void apply_to_connection(Connection* conn, int status_code);
     
 private:
-    const ServerConfig& config_;
-    
     // Get error page content for the given status code
-    std::string get_error_page_content(int status_code);
+    std::string get_error_page_content(int status_code, const VirtualServer* virtual_server = NULL);
     
     // Generate default error page when custom one doesn't exist
     std::string generate_default_error_page(int status_code, const std::string& status_message);
