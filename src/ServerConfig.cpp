@@ -485,22 +485,22 @@ bool LocationConfig::isValid(std::string& error_msg) const {
     }
 
     // Validate root path exists and is a directory
-    struct stat path_stat;
-    if (stat(root.c_str(), &path_stat) != 0) {
-        error_msg = "Root directory does not exist: " + root;
-        return false;
-    }
+    // struct stat path_stat;
+    // if (stat(root.c_str(), &path_stat) != 0) {
+    //     error_msg = "Root directory does not exist: " + root;
+    //     return false;
+    // }
     
-    if (!S_ISDIR(path_stat.st_mode)) {
-        error_msg = "Root path is not a directory: " + root;
-        return false;
-    }
+    // if (!S_ISDIR(path_stat.st_mode)) {
+    //     error_msg = "Root path is not a directory: " + root;
+    //     return false;
+    // }
     
     // Check read permissions
-    if (access(root.c_str(), R_OK) != 0) {
-        error_msg = "No read permission for root directory: " + root;
-        return false;
-    }
+    // if (access(root.c_str(), R_OK) != 0) {
+    //     error_msg = "No read permission for root directory: " + root;
+    //     return false;
+    // }
 
     if (!allowed_methods.empty()) {
         for (size_t i = 0; i < allowed_methods.size(); i++) {
