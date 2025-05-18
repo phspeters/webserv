@@ -22,7 +22,7 @@ class Router {
     // Selects the appropriate handler based on the request properties (URI,
     // method) and server configuration (CGI paths, etc.). Returns a pointer to
     // the handler instance responsible.
-    AHandler* route(HttpRequest* req);
+    AHandler* route(Connection* conn);
 
    private:
     const ServerConfig&

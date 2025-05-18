@@ -155,7 +155,7 @@ void Server::handle_read(Connection* conn) {
 
 void Server::handle_write(Connection* conn) {
     // Route the request to the appropriate handler
-    AHandler* handler = router_->route(conn->request_data_);
+    AHandler* handler = router_->route(conn);
 
     // Call the handler to process the request and generate a response
     handler->handle(conn);
