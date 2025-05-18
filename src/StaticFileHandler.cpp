@@ -9,13 +9,13 @@ void StaticFileHandler::handle(Connection* conn) {
 
     //--CHECK Check if the request has errors to return an error response
 
+    // Fluxogram 301
     if (process_redirect(conn)) {
         return; // Redirect response was set up, we're done
     }
 
-    std::string absolute_path = parse_absolute_path(conn->request_data_);
-
-     // Check if the request method is allowed (only supporting GET)
+    // Fluxogram 405 - call error handler
+    // Check if the request method is allowed (only supporting GET) // Fluxogram OK
     if (conn->request_data_->method_ != "GET") {
         conn->response_data_->status_code_ = 405;
         conn->response_data_->status_message_ = "Method Not Allowed";
@@ -24,9 +24,48 @@ void StaticFileHandler::handle(Connection* conn) {
         return;
     }
 
+    std::string absolute_path = parse_absolute_path(conn->request_data_);
+    std::string index = conn->request_data_->location_match_->index;
+    
+    // Check if the request URI ends with a slash (indicating directory)
+    bool uri_ends_with_slash = !conn->request_data_->uri_.empty() && conn->request_data_->uri_[conn->request_data_->uri_.length() - 1] == '/';
+    
+    // Check if the absolute path is a directory
+    struct stat path_stat;
+    if (stat(absolute_path.c_str(), &path_stat) == 0 && S_ISDIR(path_stat.st_mode)) {
+        // Path exists and is a directory
+        
+        // If URI doesn't end with slash, redirect to add the slash (nginx behavior)
+        if (!uri_ends_with_slash) {
+            std::cout << "Path is a directory but URI doesn't end with slash, redirecting\n";
+            
+            // Create redirect URL (same path + /)
+            std::string redirect_url = conn->request_data_->uri_ + "/";
+            
+            // Add query string if present
+            size_t query_pos = redirect_url.find('?');
+            if (query_pos != std::string::npos) {
+                // Move ? to after the added slash
+                redirect_url.insert(query_pos, "/");
+                redirect_url.erase(redirect_url.length() - 1);
+            }
+            
+            // Set up 301 redirect
+            conn->response_data_->status_code_ = 301;
+            conn->response_data_->status_message_ = "Moved Permanently";
+            conn->response_data_->headers_["Location"] = redirect_url;
+            conn->state_ = Connection::CONN_WRITING;
+            return;
+        }
+        
+        // If URI ends with slash, append index file
+        absolute_path += index;
+    }
+
     // Try to open the file 
     int fd = open(absolute_path.c_str(), O_RDONLY);
     if (fd == -1) {
+        // Fluxogram 404 - request resource not found 
         if (errno == ENOENT) {
             // File not found
             conn->response_data_->status_code_ = 404;
@@ -116,56 +155,4 @@ void StaticFileHandler::handle(Connection* conn) {
     
     // Update connection state
     conn->state_ = Connection::CONN_WRITING;
-}
-
-std::string StaticFileHandler::parse_absolute_path(HttpRequest* req) {
-
-    // Extract request data
-    const std::string& request_path = req->uri_;
-    const LocationConfig* request_location = req->location_match_;
-    std::string request_root = request_location->root;
-    std::string index = request_location->index;
-
-    // --CHECK If the root starts with /, removed it 
-    if (request_root[0] == '/') {
-        request_root = request_root.substr(1);
-    }
-    
-    std::cout << "\n==== STATIC FILE HANDLER ====\n";
-    std::cout << "Request URI: " << request_path << std::endl;
-    std::cout << "Matched location: " << request_location->path << std::endl;
-    std::cout << "Root: " << request_location->root << std::endl;
-
-    // Calculate the path relative to the location
-    std::string relative_path = "";
-    
-    // Calculate where the relative part starts
-    size_t location_len = request_location->path.length();
-    
-    // If location path ends with /, exclude it from length calculation
-    if (!request_location->path.empty() && request_location->path[location_len - 1] == '/') {
-        location_len--;
-    }
-    
-    // Extract the relative part (starting after the location path)
-    if (request_path.length() > location_len) {
-        relative_path = request_path.substr(location_len + 1);
-        if(relative_path[0] != '/') {
-            relative_path = "/" + relative_path;
-        }
-    }
-   
-    std::string absolute_path;
-    
-    if (!relative_path.empty() && relative_path[relative_path.size() - 1] == '/') {
-        relative_path += index; 
-    }
-    
-    absolute_path = request_root + relative_path;
-
-    std::cout << "Relative path: " << relative_path << std::endl;
-    std::cout << "Absolute path: " << absolute_path << std::endl;
-    std::cout << "============================\n" << std::endl;
-
-    return (absolute_path);
 }

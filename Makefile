@@ -19,7 +19,7 @@ FILES = main.cpp \
 		StaticFileHandler.cpp \
 		Logger.cpp \
 		AHandler.cpp \
-		ErrorHandler.cpp 
+		ErrorHandler.cpp \
 		CgiHandler.cpp \
 
 		
