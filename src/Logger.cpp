@@ -146,8 +146,9 @@ void print_server_config(const ServerConfig& config) {
 }
 
 void log_client_error(int status_code, const Connection* conn, const ServerConfig& config) {
-    std::cerr << "Client error " << status_code << " for connection " 
-              << conn->client_fd_ << " on ";
+    std::cerr << "Client error " << status_code << " (" 
+        << HttpResponse::get_status_message(status_code) << ") for connection " 
+        << conn->client_fd_ << " on ";
               
     if (!config.server_names_.empty()) {
         std::cerr << config.server_names_[0];

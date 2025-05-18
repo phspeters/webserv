@@ -39,8 +39,6 @@ class ResponseWriter {
     const ServerConfig&
         config_;  // Reference to config (e.g., for Server header)
 
-    std::string get_status_message(
-        int code) const;  // Helper to get text for status code
     std::string get_current_gmt_time() const;  // Helper for Date header
 
     // Prevent copying

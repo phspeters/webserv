@@ -13,14 +13,10 @@ class FileUploadHandler : public AHandler {
     // Upload-specific error types
     enum UploadError {
         UPLOAD_SUCCESS,
-        UPLOAD_INVALID_CONTENT_TYPE,
-        UPLOAD_MISSING_BOUNDARY,
-        UPLOAD_NO_FILE,
-        UPLOAD_INVALID_FORM_DATA,
-        UPLOAD_DIRECTORY_NOT_WRITABLE,
-        UPLOAD_SIZE_EXCEEDED,
-        UPLOAD_INVALID_FILENAME,
-        UPLOAD_FILE_WRITE_ERROR
+        UPLOAD_BAD_REQUEST,        // General 400 errors
+        UPLOAD_UNSUPPORTED_MEDIA,  // 415 errors
+        UPLOAD_PAYLOAD_TOO_LARGE,  // 413 errors
+        UPLOAD_SERVER_ERROR        // 500 errors
     };
 
     // Constructor takes dependencies

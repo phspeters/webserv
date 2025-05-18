@@ -7,7 +7,7 @@
     
     // Set status code and message
     resp->status_code_ = status_code;
-    resp->status_message_ = get_status_message(status_code);
+    resp->status_message_ = HttpResponse::get_status_message(status_code);
     
     // Get error page content (custom or default)
     std::string content = get_error_page_content(status_code, config);
@@ -100,7 +100,7 @@ std::string ErrorHandler::get_error_page_content(int status_code, const ServerCo
     }
     
     // No custom page or couldn't read it, generate default
-    return generate_default_error_page(status_code, get_status_message(status_code));
+    return generate_default_error_page(status_code, HttpResponse::get_status_message(status_code));
 }
 
 std::string ErrorHandler::generate_default_error_page(int status_code, const std::string& status_message) {
@@ -140,30 +140,4 @@ std::string ErrorHandler::generate_default_error_page(int status_code, const std
          << "</html>";
     
     return html.str();
-}
-
-std::string ErrorHandler::get_status_message(int code) {
-    switch (code) {
-        case 200: return "OK";
-        case 201: return "Created";
-        case 204: return "No Content";
-        case 301: return "Moved Permanently";
-        case 302: return "Found";
-        case 400: return "Bad Request";
-        case 401: return "Unauthorized";
-        case 403: return "Forbidden";
-        case 404: return "Not Found";
-        case 405: return "Method Not Allowed";
-        case 408: return "Request Timeout";
-        case 413: return "Payload Too Large";
-        case 414: return "URI Too Long";
-        case 415: return "Unsupported Media Type";
-        case 429: return "Too Many Requests";
-        case 431: return "Request Header Fields Too Large";
-        case 500: return "Internal Server Error";
-        case 501: return "Not Implemented";
-        case 503: return "Service Unavailable";
-        case 505: return "HTTP Version Not Supported";
-        default:  return "Unknown";
-    }
 }

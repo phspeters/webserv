@@ -48,7 +48,8 @@ struct HttpResponse {
     // Helper Methods (declarations)
     //--------------------------------------
     void set_header(const std::string& name, const std::string& value);
-    void set_status(int code, const std::string& message);
+    void set_status(int code);
+    static std::string get_status_message(int code); 
 
     // Method to generate the full status line + headers string (implementation
     // in .cpp)

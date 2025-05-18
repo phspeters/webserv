@@ -20,14 +20,14 @@ void FileUploadHandler::handle(Connection* conn) {
     
     // Check that it's multipart/form-data
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
-        handle_upload_error(conn, UPLOAD_INVALID_CONTENT_TYPE);
+        handle_upload_error(conn, UPLOAD_UNSUPPORTED_MEDIA);
         return;
     }
 
     // Extract boundary
     std::string boundary = extractBoundary(content_type);
     if (boundary.empty()) {
-        handle_upload_error(conn, UPLOAD_MISSING_BOUNDARY);
+        handle_upload_error(conn, UPLOAD_BAD_REQUEST);
         return;
     }
 
@@ -51,71 +51,34 @@ void FileUploadHandler::handle(Connection* conn) {
         // Error response - specific error should have been set already
         // Default error if not set
         if (resp->status_code_ == 0) {
-            handle_upload_error(conn, UPLOAD_INVALID_FORM_DATA);
+            handle_upload_error(conn, UPLOAD_BAD_REQUEST);
         }
     }
 }
 
 void FileUploadHandler::handle_upload_error(Connection* conn, UploadError error) {
-    HttpResponse* resp = conn->response_data_;
-    
-    std::string error_message;
-    int status_code;
-    
-    switch (error) {
-        case UPLOAD_INVALID_CONTENT_TYPE:
-            status_code = 415; // Unsupported Media Type
-            error_message = "Content-Type must be multipart/form-data for file uploads";
-            break;
-            
-        case UPLOAD_MISSING_BOUNDARY:
-            status_code = 400; // Bad Request
-            error_message = "Missing or invalid boundary in multipart/form-data";
-            break;
-            
-        case UPLOAD_NO_FILE:
-            status_code = 400; // Bad Request
-            error_message = "No file was uploaded";
-            break;
-            
-        case UPLOAD_INVALID_FORM_DATA:
-            status_code = 400; // Bad Request
-            error_message = "Invalid multipart form data";
-            break;
-            
-        case UPLOAD_DIRECTORY_NOT_WRITABLE:
-            status_code = 500; // Internal Server Error
-            error_message = "Server cannot write to upload directory";
-            break;
-            
-        case UPLOAD_SIZE_EXCEEDED:
-            status_code = 413; // Payload Too Large
-            error_message = "Uploaded file exceeds the maximum allowed size";
-            break;
-            
-        case UPLOAD_INVALID_FILENAME:
-            status_code = 400; // Bad Request
-            error_message = "Invalid filename";
-            break;
-            
-        case UPLOAD_FILE_WRITE_ERROR:
-            status_code = 500; // Internal Server Error
-            error_message = "Failed to write file";
-            break;
-            
-        default:
-            status_code = 500; // Internal Server Error
-            error_message = "Unknown upload error";
+    if (!conn || !conn->response_data_) {
+        return;
     }
     
-    // Use ErrorHandler to generate consistent error response
-    ErrorHandler::handle_error(resp, status_code, config_);
-    
-    // Add more specific error context in the response body
-    std::string body = "<html><body><h1>Upload Failed</h1><p>" + 
-                       error_message + "</p></body></html>";
-    resp->body_.assign(body.begin(), body.end());
-    resp->content_length_ = resp->body_.size();
+    switch (error) {
+        case UPLOAD_BAD_REQUEST:
+            ErrorHandler::bad_request(conn->response_data_, config_);
+            break;
+            
+        case UPLOAD_UNSUPPORTED_MEDIA:
+            ErrorHandler::unsupported_media_type(conn->response_data_, config_);
+            break;
+            
+        case UPLOAD_PAYLOAD_TOO_LARGE:
+            ErrorHandler::payload_too_large(conn->response_data_, config_);
+            break;
+            
+        case UPLOAD_SERVER_ERROR:
+        default:
+            ErrorHandler::internal_server_error(conn->response_data_, config_);
+            break;
+    }
 }
 
 bool FileUploadHandler::parseMultipartFormData(Connection* conn, const std::string& boundary) {
@@ -154,7 +117,7 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn, const std::stri
     }
 
     if (!file_found) {
-        handle_upload_error(conn, UPLOAD_NO_FILE);
+        handle_upload_error(conn, UPLOAD_BAD_REQUEST);
         return false;
     }
 
@@ -169,7 +132,7 @@ bool FileUploadHandler::processPart(Connection* conn, const std::string& body,
     std::string headers;
     
     if (!extractPartHeaders(body, pos, headers_end, headers)) {
-        handle_upload_error(conn, UPLOAD_INVALID_FORM_DATA);
+        handle_upload_error(conn, UPLOAD_BAD_REQUEST);
         return false;
     }
     
@@ -188,7 +151,7 @@ bool FileUploadHandler::processPart(Connection* conn, const std::string& body,
                 pos = content_end;
             } else {
                 // Can't find next boundary, something's wrong
-                handle_upload_error(conn, UPLOAD_INVALID_FORM_DATA);
+                handle_upload_error(conn, UPLOAD_BAD_REQUEST);
                 return false;
             }
         }
@@ -249,7 +212,7 @@ bool FileUploadHandler::extractFileContent(Connection* conn, const std::string& 
     if (content_end == std::string::npos) {
         content_end = body.find(end_boundary, pos);
         if (content_end == std::string::npos) {
-            handle_upload_error(conn, UPLOAD_INVALID_FORM_DATA);
+            handle_upload_error(conn, UPLOAD_BAD_REQUEST);
             return false;  // Invalid format
         }
     }
@@ -264,7 +227,7 @@ bool FileUploadHandler::extractFileContent(Connection* conn, const std::string& 
                                 
     // Check if file size exceeds limit
     if (!validate_upload_size(file_data.size(), req->location_match_)) {
-        handle_upload_error(conn, UPLOAD_SIZE_EXCEEDED);
+        handle_upload_error(conn, UPLOAD_PAYLOAD_TOO_LARGE);
         return false;
     }
 
@@ -328,7 +291,7 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
         
         // Create final directory
         if (mkdir(upload_dir.c_str(), 0755) != 0 && errno != EEXIST) {
-            error = UPLOAD_DIRECTORY_NOT_WRITABLE;
+            error = UPLOAD_SERVER_ERROR;
             return false;
         }
     }
@@ -336,7 +299,7 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
     // Sanitize filename
     std::string safe_filename = sanitizeFilename(filename);
     if (safe_filename.empty()) {
-        error = UPLOAD_INVALID_FILENAME;
+        error = UPLOAD_BAD_REQUEST;
         return false;
     }
 
@@ -345,7 +308,7 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
     std::ofstream file(full_path.c_str(), std::ios::binary);
 
     if (!file.is_open()) {
-        error = UPLOAD_DIRECTORY_NOT_WRITABLE;
+        error = UPLOAD_SERVER_ERROR;
         return false;
     }
 
@@ -355,7 +318,7 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
     // Check for errors
     if (file.bad()) {
         file.close();
-        error = UPLOAD_FILE_WRITE_ERROR;
+        error = UPLOAD_SERVER_ERROR;
         return false;
     }
 

@@ -32,7 +32,6 @@ namespace ErrorHandler {
     // Helper functions
     std::string get_error_page_content(int status_code, const ServerConfig& config);
     std::string generate_default_error_page(int status_code, const std::string& status_message);
-    std::string get_status_message(int code);
 }
 
 #endif // ERRORHANDLER_HPP

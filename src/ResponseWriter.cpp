@@ -74,9 +74,8 @@ bool ResponseWriter::write_headers(Connection* conn) {
     // Format the response status line and headers
     std::stringstream headers;
 
-    // Add status line
     headers << resp->version_ << " " << resp->status_code_ << " "
-            << resp->status_message_ << "\r\n";
+            << HttpResponse::get_status_message(resp->status_code_) << "\r\n";
 
     // Add Date header if not present
     if (resp->headers_.find("Date") == resp->headers_.end()) {
@@ -129,75 +128,23 @@ bool ResponseWriter::write_body(Connection* conn) {
     return true;
 }
 
+// Generates a standard error response using ErrorHandler
+// and writes it to the connection's write buffer.
 void ResponseWriter::write_error_response(Connection* conn) {
-    if (!conn) {
+    if (!conn || !conn->response_data_) {
         return;
     }
 
-    // Create a basic error response
-    HttpResponse* resp = conn->response_data_;
-    if (!resp) {
-        return;
+    int status_code = conn->response_data_->status_code_;
+    if (status_code <= 0) {
+        status_code = 500; // Default to internal server error
     }
-
-    resp->status_message_ = get_status_message(resp->status_code_);
-    resp->content_type_ = "text/html";
-
-    std::ostringstream ss;
-    ss << resp->status_code_;
-
-    std::string body = "<html><body><h1>" + ss.str() + " " +
-                       resp->status_message_ + "</h1></body></html>";
-
-    resp->body_.assign(body.begin(), body.end());
-    resp->content_length_ = resp->body_.size();
-
+    
+    ErrorHandler::apply_to_connection(conn, status_code, config_);
+    
+    // Write the response to the buffer
     write_headers(conn);
-
-    // Add body to write buffer
-    conn->write_buffer_.insert(conn->write_buffer_.end(), resp->body_.begin(),
-                               resp->body_.end());
-}
-
-std::string ResponseWriter::get_status_message(int code) const {
-    switch (code) {
-        case 200:
-            return "OK";
-        case 201:
-            return "Created";
-        case 204:
-            return "No Content";
-        case 301:
-            return "Moved Permanently";
-        case 302:
-            return "Found";
-        case 400:
-            return "Bad Request";
-        case 401:
-            return "Unauthorized";
-        case 403:
-            return "Forbidden";
-        case 404:
-            return "Not Found";
-        case 405:
-            return "Method Not Allowed";
-        case 413:
-            return "Payload Too Large";
-        case 414:
-            return "URI Too Long";
-        case 415:
-            return "Unsupported Media Type";
-        case 500:
-            return "Internal Server Error";
-        case 501:
-            return "Not Implemented";
-        case 503:
-            return "Service Unavailable";
-        case 505:
-            return "HTTP Version Not Supported";
-        default:
-            return "Unknown";
-    }
+    write_body(conn);
 }
 
 std::string ResponseWriter::get_current_gmt_time() const {
