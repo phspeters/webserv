@@ -226,7 +226,7 @@ bool FileUploadHandler::extractFileContent(Connection* conn, const std::string& 
     std::vector<char> file_data(body.begin() + pos, body.begin() + content_end);
                                 
     // Check if file size exceeds limit
-    if (!validate_upload_size(file_data.size(), req->location_match_)) {
+    if (!validate_upload_size(file_data.size())) {
         handle_upload_error(conn, UPLOAD_PAYLOAD_TOO_LARGE);
         return false;
     }
@@ -242,13 +242,8 @@ bool FileUploadHandler::extractFileContent(Connection* conn, const std::string& 
     return true;
 }
 
-bool FileUploadHandler::validate_upload_size(size_t size, const LocationConfig* location) {
-    // First check location-specific limit if available
-    if (location && location->client_max_body_size > 0) {
-        return size <= location->client_max_body_size;
-    }
-    
-    // Fall back to server-wide limit
+bool FileUploadHandler::validate_upload_size(size_t size) {
+    // Just use the server-wide limit from config_
     return size <= config_.client_max_body_size_;
 }
 

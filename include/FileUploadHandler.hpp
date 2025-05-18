@@ -48,7 +48,7 @@ class FileUploadHandler : public AHandler {
     std::string extractBoundary(const std::string& content_type);
     std::string sanitizeFilename(const std::string& filename);
     std::string getUploadDirectory(HttpRequest* req);
-    bool validate_upload_size(size_t size, const LocationConfig* location);
+    bool validate_upload_size(size_t size);
 
     // Prevent copying
     FileUploadHandler(const FileUploadHandler&);
