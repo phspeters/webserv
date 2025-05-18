@@ -654,3 +654,46 @@ void RequestParser::reset_parser_state() {
     current_state_ = PARSING_REQUEST_LINE;
     chunk_remaining_bytes_ = 0;
 }
+
+void RequestParser::handle_parse_error(Connection* conn, ParseResult result) {
+    int http_status;
+    
+    // Map parser errors to HTTP status codes
+    switch (result) {
+        case PARSE_INVALID_REQUEST_LINE:
+        case PARSE_INVALID_PATH:
+        case PARSE_INVALID_QUERY_STRING:
+        case PARSE_INVALID_CHUNK_SIZE:
+        case PARSE_INVALID_CONTENT_LENGTH:
+        case PARSE_ERROR:
+            http_status = 400; // Bad Request
+            break;
+            
+        case PARSE_METHOD_NOT_ALLOWED:
+            http_status = 405; // Method Not Allowed
+            break;
+            
+        case PARSE_REQUEST_TOO_LONG:
+        case PARSE_HEADER_TOO_LONG:
+        case PARSE_TOO_MANY_HEADERS:
+            http_status = 431; // Request Header Fields Too Large
+            break;
+            
+        case PARSE_VERSION_NOT_SUPPORTED:
+            http_status = 505; // HTTP Version Not Supported
+            break;
+            
+        case PARSE_CONTENT_TOO_LARGE:
+            http_status = 413; // Payload Too Large
+            break;
+            
+        default:
+            http_status = 400; // Default to Bad Request
+    }
+    
+    // Apply the appropriate error response
+    ErrorHandler::apply_to_connection(conn, http_status, config_);
+    
+    // Update connection state to writing
+    conn->state_ = Connection::CONN_WRITING;
+}

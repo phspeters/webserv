@@ -152,7 +152,7 @@ std::vector<ServerConfig> ServerManager::parse_config_file(
                 // Print the parsed configuration
                 std::cout << "\n===== PARSED SERVER CONFIGURATION =====\n"
                           << std::endl;
-                config.print();
+                print_server_config(config);
                 std::cout << "\n========================================\n"
                           << std::endl;
             } else {

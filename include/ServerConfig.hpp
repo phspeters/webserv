@@ -63,9 +63,6 @@ struct ServerConfig {
     bool isValidHost(std::string& error_msg) const;
     bool isValidPort(std::string& error_msg) const;
     bool hasValidLocations(std::string& error_msg) const;
-
-    // Print configuration (for debugging)
-    void print() const;
 };
 
 #endif  // SERVERCONFIG_HPP

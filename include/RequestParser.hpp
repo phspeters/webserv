@@ -43,6 +43,7 @@ class RequestParser {
         PARSE_INVALID_CONTENT_LENGTH,  // Content-Length header is invalid
         PARSE_CONTENT_TOO_LARGE,       // Content length exceeds maximum
         PARSE_INVALID_CHUNK_SIZE       // Invalid chunk size in chunked encoding
+        // PARSE_URI_TOO_LONG             // URI exceeds maximum length
     };
 
     // Represents the current state of the parser
@@ -70,6 +71,9 @@ class RequestParser {
     // - Updates conn->read_buffer (removing parsed data).
     // - Returns the result status.
     ParseResult parse(Connection* conn);
+
+    // Maps parse errors to HTTP status codes and sets the appropriate response
+    void handle_parse_error(Connection* conn, ParseResult result);
 
    private:
     ParserState current_state_;   // Current state of the parser

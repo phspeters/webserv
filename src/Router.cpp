@@ -25,8 +25,44 @@ AHandler* Router::route(HttpRequest* req) {
         std::cout << "\n==== ROUTER ERROR ====\n";
         std::cout << "No matching location for path: " << request_path << std::endl;
         std::cout << "======================\n" << std::endl;
+
+        ErrorHandler::not_found(req->response_data_, config_);
         // Return default handler or handle error case
-        return static_handler_; // Usually you'd return an error handler instead
+        // return static_handler_; // Usually you'd return an error handler instead
+    }
+
+     // Check if the requested method is allowed for this location
+     if (!matching_location->allowed_methods.empty()) {
+        bool method_allowed = false;
+        std::string allowed_methods_str;
+        
+        for (size_t i = 0; i < matching_location->allowed_methods.size(); i++) {
+            // Build Allow header value
+            if (i > 0) {
+                allowed_methods_str += ", ";
+            }
+            allowed_methods_str += matching_location->allowed_methods[i];
+            
+            // Check if the current request method is allowed
+            if (matching_location->allowed_methods[i] == request_method) {
+                method_allowed = true;
+            }
+        }
+        
+        if (!method_allowed) {
+            std::cout << "\n==== ROUTER ERROR ====\n";
+            std::cout << "Method not allowed: " << request_method << std::endl;
+            std::cout << "Allowed methods: " << allowed_methods_str << std::endl;
+            std::cout << "======================\n" << std::endl;
+            
+            // Apply 405 error directly to the response
+            ErrorHandler::method_not_allowed(req->response_data_, config_);
+            
+            // Add the Allow header
+            req->response_data_->headers_["Allow"] = allowed_methods_str;
+            
+            // return static_handler_; // Return static handler but response is already set
+        }
     }
 
     // Print router info when a location is matched

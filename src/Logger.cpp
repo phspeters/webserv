@@ -66,3 +66,100 @@ int print_and_erase_buffer(std::vector<char>& buffer) {
 
     return bytes_written;
 }
+
+void print_server_config(const ServerConfig& config) {
+    std::cout << "---------- SERVER CONFIG ----------" << std::endl;
+    std::cout << "Host: " << config.host_ << std::endl;
+    std::cout << "Port: " << config.port_ << std::endl;
+
+    // Print server names
+    std::cout << "Server Names: ";
+    if (config.server_names_.empty()) {
+        std::cout << "(default server)";
+    } else {
+        for (size_t i = 0; i < config.server_names_.size(); ++i) {
+            std::cout << config.server_names_[i];
+            if (i < config.server_names_.size() - 1) {
+                std::cout << ", ";
+            }
+        }
+    }
+    std::cout << std::endl;
+
+    // Print client max body size with unit
+    std::cout << "Client Max Body Size: ";
+    if (config.client_max_body_size_ >= 1024 * 1024 * 1024) {
+        std::cout << (config.client_max_body_size_ / (1024 * 1024 * 1024)) << "G";
+    } else if (config.client_max_body_size_ >= 1024 * 1024) {
+        std::cout << (config.client_max_body_size_ / (1024 * 1024)) << "M";
+    } else if (config.client_max_body_size_ >= 1024) {
+        std::cout << (config.client_max_body_size_ / 1024) << "K";
+    } else {
+        std::cout << config.client_max_body_size_ << " bytes";
+    }
+    std::cout << std::endl;
+
+    // Print error pages
+    std::cout << "Error Pages:" << std::endl;
+    if (config.error_pages.empty()) {
+        std::cout << "  (none)" << std::endl;
+    } else {
+        for (std::map<int, std::string>::const_iterator it =
+                 config.error_pages.begin();
+             it != config.error_pages.end(); ++it) {
+            std::cout << "  " << it->first << " -> " << it->second << std::endl;
+        }
+    }
+
+    // Print location blocks
+    std::cout << "Location Blocks (" << config.locations.size() << "):" << std::endl;
+    for (size_t i = 0; i < config.locations.size(); ++i) {
+        const LocationConfig& loc = config.locations[i];
+        std::cout << "  ---------- LOCATION: " << loc.path << " ----------"
+                  << std::endl;
+
+        std::cout << "    root: " << loc.root << std::endl;
+
+        std::cout << "    autoindex: " << (loc.autoindex ? "on" : "off")
+                  << std::endl;
+
+        std::cout << "    allowed_methods: ";
+        for (size_t j = 0; j < loc.allowed_methods.size(); ++j) {
+            std::cout << loc.allowed_methods[j];
+            if (j < loc.allowed_methods.size() - 1) {
+                std::cout << ", ";
+            }
+        }
+        std::cout << std::endl;
+
+        std::cout << "    cgi: " << (loc.cgi_enabled ? "on" : "off")
+                  << std::endl;
+
+        std::cout << "    index: " << loc.index << std::endl;
+
+        if (!loc.redirect.empty()) {
+            std::cout << "    redirect: " << loc.redirect << std::endl;
+        }
+    }
+
+    std::cout << "----------------------------------" << std::endl;
+}
+
+void log_client_error(int status_code, const Connection* conn, const ServerConfig& config) {
+    std::cerr << "Client error " << status_code << " for connection " 
+              << conn->client_fd_ << " on ";
+              
+    if (!config.server_names_.empty()) {
+        std::cerr << config.server_names_[0];
+    } else {
+        std::cerr << "default server";
+    }
+    
+    std::cerr << ":" << config.port_;
+    
+    if (conn->request_data_ && !conn->request_data_->uri_.empty()) {
+        std::cerr << " - URI: " << conn->request_data_->uri_;
+    }
+    
+    std::cerr << std::endl;
+}

@@ -39,9 +39,6 @@ bool Server::init() {
     request_parser_ = new RequestParser(config_);
     response_writer_ = new ResponseWriter(config_);
 
-    // Initialize the error handler
-    error_handler_ = new ErrorHandler(config_);
-
     // Initialize handlers
     static_file_handler_ = new StaticFileHandler(config_);
     // cgi_handler_ = new CgiHandler(config_);
@@ -137,17 +134,23 @@ void Server::handle_read(Connection* conn) {
     // Try to parse the buffer into a full request
     RequestParser::ParseResult status = request_parser_->parse(conn);
 
-    // If request parsing is incomplete, return and wait for more data
+    // Handle different parse results
     if (status == RequestParser::PARSE_INCOMPLETE) {
+        // Need more data, wait for next read event
         return;
+    } else if (status == RequestParser::PARSE_SUCCESS) {
+        // Print request to console for debugging
+        print_request(conn);
+        
+        // Change epoll interest event to EPOLLOUT for writing
+        update_epoll_events(conn->client_fd_, EPOLLOUT);
+    } else {
+        // Handle specific HTTP protocol errors
+        request_parser_->handle_parse_error(conn, status);
+        
+        // Change to EPOLLOUT since we'll be writing an error response
+        update_epoll_events(conn->client_fd_, EPOLLOUT);
     }
-
-    // TEMP - Print request to console
-    print_request(conn);
-    // TEMP
-
-    // Change epoll interest event to EPOLLOUT for writing
-    update_epoll_events(conn->client_fd_, EPOLLOUT);
 }
 
 void Server::handle_write(Connection* conn) {
@@ -195,9 +198,30 @@ void Server::handle_write(Connection* conn) {
     // Check for error status codes that should close the connection
     bool force_close = false;
     int status_code = conn->response_data_->status_code_;
-    if (status_code >= 400) {
-        // Close connections for client and server errors
+
+    // TEMP: close connection for all errors
+    // if (status_code >= 400) {
+    //     // Close connections for client and server errors
+    //     force_close = true;
+    // }
+
+    // More specific handling of status codes
+    if (status_code >= 500) {
+        // Server errors - always close the connection
+        log_client_error(status_code, conn, config_);
         force_close = true;
+    } 
+    else if (status_code >= 400) {
+        // Client errors - log them
+        log_client_error(status_code, conn, config_);
+        
+        // Close connection for specific client errors
+        // 413: Payload Too Large - client violated limits
+        // 400: Bad Request - malformed request
+        // 408: Request Timeout
+        if (status_code == 413 || status_code == 400 || status_code == 408) {
+            force_close = true;
+        }
     }
 
     if (!force_close && conn->is_keep_alive()) {
@@ -209,7 +233,7 @@ void Server::handle_write(Connection* conn) {
 }
 
 void Server::handle_error(Connection* conn) {
-    // Handle error
+    ErrorHandler::apply_to_connection(conn, 500, config_);
     close_client_connection(conn);
 }
 

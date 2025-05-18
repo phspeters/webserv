@@ -10,6 +10,19 @@ struct ServerConfig;
 // Handles file upload requests
 class FileUploadHandler : public AHandler {
    public:
+    // Upload-specific error types
+    enum UploadError {
+        UPLOAD_SUCCESS,
+        UPLOAD_INVALID_CONTENT_TYPE,
+        UPLOAD_MISSING_BOUNDARY,
+        UPLOAD_NO_FILE,
+        UPLOAD_INVALID_FORM_DATA,
+        UPLOAD_DIRECTORY_NOT_WRITABLE,
+        UPLOAD_SIZE_EXCEEDED,
+        UPLOAD_INVALID_FILENAME,
+        UPLOAD_FILE_WRITE_ERROR
+    };
+
     // Constructor takes dependencies
     FileUploadHandler(const ServerConfig& config);
     virtual ~FileUploadHandler();
@@ -19,13 +32,27 @@ class FileUploadHandler : public AHandler {
    private:
     const ServerConfig& config_;
 
+    // Error handling methods
+    void handle_upload_error(Connection* conn, UploadError error);
+    
     // Helper methods
     bool parseMultipartFormData(Connection* conn, const std::string& boundary);
-    bool saveUploadedFile(const std::string& filename,
-                          const std::vector<char>& data);
+    bool processPart(Connection* conn, const std::string& body,
+        const std::string& full_boundary, const std::string& end_boundary,
+        size_t& pos, bool& file_found);
+    bool extractPartHeaders(const std::string& body, size_t& pos, 
+              size_t& headers_end, std::string& headers);
+    bool extractFilename(const std::string& headers, std::string& filename);
+    bool extractFileContent(Connection* conn, const std::string& body, 
+              size_t pos, size_t& content_end,
+              const std::string& full_boundary, const std::string& end_boundary,
+              const std::string& filename, bool& file_found);
+    bool saveUploadedFile(HttpRequest* req, const std::string& filename,
+                          const std::vector<char>& data, UploadError& error);
     std::string extractBoundary(const std::string& content_type);
     std::string sanitizeFilename(const std::string& filename);
     std::string getUploadDirectory(HttpRequest* req);
+    bool validate_upload_size(size_t size, const LocationConfig* location);
 
     // Prevent copying
     FileUploadHandler(const FileUploadHandler&);

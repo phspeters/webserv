@@ -456,8 +456,49 @@ bool LocationConfig::isValid(std::string& error_msg) const {
         return false;
     }
 
+    // Check if path starts with /
+    if (path[0] != '/') {
+        error_msg = "Location path must start with /: " + path;
+        return false;
+    }
+    
+    // Check for invalid characters in path
+    const std::string invalidChars = "<>\"'|*?";
+    for (size_t i = 0; i < invalidChars.length(); i++) {
+        if (path.find(invalidChars[i]) != std::string::npos) {
+            error_msg = "Location path contains invalid character '" + 
+                        std::string(1, invalidChars[i]) + "': " + path;
+            return false;
+        }
+    }
+    
+    // Check if redirect is valid when specified
+    if (!redirect.empty() && redirect[0] != '/' && 
+        redirect.find("http://") != 0 && redirect.find("https://") != 0) {
+        error_msg = "Redirect must be an absolute path or URL: " + redirect;
+        return false;
+    }
+
     if (root.empty()) {
         error_msg = "Root directive is mandatory";
+        return false;
+    }
+
+    // Validate root path exists and is a directory
+    struct stat path_stat;
+    if (stat(root.c_str(), &path_stat) != 0) {
+        error_msg = "Root directory does not exist: " + root;
+        return false;
+    }
+    
+    if (!S_ISDIR(path_stat.st_mode)) {
+        error_msg = "Root path is not a directory: " + root;
+        return false;
+    }
+    
+    // Check read permissions
+    if (access(root.c_str(), R_OK) != 0) {
+        error_msg = "No read permission for root directory: " + root;
         return false;
     }
 
@@ -497,82 +538,4 @@ const LocationConfig* ServerConfig::findMatchingLocation(const std::string& uri)
     }
     
     return best_match;
-}
-
-void ServerConfig::print() const {
-    std::cout << "---------- SERVER CONFIG ----------" << std::endl;
-    std::cout << "Host: " << host_ << std::endl;
-    std::cout << "Port: " << port_ << std::endl;
-
-    // Print server names
-    std::cout << "Server Names: ";
-    if (server_names_.empty()) {
-        std::cout << "(default server)";
-    } else {
-        for (size_t i = 0; i < server_names_.size(); ++i) {
-            std::cout << server_names_[i];
-            if (i < server_names_.size() - 1) {
-                std::cout << ", ";
-            }
-        }
-    }
-    std::cout << std::endl;
-
-    // Print client max body size with unit
-    std::cout << "Client Max Body Size: ";
-    if (client_max_body_size_ >= 1024 * 1024 * 1024) {
-        std::cout << (client_max_body_size_ / (1024 * 1024 * 1024)) << "G";
-    } else if (client_max_body_size_ >= 1024 * 1024) {
-        std::cout << (client_max_body_size_ / (1024 * 1024)) << "M";
-    } else if (client_max_body_size_ >= 1024) {
-        std::cout << (client_max_body_size_ / 1024) << "K";
-    } else {
-        std::cout << client_max_body_size_ << " bytes";
-    }
-    std::cout << std::endl;
-
-    // Print error pages
-    std::cout << "Error Pages:" << std::endl;
-    if (error_pages.empty()) {
-        std::cout << "  (none)" << std::endl;
-    } else {
-        for (std::map<int, std::string>::const_iterator it =
-                 error_pages.begin();
-             it != error_pages.end(); ++it) {
-            std::cout << "  " << it->first << " -> " << it->second << std::endl;
-        }
-    }
-
-    // Print location blocks
-    std::cout << "Location Blocks (" << locations.size() << "):" << std::endl;
-    for (size_t i = 0; i < locations.size(); ++i) {
-        const LocationConfig& loc = locations[i];
-        std::cout << "  ---------- LOCATION: " << loc.path << " ----------"
-                  << std::endl;
-
-        std::cout << "    root: " << loc.root << std::endl;
-
-        std::cout << "    autoindex: " << (loc.autoindex ? "on" : "off")
-                  << std::endl;
-
-        std::cout << "    allowed_methods: ";
-        for (size_t j = 0; j < loc.allowed_methods.size(); ++j) {
-            std::cout << loc.allowed_methods[j];
-            if (j < loc.allowed_methods.size() - 1) {
-                std::cout << ", ";
-            }
-        }
-        std::cout << std::endl;
-
-        std::cout << "    cgi: " << (loc.cgi_enabled ? "on" : "off")
-                  << std::endl;
-
-        std::cout << "    index: " << loc.index << std::endl;
-
-        if (!loc.redirect.empty()) {
-            std::cout << "    redirect: " << loc.redirect << std::endl;
-        }
-    }
-
-    std::cout << "----------------------------------" << std::endl;
 }
