@@ -9,6 +9,7 @@ FILES = main.cpp \
 		Connection.cpp \
 		ConnectionManager.cpp \
 		HttpRequest.cpp \
+		HttpResponse.cpp \
 		RequestParser.cpp \
 		Server.cpp \
 		ServerConfig.cpp \

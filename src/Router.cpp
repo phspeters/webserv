@@ -11,7 +11,9 @@ Router::~Router() {
     // Clean up owned components
 }
 
-AHandler* Router::route(HttpRequest* req) {
+AHandler* Router::route(Connection* conn) {
+    HttpRequest* req = conn->request_data_;
+
     // Get the path from the request (already without query part)
     const std::string& request_path = req->uri_;
     const std::string& request_method = req->method_;
@@ -26,9 +28,9 @@ AHandler* Router::route(HttpRequest* req) {
         std::cout << "No matching location for path: " << request_path << std::endl;
         std::cout << "======================\n" << std::endl;
 
-        ErrorHandler::not_found(req->response_data_, config_);
+        ErrorHandler::not_found(conn->response_data_, config_);
         // Return default handler or handle error case
-        // return static_handler_; // Usually you'd return an error handler instead
+        return static_handler_; // Usually you'd return an error handler instead
     }
 
      // Check if the requested method is allowed for this location
@@ -56,12 +58,12 @@ AHandler* Router::route(HttpRequest* req) {
             std::cout << "======================\n" << std::endl;
             
             // Apply 405 error directly to the response
-            ErrorHandler::method_not_allowed(req->response_data_, config_);
+            ErrorHandler::method_not_allowed(conn->response_data_, config_);
             
             // Add the Allow header
-            req->response_data_->headers_["Allow"] = allowed_methods_str;
+            conn->response_data_->headers_["Allow"] = allowed_methods_str;
             
-            // return static_handler_; // Return static handler but response is already set
+            return static_handler_; // Return static handler but response is already set
         }
     }
 
