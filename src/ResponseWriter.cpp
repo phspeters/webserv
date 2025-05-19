@@ -133,7 +133,8 @@ void ResponseWriter::write_error_response(Connection* conn) {
         status_code = 500;  // Default to internal server error
     }
 
-    ErrorHandler::apply_to_connection(conn, status_code, *(conn->virtual_server_));
+    ErrorHandler::apply_to_connection(conn, status_code,
+                                      *(conn->virtual_server_));
 
     // Write the response to the buffer
     write_headers(conn);

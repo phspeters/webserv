@@ -35,6 +35,7 @@ struct Connection {
     size_t chunk_remaining_bytes_;    // Remaining bytes in the current chunk
     std::vector<char> write_buffer_;  // Buffer for outgoing data to client
     size_t write_buffer_offset_;  // How much of the write_buffer has been sent
+
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)
     //--------------------------------------
@@ -46,7 +47,6 @@ struct Connection {
     //--------------------------------------
     // State Management
     //--------------------------------------
-
     codes::ConnectionState conn_state_;  // Current state of the connection
     codes::ParserState parser_state_;    // Current state of the parser
 
@@ -65,6 +65,7 @@ struct Connection {
     bool is_writable() const;
     bool is_error() const;
     bool is_keep_alive() const;
+
     //--------------------------------------
     // Handler-Specific State (Example for CGI - could be a union or void*)
     //--------------------------------------

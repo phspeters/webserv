@@ -31,18 +31,8 @@ struct HttpResponse {
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    HttpResponse()
-        : status_code_(0),  // Indicate not set yet, perhaps? Or default to 200?
-          content_length_(0)
-    // headers_built(false),
-    // headers_sent(false),
-    // body_sent(false)
-    {
-        // Initialize strings, maps, vectors to empty states automatically
-        version_ = "HTTP/1.1";  // Default version
-    }
-
-    ~HttpResponse() {}
+    HttpResponse();
+    ~HttpResponse();
 
     //--------------------------------------
     // Helper Methods (declarations)
@@ -53,23 +43,12 @@ struct HttpResponse {
 
     // Method to generate the full status line + headers string (implementation
     // in .cpp)
-    std::string get_headers_sring() const;
+    std::string get_headers_string() const;
 
     // Method to generate the status line only (implementation in .cpp)
     std::string get_status_line() const;
 
-    void clear() {
-        status_code_ = 0;
-        status_message_.clear();
-        version_ = "HTTP/1.1";
-        headers_.clear();
-        body_.clear();
-        content_length_ = 0;
-        content_type_.clear();
-        // headers_built = false;
-        // headers_sent = false;
-        // body_sent = false;
-    }
+    void clear();
 
    private:
     // Prevent copying if responses are managed by pointer in Connection

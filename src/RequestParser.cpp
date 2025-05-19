@@ -506,7 +506,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                 if (status == codes::PARSE_SUCCESS) {
                     conn->parser_state_ = codes::PARSING_COMPLETE;
                 }
-				return status;
+                return status;
             }
 
             continue;  // Process the chunk data in the next iteration
@@ -652,9 +652,10 @@ codes::ParseStatus RequestParser::finish_chunked_parsing(
     }
 }
 
-void RequestParser::handle_parse_error(Connection* conn, codes::ParseStatus status) {
+void RequestParser::handle_parse_error(Connection* conn,
+                                       codes::ParseStatus status) {
     int http_status;
-    
+
     // Map parser errors to HTTP status codes
     switch (status) {
         case codes::PARSE_INVALID_REQUEST_LINE:
@@ -663,34 +664,35 @@ void RequestParser::handle_parse_error(Connection* conn, codes::ParseStatus stat
         case codes::PARSE_INVALID_CHUNK_SIZE:
         case codes::PARSE_INVALID_CONTENT_LENGTH:
         case codes::PARSE_ERROR:
-            http_status = 400; // Bad Request
+            http_status = 400;  // Bad Request
             break;
-            
+
         case codes::PARSE_METHOD_NOT_ALLOWED:
-            http_status = 405; // Method Not Allowed
+            http_status = 405;  // Method Not Allowed
             break;
-            
+
         case codes::PARSE_REQUEST_TOO_LONG:
         case codes::PARSE_HEADER_TOO_LONG:
         case codes::PARSE_TOO_MANY_HEADERS:
-            http_status = 431; // Request Header Fields Too Large
+            http_status = 431;  // Request Header Fields Too Large
             break;
-            
+
         case codes::PARSE_VERSION_NOT_SUPPORTED:
-            http_status = 505; // HTTP Version Not Supported
+            http_status = 505;  // HTTP Version Not Supported
             break;
-            
+
         case codes::PARSE_CONTENT_TOO_LARGE:
-            http_status = 413; // Payload Too Large
+            http_status = 413;  // Payload Too Large
             break;
-            
+
         default:
-            http_status = 400; // Default to Bad Request
+            http_status = 400;  // Default to Bad Request
     }
-    
+
     // Apply the appropriate error response
-    ErrorHandler::apply_to_connection(conn, http_status, *(conn->virtual_server_));
-    
+    ErrorHandler::apply_to_connection(conn, http_status,
+                                      *(conn->virtual_server_));
+
     // Update connection state to writing
     conn->conn_state_ = codes::CONN_WRITING;
 }

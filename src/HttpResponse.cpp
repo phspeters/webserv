@@ -1,5 +1,9 @@
 #include "webserv.hpp"
+HttpResponse::HttpResponse() : status_code_(200), content_length_(0) {
+    version_ = "HTTP/1.1";
+}
 
+HttpResponse::~HttpResponse() {}
 void HttpResponse::set_header(const std::string& name,
                               const std::string& value) {
     headers_[name] = value;
@@ -89,7 +93,7 @@ std::string HttpResponse::get_status_line() const {
     return oss.str();
 }
 
-std::string HttpResponse::get_headers_sring() const {
+std::string HttpResponse::get_headers_string() const {
     std::ostringstream oss;
 
     // Add status line
@@ -116,4 +120,14 @@ std::string HttpResponse::get_headers_sring() const {
     oss << "\r\n";
 
     return oss.str();
+}
+
+void HttpResponse::clear() {
+    status_code_ = 0;
+    status_message_.clear();
+    version_ = "HTTP/1.1";
+    headers_.clear();
+    body_.clear();
+    content_length_ = 0;
+    content_type_.clear();
 }
