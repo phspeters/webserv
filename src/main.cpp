@@ -18,15 +18,15 @@ int main(int argc, char* argv[]) {
     }
 
     std::string config_file = argv[1];
-
-    // Initialize server manager
     WebServer web_server;
+	
+	// Parse configuration file
+	if (!web_server.parse_config_file(config_file)) {
+		return EXIT_FAILURE;
+	}
+	
+	// Initialize server manager
     if (!web_server.init()) {
-        return EXIT_FAILURE;
-    }
-
-    // Parse configuration file
-    if (web_server.parse_config_file(config_file)) {
         return EXIT_FAILURE;
     }
 
