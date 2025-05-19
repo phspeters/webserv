@@ -2,8 +2,7 @@
 
 // curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
 
-FileUploadHandler::FileUploadHandler(const ServerConfig& config)
-    : AHandler(), config_(config) {}
+FileUploadHandler::FileUploadHandler() : AHandler() {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
@@ -12,12 +11,12 @@ void FileUploadHandler::handle(Connection* conn) {
     HttpResponse* resp = conn->response_data_;
 
     if (!req || !resp) {
-        ErrorHandler::internal_server_error(resp, config_);
+        ErrorHandler::internal_server_error(resp, *(conn->virtual_server_));
         return;
     }
 
     std::string content_type = req->get_header("content-type");
-    
+
     // Check that it's multipart/form-data
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
         handle_upload_error(conn, UPLOAD_UNSUPPORTED_MEDIA);
@@ -25,7 +24,7 @@ void FileUploadHandler::handle(Connection* conn) {
     }
 
     // Extract boundary
-    std::string boundary = extractBoundary(content_type);
+    std::string boundary = extract_boundary(content_type);
     if (boundary.empty()) {
         handle_upload_error(conn, UPLOAD_BAD_REQUEST);
         return;
@@ -33,18 +32,19 @@ void FileUploadHandler::handle(Connection* conn) {
 
     // Verify location_match_ is set by the router
     if (!req->location_match_) {
-        ErrorHandler::internal_server_error(resp, config_);
+        ErrorHandler::internal_server_error(resp, *(conn->virtual_server_));
         return;
     }
 
     // Process the multipart form data
-    if (parseMultipartFormData(conn, boundary)) {
+    if (parse_multipart_form_data(conn, boundary)) {
         // Success response
         resp->status_code_ = 201;
         resp->status_message_ = "Created";
         resp->content_type_ = "text/html";
         std::string body =
-            "<html><body><h1>Upload Successful</h1><p>Your file has been uploaded successfully.</p></body></html>";
+            "<html><body><h1>Upload Successful</h1><p>Your file has been "
+            "uploaded successfully.</p></body></html>";
         resp->body_.assign(body.begin(), body.end());
         resp->content_length_ = resp->body_.size();
     } else {
@@ -56,32 +56,38 @@ void FileUploadHandler::handle(Connection* conn) {
     }
 }
 
-void FileUploadHandler::handle_upload_error(Connection* conn, UploadError error) {
+void FileUploadHandler::handle_upload_error(Connection* conn,
+                                            UploadError error) {
     if (!conn || !conn->response_data_) {
         return;
     }
-    
+
     switch (error) {
         case UPLOAD_BAD_REQUEST:
-            ErrorHandler::bad_request(conn->response_data_, config_);
+            ErrorHandler::bad_request(conn->response_data_,
+                                      *(conn->virtual_server_));
             break;
-            
+
         case UPLOAD_UNSUPPORTED_MEDIA:
-            ErrorHandler::unsupported_media_type(conn->response_data_, config_);
+            ErrorHandler::unsupported_media_type(conn->response_data_,
+                                                 *(conn->virtual_server_));
             break;
-            
+
         case UPLOAD_PAYLOAD_TOO_LARGE:
-            ErrorHandler::payload_too_large(conn->response_data_, config_);
+            ErrorHandler::payload_too_large(conn->response_data_,
+                                            *(conn->virtual_server_));
             break;
-            
+
         case UPLOAD_SERVER_ERROR:
         default:
-            ErrorHandler::internal_server_error(conn->response_data_, config_);
+            ErrorHandler::internal_server_error(conn->response_data_,
+                                                *(conn->virtual_server_));
             break;
     }
 }
 
-bool FileUploadHandler::parseMultipartFormData(Connection* conn, const std::string& boundary) {
+bool FileUploadHandler::parse_multipart_form_data(Connection* conn,
+                                                  const std::string& boundary) {
     HttpRequest* req = conn->request_data_;
 
     // Full boundary string in the content
@@ -90,7 +96,7 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn, const std::stri
 
     // Convert body to string for easier processing
     std::string body(req->body_.begin(), req->body_.end());
-    
+
     // Find all parts
     size_t pos = 0;
     bool file_found = false;
@@ -109,10 +115,11 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn, const std::stri
         if (pos + 2 <= body.length() && body.substr(pos, 2) == "--") {
             break;  // End boundary
         }
-        
+
         // Process this part
-        if (!processPart(conn, body, full_boundary, end_boundary, pos, file_found)) {
-            return false; // Error occurred
+        if (!process_part(conn, body, full_boundary, end_boundary, pos,
+                          file_found)) {
+            return false;  // Error occurred
         }
     }
 
@@ -124,21 +131,22 @@ bool FileUploadHandler::parseMultipartFormData(Connection* conn, const std::stri
     return true;
 }
 
-bool FileUploadHandler::processPart(Connection* conn, const std::string& body,
-                                   const std::string& full_boundary, const std::string& end_boundary,
-                                   size_t& pos, bool& file_found) {
+bool FileUploadHandler::process_part(Connection* conn, const std::string& body,
+                                     const std::string& full_boundary,
+                                     const std::string& end_boundary,
+                                     size_t& pos, bool& file_found) {
     // Extract headers
     size_t headers_end;
     std::string headers;
-    
-    if (!extractPartHeaders(body, pos, headers_end, headers)) {
+
+    if (!extract_part_headers(body, pos, headers_end, headers)) {
         handle_upload_error(conn, UPLOAD_BAD_REQUEST);
         return false;
     }
-    
+
     // Extract filename from headers
     std::string filename;
-    if (!extractFilename(headers, filename)) {
+    if (!extract_filename(headers, filename)) {
         // Not a file part, skip it
         // Find the end of this part to update pos for next iteration
         size_t content_end = body.find(full_boundary, pos);
@@ -155,18 +163,20 @@ bool FileUploadHandler::processPart(Connection* conn, const std::string& body,
                 return false;
             }
         }
-        return true; // Skip this part but continue parsing
+        return true;  // Skip this part but continue parsing
     }
-    
+
     // Move to content start
     pos = headers_end + 4;  // Skip "\r\n\r\n"
-    
+
     // Extract and process file content
-    return extractFileContent(conn, body, pos, pos, full_boundary, end_boundary, filename, file_found);
+    return extract_file_content(conn, body, pos, pos, full_boundary,
+                                end_boundary, filename, file_found);
 }
 
-bool FileUploadHandler::extractPartHeaders(const std::string& body, size_t& pos, 
-                                         size_t& headers_end, std::string& headers) {
+bool FileUploadHandler::extract_part_headers(const std::string& body,
+                                             size_t& pos, size_t& headers_end,
+                                             std::string& headers) {
     // Find the end of the headers section (double newline)
     headers_end = body.find("\r\n\r\n", pos);
     if (headers_end == std::string::npos) {
@@ -178,7 +188,8 @@ bool FileUploadHandler::extractPartHeaders(const std::string& body, size_t& pos,
     return true;
 }
 
-bool FileUploadHandler::extractFilename(const std::string& headers, std::string& filename) {
+bool FileUploadHandler::extract_filename(const std::string& headers,
+                                         std::string& filename) {
     // Find Content-Disposition header
     size_t content_disp_pos = headers.find("Content-Disposition:");
     if (content_disp_pos == std::string::npos) {
@@ -190,21 +201,22 @@ bool FileUploadHandler::extractFilename(const std::string& headers, std::string&
     if (filename_pos == std::string::npos) {
         return false;  // No filename, not a file upload
     }
-    
+
     filename_pos += 10;  // Length of 'filename="'
     size_t filename_end = headers.find("\"", filename_pos);
     if (filename_end == std::string::npos) {
         return false;  // Invalid format
     }
-    
+
     filename = headers.substr(filename_pos, filename_end - filename_pos);
-    return !filename.empty(); // Return true only if we found a non-empty filename
+    return !filename
+                .empty();  // Return true only if we found a non-empty filename
 }
 
-bool FileUploadHandler::extractFileContent(Connection* conn, const std::string& body, 
-                                         size_t pos, size_t& content_end,
-                                         const std::string& full_boundary, const std::string& end_boundary,
-                                         const std::string& filename, bool& file_found) {
+bool FileUploadHandler::extract_file_content(
+    Connection* conn, const std::string& body, size_t pos, size_t& content_end,
+    const std::string& full_boundary, const std::string& end_boundary,
+    const std::string& filename, bool& file_found) {
     HttpRequest* req = conn->request_data_;
 
     // Find the end of this part (next boundary)
@@ -224,16 +236,17 @@ bool FileUploadHandler::extractFileContent(Connection* conn, const std::string& 
 
     // Extract file content
     std::vector<char> file_data(body.begin() + pos, body.begin() + content_end);
-                                
+
     // Check if file size exceeds limit
-    if (!validate_upload_size(file_data.size())) {
+    if (!validate_upload_size(file_data.size(),
+                              conn->virtual_server_->client_max_body_size_)) {
         handle_upload_error(conn, UPLOAD_PAYLOAD_TOO_LARGE);
         return false;
     }
 
     // Save the file
     UploadError save_error = UPLOAD_SUCCESS;
-    if (!saveUploadedFile(req, filename, file_data, save_error)) {
+    if (!save_uploaded_file(req, filename, file_data, save_error)) {
         handle_upload_error(conn, save_error);
         return false;
     }
@@ -242,14 +255,15 @@ bool FileUploadHandler::extractFileContent(Connection* conn, const std::string& 
     return true;
 }
 
-bool FileUploadHandler::validate_upload_size(size_t size) {
+bool FileUploadHandler::validate_upload_size(size_t size,
+                                             size_t max_body_size) {
     // Just use the server-wide limit from config_
-    return size <= config_.client_max_body_size_;
+    return size <= max_body_size;
 }
 
-std::string FileUploadHandler::getUploadDirectory(HttpRequest* req) {
+std::string FileUploadHandler::get_upload_directory(HttpRequest* req) {
     std::string base_path = parse_absolute_path(req);
-    
+
     // Extract just the directory part (remove any filename component)
     size_t last_slash = base_path.find_last_of('/');
     if (last_slash != std::string::npos) {
@@ -258,20 +272,20 @@ std::string FileUploadHandler::getUploadDirectory(HttpRequest* req) {
         // If no slash found, add one
         base_path += '/';
     }
-    
+
     // Add uploads subdirectory
     std::string upload_dir = base_path + "uploads/";
-    
+
     return upload_dir;
 }
 
-bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
-                                       const std::string& filename,
-                                       const std::vector<char>& data,
-                                       UploadError& error) {
+bool FileUploadHandler::save_uploaded_file(HttpRequest* req,
+                                           const std::string& filename,
+                                           const std::vector<char>& data,
+                                           UploadError& error) {
     // Get the upload directory using root directive
-    std::string upload_dir = getUploadDirectory(req);
-    
+    std::string upload_dir = get_upload_directory(req);
+
     // Create upload directory if it doesn't exist
     struct stat st;
     if (stat(upload_dir.c_str(), &st) != 0) {
@@ -280,10 +294,11 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
         while ((pos = upload_dir.find('/', pos + 1)) != std::string::npos) {
             if (pos > 0) {
                 std::string parent_dir = upload_dir.substr(0, pos);
-                mkdir(parent_dir.c_str(), 0755);  // Ignore errors for existing dirs
+                mkdir(parent_dir.c_str(),
+                      0755);  // Ignore errors for existing dirs
             }
         }
-        
+
         // Create final directory
         if (mkdir(upload_dir.c_str(), 0755) != 0 && errno != EEXIST) {
             error = UPLOAD_SERVER_ERROR;
@@ -292,7 +307,7 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
     }
 
     // Sanitize filename
-    std::string safe_filename = sanitizeFilename(filename);
+    std::string safe_filename = sanitize_filename(filename);
     if (safe_filename.empty()) {
         error = UPLOAD_BAD_REQUEST;
         return false;
@@ -321,7 +336,7 @@ bool FileUploadHandler::saveUploadedFile(HttpRequest* req,
     return true;
 }
 
-std::string FileUploadHandler::sanitizeFilename(const std::string& filename) {
+std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
     // Remove path information
     std::string safe_filename = filename;
     size_t last_slash = safe_filename.find_last_of("/\\");
@@ -341,7 +356,7 @@ std::string FileUploadHandler::sanitizeFilename(const std::string& filename) {
     return safe_filename;
 }
 
-std::string FileUploadHandler::extractBoundary(
+std::string FileUploadHandler::extract_boundary(
     const std::string& content_type) {
     size_t boundary_pos = content_type.find("boundary=");
     if (boundary_pos == std::string::npos) {

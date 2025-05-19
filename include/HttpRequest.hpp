@@ -3,7 +3,7 @@
 
 #include "webserv.hpp"
 
-class RequestParser;
+struct Location;
 
 // Represents a parsed HTTP Request.
 // An instance of this is typically created during the parsing phase
@@ -25,9 +25,7 @@ struct HttpRequest {
     std::string path_;          // Path part of the URI (e.g., "/index.html")
     std::string query_string_;  // Query part of the UR  I (e.g., "a=1&b=2")
 
-    const LocationConfig* location_match_;  // Best matching location for the request
-
-    RequestParser::ParseResult parse_status_;  // Status of request parsing
+    const Location* location_match_;  // Best matching location for the request
 
     //--------------------------------------
     // Constructor / Destructor
@@ -39,7 +37,7 @@ struct HttpRequest {
     // Helper Methods
     //--------------------------------------
     std::string get_header(const std::string& name) const;
-    bool is_valid() const;
+    void set_header(const std::string& name, const std::string& value);
     void clear();
 
    private:

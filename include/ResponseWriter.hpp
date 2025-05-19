@@ -6,21 +6,15 @@
 // Forward declarations
 struct Connection;
 struct HttpResponse;
-struct ServerConfig;
+struct VirtualServer;
 
 // Utility class to help format HTTP responses.
 class ResponseWriter {
    public:
-    enum ResponseStatus {
-        RESPONSE_COMPLETE,     // Response fully sent
-        RESPONSE_INCOMPLETE,   // Partial write, needs another EPOLLOUT event
-        RESPONSE_ERROR         // Error occurred during writing
-    };
-
-    explicit ResponseWriter(const ServerConfig& config);
+    ResponseWriter();
     ~ResponseWriter();
 
-    ResponseStatus write_response(Connection* conn);
+    codes::ResponseStatus write_response(Connection* conn);
 
     // Prepares the initial part of the response (status line + headers)
     // and places it into the Connection's write buffer.
@@ -36,9 +30,8 @@ class ResponseWriter {
     void write_error_response(Connection* conn);
 
    private:
-    const ServerConfig&
-        config_;  // Reference to config (e.g., for Server header)
-
+    std::string get_status_message(
+        int code) const;  // Helper to get text for status code
     std::string get_current_gmt_time() const;  // Helper for Date header
 
     // Prevent copying

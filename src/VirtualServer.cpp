@@ -17,7 +17,7 @@ static const bool DEFAULT_AUTOINDEX = false;
 static const bool DEFAULT_CGI_ENABLED = false;
 static const std::string DEFAULT_INDEX = "index.html";
 
-static std::vector<std::string> createDefaultAllowedMethods() {
+static std::vector<std::string> create_default_allowed_methods() {
     std::vector<std::string> methods;
     methods.push_back("GET");
     methods.push_back("POST");
@@ -26,25 +26,26 @@ static std::vector<std::string> createDefaultAllowedMethods() {
 }
 
 static const std::vector<std::string> DEFAULT_ALLOWED_METHODS =
-    createDefaultAllowedMethods();
+    create_default_allowed_methods();
 
-// Constructor for LocationConfig with defaults
-LocationConfig::LocationConfig()
-    : autoindex(DEFAULT_AUTOINDEX),
-      cgi_enabled(DEFAULT_CGI_ENABLED),
-      index(DEFAULT_INDEX) {
-    allowed_methods = DEFAULT_ALLOWED_METHODS;
+// Constructor for Location with defaults
+Location::Location()
+    : autoindex_(DEFAULT_AUTOINDEX),
+      cgi_enabled_(DEFAULT_CGI_ENABLED),
+      index_(DEFAULT_INDEX) {
+    allowed_methods_ = DEFAULT_ALLOWED_METHODS;
 }
 
 // Default constructor implementation
-ServerConfig::ServerConfig()
+VirtualServer::VirtualServer()
     : port_(DEFAULT_PORT),
       listen_specified_(false),
       client_max_body_size_(DEFAULT_MAX_BODY_SIZE) {
     host_ = DEFAULT_HOST;
 }
 
-bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
+bool VirtualServer::parse_server_block(std::ifstream& file,
+                                       VirtualServer& virtual_server) {
     std::string line;
 
     while (std::getline(file, line)) {
@@ -56,20 +57,20 @@ bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
 
         // Check for block end
         if (line == "}") {
-            config.applyDefaults();
+            virtual_server.apply_defaults();
             return true;
         }
 
         if (line.find("location") == 0) {
-            if (!parseLocationBlock(file, line, config)) {
+            if (!parse_location_block(file, line, virtual_server)) {
                 return false;
             }
             continue;
         }
 
         std::string key, value;
-        if (parseDirective(line, key, value)) {
-            if (!handleServerDirective(key, value, config)) {
+        if (parse_directive(line, key, value)) {
+            if (!handle_server_directive(key, value, virtual_server)) {
                 return false;
             }
         } else {
@@ -83,8 +84,8 @@ bool ServerConfig::parseServerBlock(std::ifstream& file, ServerConfig& config) {
     return false;
 }
 
-bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line,
-                                      ServerConfig& config) {
+bool VirtualServer::parse_location_block(std::ifstream& file, std::string line,
+                                         VirtualServer& virtual_server) {
     // Extract location path
     size_t pathStart = line.find_first_not_of(" \t", 8);  // Skip "location"
     if (pathStart == std::string::npos) return false;
@@ -105,9 +106,9 @@ bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line,
         if (nextLine != "{") return false;
     }
 
-    // Create a new location config
-    LocationConfig location;
-    location.path = path;
+    // Create a new Location
+    Location location;
+    location.path_ = path;
 
     // Parse location block
     std::string locLine;
@@ -119,13 +120,13 @@ bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line,
         }
 
         if (locLine == "}") {
-            config.locations.push_back(location);
+            virtual_server.locations_.push_back(location);
             return true;
         }
 
         std::string key, value;
-        if (parseDirective(locLine, key, value)) {
-            if (!addDirectiveValue(location, key, value)) {
+        if (parse_directive(locLine, key, value)) {
+            if (!add_directive_value(location, key, value)) {
                 return false;  // Reject if directive isn't recognized
             }
         }
@@ -135,30 +136,35 @@ bool ServerConfig::parseLocationBlock(std::ifstream& file, std::string line,
 }
 
 // Handle server directives with a separate method
-bool ServerConfig::handleServerDirective(const std::string& key,
-                                         const std::string& value,
-                                         ServerConfig& config) {
+bool VirtualServer::handle_server_directive(const std::string& key,
+                                            const std::string& value,
+                                            VirtualServer& virtual_server) {
     if (key == "listen") {
-        config.listen_specified_ = true;
-        return parseListen(value, config);
+        virtual_server.listen_specified_ = true;
+        return parse_listen(value, virtual_server);
     } else if (key == "server_name") {
-        return parseServerName(value, config);
+        return parse_server_name(value, virtual_server);
     } else if (key == "error_page") {
-        return parseErrorPage(value, config);
+        return parse_error_page(value, virtual_server);
     } else if (key == "client_max_body_size") {
-        return parseClientMaxBodySize(value, config);
+        return parse_client_max_body_size(value, virtual_server);
     } else {
         std::cerr << "Error: Unknown directive '" << key << "'" << std::endl;
         return false;
     }
 }
 
-bool ServerConfig::parseListen(const std::string& value, ServerConfig& config) {
+bool VirtualServer::parse_listen(const std::string& value,
+                                 VirtualServer& virtual_server) {
+    // Extract hostname/IP and port from the value
+    std::string host_str;
     size_t colonPos = value.find(':');
+
     if (colonPos != std::string::npos) {
-        config.host_ = value.substr(0, colonPos);
+        // Format: hostname:port or ip:port
+        host_str = value.substr(0, colonPos);
         std::istringstream iss(value.substr(colonPos + 1));
-        if (!(iss >> config.port_)) {
+        if (!(iss >> virtual_server.port_)) {
             std::cerr << "Error parsing port in listen directive: " << value
                       << std::endl;
             return false;
@@ -166,18 +172,56 @@ bool ServerConfig::parseListen(const std::string& value, ServerConfig& config) {
     } else {
         // Just a port number
         std::istringstream iss(value);
-        if (!(iss >> config.port_)) {
+        if (!(iss >> virtual_server.port_)) {
             std::cerr << "Error parsing port in listen directive: " << value
                       << std::endl;
             return false;
         }
-        config.host_ = DEFAULT_HOST;  // Default to all interfaces
+        host_str = DEFAULT_HOST;  // Default to all interfaces
     }
+
+    // Store the original hostname
+    virtual_server.host_name_ = host_str;
+
+    // Special case for "0.0.0.0" (INADDR_ANY) - no need to resolve
+    if (host_str == "0.0.0.0") {
+        virtual_server.host_ = host_str;
+    } else {
+        // Check if already a valid IP address
+        struct in_addr addr;
+        if (inet_pton(AF_INET, host_str.c_str(), &addr) == 1) {
+            // Already a valid IP, keep it
+            virtual_server.host_ = host_str;
+        } else {
+            // Resolve hostname to IP
+            struct addrinfo hints, *res;
+            memset(&hints, 0, sizeof(hints));
+            hints.ai_family = AF_INET;  // IPv4 only
+            hints.ai_socktype = SOCK_STREAM;
+
+            int status = getaddrinfo(host_str.c_str(), NULL, &hints, &res);
+            if (status != 0) {
+                std::cerr << "Error resolving hostname '" << host_str
+                          << "': " << gai_strerror(status) << std::endl;
+                return false;
+            }
+
+            // Convert the resolved address to string and store it
+            char ip_str[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &((struct sockaddr_in*)res->ai_addr)->sin_addr,
+                      ip_str, sizeof(ip_str));
+            virtual_server.host_ = ip_str;
+
+            // Free the linked list returned by getaddrinfo
+            freeaddrinfo(res);
+        }
+    }
+
     return true;
 }
 
-bool ServerConfig::parseClientMaxBodySize(const std::string& value,
-                                          ServerConfig& config) {
+bool VirtualServer::parse_client_max_body_size(const std::string& value,
+                                               VirtualServer& virtual_server) {
     if (value.empty()) {
         std::cerr << "Error: client_max_body_size cannot be empty" << std::endl;
         return false;
@@ -237,56 +281,56 @@ bool ServerConfig::parseClientMaxBodySize(const std::string& value,
         return false;
     }
 
-    config.client_max_body_size_ = size;
+    virtual_server.client_max_body_size_ = size;
     return true;
 }
 
-bool ServerConfig::parseServerName(const std::string& value,
-                                   ServerConfig& config) {
+bool VirtualServer::parse_server_name(const std::string& value,
+                                      VirtualServer& virtual_server) {
     std::istringstream iss(value);
     std::string name;
     while (iss >> name) {
-        config.server_names_.push_back(name);
+        virtual_server.server_names_.push_back(name);
     }
     return true;
 }
 
-bool ServerConfig::parseErrorPage(const std::string& value,
-                                  ServerConfig& config) {
+bool VirtualServer::parse_error_page(const std::string& value,
+                                     VirtualServer& virtual_server) {
     std::istringstream iss(value);
     int code;
     std::string path;
     if (iss >> code >> path) {
-        config.error_pages[code] = path;
+        virtual_server.error_pages_[code] = path;
         return true;
     }
     std::cerr << "Error parsing error_page directive: " << value << std::endl;
     return false;
 }
 
-bool ServerConfig::addDirectiveValue(LocationConfig& location,
-                                     const std::string& key,
-                                     const std::string& value) {
+bool VirtualServer::add_directive_value(Location& location,
+                                        const std::string& key,
+                                        const std::string& value) {
     if (key == "root") {
-        location.root = value;
+        location.root_ = value;
     } else if (key == "autoindex") {
-        location.autoindex = (value == "on");
+        location.autoindex_ = (value == "on");
     } else if (key == "allow_methods") {
         // Clear default methods first
-        location.allowed_methods.clear();
+        location.allowed_methods_.clear();
 
         // Split and add methods
         std::istringstream iss(value);
         std::string method;
         while (iss >> method) {
-            location.allowed_methods.push_back(method);
+            location.allowed_methods_.push_back(method);
         }
     } else if (key == "cgi") {
-        location.cgi_enabled = (value == "on");
+        location.cgi_enabled_ = (value == "on");
     } else if (key == "index") {
-        location.index = value;
+        location.index_ = value;
     } else if (key == "redirect") {
-        location.redirect = value;
+        location.redirect_ = value;
     } else {
         std::cerr << "Unknown directive in location block: " << key
                   << std::endl;
@@ -296,8 +340,8 @@ bool ServerConfig::addDirectiveValue(LocationConfig& location,
 }
 
 // Helper to parse a single directive line
-bool ServerConfig::parseDirective(const std::string& line, std::string& key,
-                                  std::string& value) {
+bool VirtualServer::parse_directive(const std::string& line, std::string& key,
+                                    std::string& value) {
     size_t pos = line.find_first_of(" \t");
 
     if (pos == std::string::npos) {
@@ -334,25 +378,25 @@ bool ServerConfig::parseDirective(const std::string& line, std::string& key,
     return !value.empty();
 }
 
-bool ServerConfig::applyDefaults() {
+bool VirtualServer::apply_defaults() {
     // Apply server-level defaults
     if (server_names_.empty()) {
         server_names_.push_back(DEFAULT_SERVER_NAME);
     }
 
     // Default error pages if not specified
-    if (error_pages.find(DEFAULT_404_ERROR_CODE) == error_pages.end()) {
-        error_pages[DEFAULT_404_ERROR_CODE] = DEFAULT_404_ERROR_PAGE;
+    if (error_pages_.find(DEFAULT_404_ERROR_CODE) == error_pages_.end()) {
+        error_pages_[DEFAULT_404_ERROR_CODE] = DEFAULT_404_ERROR_PAGE;
     }
-    if (error_pages.find(DEFAULT_500_ERROR_CODE) == error_pages.end()) {
-        error_pages[DEFAULT_500_ERROR_CODE] = DEFAULT_500_ERROR_PAGE;
+    if (error_pages_.find(DEFAULT_500_ERROR_CODE) == error_pages_.end()) {
+        error_pages_[DEFAULT_500_ERROR_CODE] = DEFAULT_500_ERROR_PAGE;
     }
 
     return true;
 }
 
 // Implementation of validation methods
-bool ServerConfig::isValidHost(std::string& error_msg) const {
+bool VirtualServer::is_valid_host(std::string& error_msg) const {
     // Check if the host is valid IP address format
     std::string::size_type start = 0;
     int octets = 0;
@@ -395,28 +439,27 @@ bool ServerConfig::isValidHost(std::string& error_msg) const {
     return true;
 }
 
-bool ServerConfig::isValidPort(std::string& error_msg) const {
+bool VirtualServer::is_valid_port(std::string& error_msg) const {
     if (port_ <= 0 || port_ > 65535) {
-        error_msg =
-            "Invalid port number: " +
-            static_cast<std::ostringstream*>(&(std::ostringstream() << port_))
-                ->str();
+        std::ostringstream ss;
+        ss << "Invalid port number: " << port_;
+        error_msg = ss.str();
         return false;
     }
     return true;
 }
 
-bool ServerConfig::hasValidLocations(std::string& error_msg) const {
-    if (locations.empty()) {
+bool VirtualServer::has_valid_locations(std::string& error_msg) const {
+    if (locations_.empty()) {
         error_msg = "Server must have at least one location block";
         return false;
     }
 
     // Validate each location
-    for (size_t i = 0; i < locations.size(); i++) {
+    for (size_t i = 0; i < locations_.size(); i++) {
         std::string location_error;
-        if (!locations[i].isValid(location_error)) {
-            error_msg = "Invalid location [" + locations[i].path +
+        if (!locations_[i].is_valid(location_error)) {
+            error_msg = "Invalid location [" + locations_[i].path_ +
                         "]: " + location_error;
             // std::cout << "DEBUG: Location validation failed: " << error_msg
             //           << std::endl;
@@ -429,57 +472,57 @@ bool ServerConfig::hasValidLocations(std::string& error_msg) const {
     return true;
 }
 
-bool ServerConfig::isValid(std::string& error_msg) const {
+bool VirtualServer::is_valid(std::string& error_msg) const {
     if (!listen_specified_) {
         error_msg = "Listen directive is mandatory";
         return false;
     }
 
-    if (!isValidHost(error_msg)) {
+    if (!is_valid_host(error_msg)) {
         return false;
     }
 
-    if (!isValidPort(error_msg)) {
+    if (!is_valid_port(error_msg)) {
         return false;
     }
 
-    if (!hasValidLocations(error_msg)) {
+    if (!has_valid_locations(error_msg)) {
         return false;
     }
 
     return true;
 }
 
-bool LocationConfig::isValid(std::string& error_msg) const {
-    if (path.empty()) {
+bool Location::is_valid(std::string& error_msg) const {
+    if (path_.empty()) {
         error_msg = "Location path is required";
         return false;
     }
 
     // Check if path starts with /
-    if (path[0] != '/') {
-        error_msg = "Location path must start with /: " + path;
-        return false;
-    }
-    
-    // Check for invalid characters in path
-    const std::string invalidChars = "<>\"'|*?";
-    for (size_t i = 0; i < invalidChars.length(); i++) {
-        if (path.find(invalidChars[i]) != std::string::npos) {
-            error_msg = "Location path contains invalid character '" + 
-                        std::string(1, invalidChars[i]) + "': " + path;
-            return false;
-        }
-    }
-    
-    // Check if redirect is valid when specified
-    if (!redirect.empty() && redirect[0] != '/' && 
-        redirect.find("http://") != 0 && redirect.find("https://") != 0) {
-        error_msg = "Redirect must be an absolute path or URL: " + redirect;
+    if (path_[0] != '/') {
+        error_msg = "Location path must start with /: " + path_;
         return false;
     }
 
-    if (root.empty()) {
+    // Check for invalid characters in path
+    const std::string invalidChars = "<>\"'|*?";
+    for (size_t i = 0; i < invalidChars.length(); i++) {
+        if (path_.find(invalidChars[i]) != std::string::npos) {
+            error_msg = "Location path contains invalid character '" +
+                        std::string(1, invalidChars[i]) + "': " + path_;
+            return false;
+        }
+    }
+
+    // Check if redirect is valid when specified
+    if (!redirect_.empty() && redirect_[0] != '/' &&
+        redirect_.find("http://") != 0 && redirect_.find("https://") != 0) {
+        error_msg = "Redirect must be an absolute path or URL: " + redirect_;
+        return false;
+    }
+
+    if (root_.empty()) {
         error_msg = "Root directive is mandatory";
         return false;
     }
@@ -490,21 +533,21 @@ bool LocationConfig::isValid(std::string& error_msg) const {
     //     error_msg = "Root directory does not exist: " + root;
     //     return false;
     // }
-    
+
     // if (!S_ISDIR(path_stat.st_mode)) {
     //     error_msg = "Root path is not a directory: " + root;
     //     return false;
     // }
-    
+
     // Check read permissions
     // if (access(root.c_str(), R_OK) != 0) {
     //     error_msg = "No read permission for root directory: " + root;
     //     return false;
     // }
 
-    if (!allowed_methods.empty()) {
-        for (size_t i = 0; i < allowed_methods.size(); i++) {
-            const std::string& method = allowed_methods[i];
+    if (!allowed_methods_.empty()) {
+        for (size_t i = 0; i < allowed_methods_.size(); i++) {
+            const std::string& method = allowed_methods_[i];
             if (method != "GET" && method != "POST" && method != "DELETE") {
                 error_msg = "Invalid HTTP method: " + method;
                 return false;
@@ -518,24 +561,28 @@ bool LocationConfig::isValid(std::string& error_msg) const {
     return true;
 }
 
-const LocationConfig* ServerConfig::findMatchingLocation(const std::string& uri) const {
-    const LocationConfig* best_match = NULL;
-    
-    for (std::vector<LocationConfig>::const_iterator it = locations.begin(); it != locations.end(); ++it) {
-        const LocationConfig& location = *it;
+const Location* VirtualServer::find_matching_location(
+    const std::string& uri) const {
+    const Location* best_match = NULL;
+
+    for (std::vector<Location>::const_iterator it = locations_.begin();
+         it != locations_.end(); ++it) {
+        const Location& location = *it;
         // Check if the request path starts with the location path
-        if (uri.find(location.path) == 0) {
+        if (uri.find(location.path_) == 0) {
             // Make sure we match complete segments
-            if (location.path == "/" ||           // Root always matches
-                uri == location.path ||          // Exact match
-                (uri.length() > location.path.length() && 
-                (uri[location.path.length()] == '/' || location.path[location.path.length() - 1] == '/'))) { 
-                if (!best_match || location.path.length() > best_match->path.length()) { 
+            if (location.path_ == "/" ||  // Root always matches
+                uri == location.path_ ||  // Exact match
+                (uri.length() > location.path_.length() &&
+                 (uri[location.path_.length()] == '/' ||
+                  location.path_[location.path_.length() - 1] == '/'))) {
+                if (!best_match ||
+                    location.path_.length() > best_match->path_.length()) {
                     best_match = &location;
                 }
             }
         }
     }
-    
+
     return best_match;
 }

@@ -1,9 +1,6 @@
 #include "webserv.hpp"
 
-RequestParser::RequestParser(const ServerConfig& config)
-    : current_state_(PARSING_REQUEST_LINE),
-      config_(config),
-      chunk_remaining_bytes_(0) {}
+RequestParser::RequestParser() {}
 
 RequestParser::~RequestParser() {}
 
@@ -39,47 +36,42 @@ bool RequestParser::read_from_socket(Connection* conn) {
     return true;
 }
 
-RequestParser::ParseResult RequestParser::parse(Connection* conn) {
-    // Reset parser state if we are starting a new request
-    if (current_state_ == PARSING_COMPLETE) {
-        reset_parser_state();
-    }
-
-    RequestParser::ParseResult& result = conn->request_data_->parse_status_;
+codes::ParseStatus RequestParser::parse(Connection* conn) {
+    codes::ParseStatus& parse_status = conn->parse_status_;
 
     // Process as much as possible in one call
     while (!conn->read_buffer_.empty()) {
         // Process based on current state
         // The state transition is handled inside each parsing function
-        switch (current_state_) {
-            case PARSING_REQUEST_LINE:
-                result = parse_request_line(conn);
+        switch (conn->parser_state_) {
+            case codes::PARSING_REQUEST_LINE:
+                parse_status = parse_request_line(conn);
                 break;
-            case PARSING_HEADERS:
-                result = parse_headers(conn);
+            case codes::PARSING_HEADERS:
+                parse_status = parse_headers(conn);
                 break;
-            case PARSING_BODY:
-                result = parse_body(conn);
+            case codes::PARSING_BODY:
+                parse_status = parse_body(conn);
                 break;
-            case PARSING_CHUNKED_BODY:
-                result = parse_chunked_body(conn);
+            case codes::PARSING_CHUNKED_BODY:
+                parse_status = parse_chunked_body(conn);
                 break;
-            case PARSING_COMPLETE:
-                result = PARSE_SUCCESS;
+            case codes::PARSING_COMPLETE:
+                parse_status = codes::PARSE_SUCCESS;
                 break;
         }
 
-        if (result != PARSE_INCOMPLETE) {
+        if (parse_status != codes::PARSE_INCOMPLETE) {
             // Either parsing is complete or an error occurred - return to
             // caller
-            return result;
+            return parse_status;
         }
     }
 
-    return PARSE_INCOMPLETE;  // More data needed
+    return codes::PARSE_INCOMPLETE;  // More data needed
 }
 
-RequestParser::ParseResult RequestParser::parse_request_line(Connection* conn) {
+codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
     std::vector<char>& buffer = conn->read_buffer_;
     HttpRequest* request = conn->request_data_;
 
@@ -89,30 +81,30 @@ RequestParser::ParseResult RequestParser::parse_request_line(Connection* conn) {
 
     if (line_end == buffer.end()) {
         // Not enough data yet
-        if (buffer.size() > HttpConfig::MAX_REQUEST_LINE_LENGTH) {
-            return PARSE_REQUEST_TOO_LONG;
+        if (buffer.size() > http_limits::MAX_REQUEST_LINE_LENGTH) {
+            return codes::PARSE_REQUEST_TOO_LONG;
         }
-        return PARSE_INCOMPLETE;
+        return codes::PARSE_INCOMPLETE;
     }
 
     // Get the complete request line
     std::string request_line(buffer.begin(), line_end);
     if (!split_request_line(request, request_line)) {
-        return PARSE_INVALID_REQUEST_LINE;
+        return codes::PARSE_INVALID_REQUEST_LINE;
     }
 
     // Validate components
-    ParseResult validation_result = validate_request_line(request);
-    if (validation_result != PARSE_SUCCESS) {
-        return validation_result;
+    codes::ParseStatus validation_status = validate_request_line(request);
+    if (validation_status != codes::PARSE_SUCCESS) {
+        return validation_status;
     }
 
     // Remove processed data (including CRLF)
     buffer.erase(buffer.begin(), line_end + 2);
 
     // Move to header parsing
-    current_state_ = PARSING_HEADERS;
-    return PARSE_INCOMPLETE;
+    conn->parser_state_ = codes::PARSING_HEADERS;
+    return codes::PARSE_INCOMPLETE;
 }
 
 bool RequestParser::split_request_line(HttpRequest* request,
@@ -165,7 +157,7 @@ bool RequestParser::split_uri_components(HttpRequest* request) {
 }
 
 std::string RequestParser::decode_uri(const std::string& uri) {
-    std::string result;
+    std::string decoded_uri;
 
     for (size_t i = 0; i < uri.length(); i++) {
         if (uri[i] == '%') {
@@ -185,56 +177,56 @@ std::string RequestParser::decode_uri(const std::string& uri) {
                 return "";
             }
 
-            result += static_cast<char>(value);
+            decoded_uri += static_cast<char>(value);
             i += 2;  // Skip the two hex digits
         } else if (uri[i] == '+') {
             // In query strings, '+' becomes space
-            result += ' ';
+            decoded_uri += ' ';
         } else {
             // Direct character (also check for control characters)
             if (static_cast<unsigned char>(uri[i]) < 32 ||
                 static_cast<unsigned char>(uri[i]) == 127) {
                 return "";
             }
-            result += uri[i];
+            decoded_uri += uri[i];
         }
     }
 
-    return result;
+    return decoded_uri;
 }
 
-RequestParser::ParseResult RequestParser::validate_request_line(
+codes::ParseStatus RequestParser::validate_request_line(
     const HttpRequest* request) {
     if (!validate_method(request->method_)) {
-        return PARSE_METHOD_NOT_ALLOWED;
+        return codes::PARSE_METHOD_NOT_ALLOWED;
     }
 
     if (!validate_path(request->path_)) {
-        return PARSE_INVALID_PATH;
+        return codes::PARSE_INVALID_PATH;
     }
 
     if (!validate_query_string(request->query_string_)) {
-        return PARSE_INVALID_QUERY_STRING;
+        return codes::PARSE_INVALID_QUERY_STRING;
     }
 
     if (!validate_http_version(request->version_)) {
-        return PARSE_VERSION_NOT_SUPPORTED;
+        return codes::PARSE_VERSION_NOT_SUPPORTED;
     }
 
-    return PARSE_SUCCESS;
+    return codes::PARSE_SUCCESS;
 }
 
 bool RequestParser::validate_method(const std::string& method) {
-    static const std::string methods[] = {
+    static const std::string METHODS[] = {
         "GET",
         "POST",
         "DELETE",
     };
-    static const std::vector<std::string> valid_methods(
-        methods, methods + sizeof(methods) / sizeof(methods[0]));
+    static const std::vector<std::string> VALID_METHODS(
+        METHODS, METHODS + sizeof(METHODS) / sizeof(METHODS[0]));
 
-    return std::find(valid_methods.begin(), valid_methods.end(), method) !=
-           valid_methods.end();
+    return std::find(VALID_METHODS.begin(), VALID_METHODS.end(), method) !=
+           VALID_METHODS.end();
 }
 
 bool RequestParser::validate_path(const std::string& path) {
@@ -244,7 +236,7 @@ bool RequestParser::validate_path(const std::string& path) {
     }
 
     // Check for length limit
-    if (path.size() > HttpConfig::MAX_PATH_LENGTH) {
+    if (path.size() > http_limits::MAX_PATH_LENGTH) {
         return false;
     }
 
@@ -297,7 +289,7 @@ bool RequestParser::validate_query_string(const std::string& query_string) {
     }
 
     // Check for length limit
-    if (query_string.size() > HttpConfig::MAX_QUERY_LENGTH) {
+    if (query_string.size() > http_limits::MAX_QUERY_LENGTH) {
         return false;
     }
 
@@ -328,7 +320,7 @@ bool RequestParser::validate_http_version(const std::string& version) {
     return version == "HTTP/1.0" || version == "HTTP/1.1";
 }
 
-RequestParser::ParseResult RequestParser::parse_headers(Connection* conn) {
+codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
     std::vector<char>& buffer = conn->read_buffer_;
     HttpRequest* request = conn->request_data_;
 
@@ -343,10 +335,10 @@ RequestParser::ParseResult RequestParser::parse_headers(Connection* conn) {
         // Need more data?
         if (line_end == buffer.end()) {
             // Check header size limit before requesting more data
-            if (buffer.size() > HttpConfig::MAX_HEADER_VALUE_LENGTH) {
-                return PARSE_HEADER_TOO_LONG;
+            if (buffer.size() > http_limits::MAX_HEADER_VALUE_LENGTH) {
+                return codes::PARSE_HEADER_TOO_LONG;
             }
-            return PARSE_INCOMPLETE;
+            return codes::PARSE_INCOMPLETE;
         }
 
         // Check for empty line (end of headers)
@@ -359,10 +351,11 @@ RequestParser::ParseResult RequestParser::parse_headers(Connection* conn) {
 
         // Process a normal header line
         std::string header_line(buffer.begin(), line_end);
-        ParseResult result = process_single_header(header_line, request);
+        codes::ParseStatus parse_status =
+            process_single_header(header_line, request);
 
-        if (result != PARSE_SUCCESS) {
-            return result;
+        if (parse_status != codes::PARSE_SUCCESS) {
+            return parse_status;
         }
 
         // Remove processed line (including CRLF)
@@ -371,19 +364,19 @@ RequestParser::ParseResult RequestParser::parse_headers(Connection* conn) {
 
     // Headers are complete, determine next parser state
     if (headers_complete) {
-        return determine_request_body_handling(request);
+        return determine_request_body_handling(conn);
     }
 
-    return PARSE_INCOMPLETE;
+    return codes::PARSE_INCOMPLETE;
 }
 
 // Helper function to process a single header line
-RequestParser::ParseResult RequestParser::process_single_header(
+codes::ParseStatus RequestParser::process_single_header(
     const std::string& header_line, HttpRequest* request) {
     // Find the colon
     size_t colon_pos = header_line.find(':');
     if (colon_pos == std::string::npos || colon_pos == 0) {
-        return PARSE_ERROR;
+        return codes::PARSE_ERROR;
     }
 
     // Extract key and value
@@ -399,7 +392,7 @@ RequestParser::ParseResult RequestParser::process_single_header(
         // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." /
         //         "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
         if (!(isalnum(c) || strchr("!#$%&'*+-.^_`|~", c))) {
-            return PARSE_ERROR;
+            return codes::PARSE_ERROR;
         }
 
         key[i] = std::tolower(c);
@@ -412,18 +405,19 @@ RequestParser::ParseResult RequestParser::process_single_header(
     }
 
     // Check header count limit
-    if (request->headers_.size() >= HttpConfig::MAX_HEADERS) {
-        return PARSE_TOO_MANY_HEADERS;
+    if (request->headers_.size() >= http_limits::MAX_HEADERS) {
+        return codes::PARSE_TOO_MANY_HEADERS;
     }
 
     // Store the header
     request->headers_[key] = value;
-    return PARSE_SUCCESS;
+    return codes::PARSE_SUCCESS;
 }
 
 // Helper function to handle end-of-headers processing
-RequestParser::ParseResult RequestParser::determine_request_body_handling(
-    HttpRequest* request) {
+codes::ParseStatus RequestParser::determine_request_body_handling(
+    Connection* conn) {
+    HttpRequest* request = conn->request_data_;
     // Check for request body
     if (request->method_ == "POST" || request->method_ == "PUT") {
         // Check for Transfer-Encoding header
@@ -431,8 +425,8 @@ RequestParser::ParseResult RequestParser::determine_request_body_handling(
             request->get_header("transfer-encoding");
         if (!transfer_encoding.empty() &&
             transfer_encoding.find("chunked") != std::string::npos) {
-            current_state_ = PARSING_CHUNKED_BODY;
-            return PARSE_INCOMPLETE;
+            conn->parser_state_ = codes::PARSING_CHUNKED_BODY;
+            return codes::PARSE_INCOMPLETE;
         }
 
         // Check for Content-Length header
@@ -444,26 +438,26 @@ RequestParser::ParseResult RequestParser::determine_request_body_handling(
 
             // Validate content length format
             if (end_ptr == content_length.c_str() || *end_ptr != '\0') {
-                return PARSE_INVALID_CONTENT_LENGTH;
+                return codes::PARSE_INVALID_CONTENT_LENGTH;
             }
 
-            if (body_size > config_.client_max_body_size_) {
-                return PARSE_CONTENT_TOO_LARGE;
+            if (body_size > conn->virtual_server_->client_max_body_size_) {
+                return codes::PARSE_CONTENT_TOO_LARGE;
             }
 
             if (body_size > 0) {
-                current_state_ = PARSING_BODY;
-                return PARSE_INCOMPLETE;
+                conn->parser_state_ = codes::PARSING_BODY;
+                return codes::PARSE_INCOMPLETE;
             }
         }
     }
 
     // No body needed or zero-length body
-    current_state_ = PARSING_COMPLETE;
-    return PARSE_SUCCESS;
+    conn->parser_state_ = codes::PARSING_COMPLETE;
+    return codes::PARSE_SUCCESS;
 }
 
-RequestParser::ParseResult RequestParser::parse_body(Connection* conn) {
+codes::ParseStatus RequestParser::parse_body(Connection* conn) {
     std::vector<char>& buffer = conn->read_buffer_;
     HttpRequest* request = conn->request_data_;
 
@@ -473,7 +467,7 @@ RequestParser::ParseResult RequestParser::parse_body(Connection* conn) {
 
     // Check if we have enough data
     if (buffer.size() < body_size) {
-        return PARSE_INCOMPLETE;
+        return codes::PARSE_INCOMPLETE;
     }
 
     // Copy body data
@@ -483,66 +477,73 @@ RequestParser::ParseResult RequestParser::parse_body(Connection* conn) {
     buffer.erase(buffer.begin(), buffer.begin() + body_size);
 
     // Request is complete
-    current_state_ = PARSING_COMPLETE;
-    return PARSE_SUCCESS;
+    conn->parser_state_ = codes::PARSING_COMPLETE;
+    return codes::PARSE_SUCCESS;
 }
 
 // Chunked transfer encoding sends HTTP message bodies in a series of "chunks"
 // without needing to know the total size in advance. Each chunk has a size
 // prefix in hexadecimal notation, followed by the chunk data.
-RequestParser::ParseResult RequestParser::parse_chunked_body(Connection* conn) {
+codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
     std::vector<char>& buffer = conn->read_buffer_;
     HttpRequest* request = conn->request_data_;
-    ParseResult result;
+    codes::ParseStatus parse_status;
 
     while (!buffer.empty()) {
         // Process based on chunked parsing state
-        if (chunk_remaining_bytes_ == 0) {
+        if (conn->chunk_remaining_bytes_ == 0) {
             // Reading a new chunk size
-            result = parse_chunk_header(buffer, chunk_remaining_bytes_);
+            parse_status =
+                parse_chunk_header(buffer, conn->chunk_remaining_bytes_);
 
-            if (result != PARSE_SUCCESS) {
-                return result;  // Either incomplete or error
+            if (parse_status != codes::PARSE_SUCCESS) {
+                return parse_status;  // Either incomplete or error
             }
 
             // If chunk size is 0, this is the last chunk
-            if (chunk_remaining_bytes_ == 0) {
-                return finish_chunked_parsing(buffer);
+            if (conn->chunk_remaining_bytes_ == 0) {
+                codes::ParseStatus status = finish_chunked_parsing(buffer);
+                if (status == codes::PARSE_SUCCESS) {
+                    conn->parser_state_ = codes::PARSING_COMPLETE;
+                }
+				return status;
             }
 
             continue;  // Process the chunk data in the next iteration
         }
 
         // Reading chunk data
-        result = read_chunk_data(buffer, request, chunk_remaining_bytes_);
+        parse_status =
+            read_chunk_data(buffer, request, conn->chunk_remaining_bytes_,
+                            conn->virtual_server_->client_max_body_size_);
 
-        if (result != PARSE_SUCCESS) {
-            return result;
+        if (parse_status != codes::PARSE_SUCCESS) {
+            return parse_status;
         }
 
         // If we've completed reading this chunk data
-        if (chunk_remaining_bytes_ == 0) {
-            result = process_chunk_terminator(buffer);
+        if (conn->chunk_remaining_bytes_ == 0) {
+            parse_status = process_chunk_terminator(buffer);
 
-            if (result != PARSE_SUCCESS) {
-                return result;
+            if (parse_status != codes::PARSE_SUCCESS) {
+                return parse_status;
             }
         }
     }
 
     // Need more data
-    return PARSE_INCOMPLETE;
+    return codes::PARSE_INCOMPLETE;
 }
 
 // Helper method for parsing chunk headers
-RequestParser::ParseResult RequestParser::parse_chunk_header(
-    std::vector<char>& buffer, size_t& out_chunk_size) {
+codes::ParseStatus RequestParser::parse_chunk_header(std::vector<char>& buffer,
+                                                     size_t& out_chunk_size) {
     // Find the end of the chunk size line
     std::vector<char>::iterator line_end =
         std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
 
     if (line_end == buffer.end()) {
-        return PARSE_INCOMPLETE;  // Need more data
+        return codes::PARSE_INCOMPLETE;  // Need more data
     }
 
     // Parse the chunk size (hex)
@@ -565,33 +566,35 @@ RequestParser::ParseResult RequestParser::parse_chunk_header(
     // Ensure valid hex number
     if (end_ptr == chunk_size_line.c_str() ||
         (*end_ptr != '\0' && *end_ptr != ' ' && *end_ptr != '\t')) {
-        return PARSE_INVALID_CHUNK_SIZE;
+        return codes::PARSE_INVALID_CHUNK_SIZE;
     }
 
     // Validate chunk size
-    if (out_chunk_size > HttpConfig::MAX_CHUNK_SIZE) {
-        return PARSE_INVALID_CHUNK_SIZE;
+    if (out_chunk_size > http_limits::MAX_CHUNK_SIZE) {
+        return codes::PARSE_INVALID_CHUNK_SIZE;
     }
 
     // Remove chunk size line
     buffer.erase(buffer.begin(), line_end + 2);
 
-    return PARSE_SUCCESS;
+    return codes::PARSE_SUCCESS;
 }
 
 // Helper method for reading chunk data
-RequestParser::ParseResult RequestParser::read_chunk_data(
-    std::vector<char>& buffer, HttpRequest* request, size_t& remaining_bytes) {
+codes::ParseStatus RequestParser::read_chunk_data(std::vector<char>& buffer,
+                                                  HttpRequest* request,
+                                                  size_t& remaining_bytes,
+                                                  size_t client_max_body_size) {
     // Calculate how much data we can process
     size_t bytes_to_read = std::min(remaining_bytes, buffer.size());
 
     if (bytes_to_read == 0) {
-        return PARSE_INCOMPLETE;
+        return codes::PARSE_INCOMPLETE;
     }
 
     // Validate total body size
-    if (request->body_.size() + bytes_to_read > config_.client_max_body_size_) {
-        return PARSE_CONTENT_TOO_LARGE;
+    if (request->body_.size() + bytes_to_read > client_max_body_size) {
+        return codes::PARSE_CONTENT_TOO_LARGE;
     }
 
     // Append directly to body
@@ -602,28 +605,28 @@ RequestParser::ParseResult RequestParser::read_chunk_data(
     buffer.erase(buffer.begin(), buffer.begin() + bytes_to_read);
     remaining_bytes -= bytes_to_read;
 
-    return PARSE_SUCCESS;
+    return codes::PARSE_SUCCESS;
 }
 
 // Helper method for processing chunk terminator (CRLF)
-RequestParser::ParseResult RequestParser::process_chunk_terminator(
+codes::ParseStatus RequestParser::process_chunk_terminator(
     std::vector<char>& buffer) {
     // Need CRLF after chunk data
     if (buffer.size() < 2) {
-        return PARSE_INCOMPLETE;
+        return codes::PARSE_INCOMPLETE;
     }
 
     // Verify and consume CRLF
     if (buffer[0] != '\r' || buffer[1] != '\n') {
-        return PARSE_ERROR;
+        return codes::PARSE_ERROR;
     }
 
     buffer.erase(buffer.begin(), buffer.begin() + 2);
-    return PARSE_SUCCESS;
+    return codes::PARSE_SUCCESS;
 }
 
 // Helper method for finishing chunked parsing (last chunk)
-RequestParser::ParseResult RequestParser::finish_chunked_parsing(
+codes::ParseStatus RequestParser::finish_chunked_parsing(
     std::vector<char>& buffer) {
     // Process trailers line-by-line until we find an empty line
     while (true) {
@@ -632,15 +635,14 @@ RequestParser::ParseResult RequestParser::finish_chunked_parsing(
             std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
 
         if (line_end == buffer.end()) {
-            return PARSE_INCOMPLETE;  // Need more data
+            return codes::PARSE_INCOMPLETE;  // Need more data
         }
 
         // Check if this is an empty line (just CRLF)
         if (line_end == buffer.begin()) {
             // This is the end marker - remove it and finish
             buffer.erase(buffer.begin(), buffer.begin() + 2);
-            current_state_ = PARSING_COMPLETE;
-            return PARSE_SUCCESS;
+            return codes::PARSE_SUCCESS;
         }
 
         // Otherwise, this is a trailer field - which we ignore
@@ -650,40 +652,35 @@ RequestParser::ParseResult RequestParser::finish_chunked_parsing(
     }
 }
 
-void RequestParser::reset_parser_state() {
-    current_state_ = PARSING_REQUEST_LINE;
-    chunk_remaining_bytes_ = 0;
-}
-
-void RequestParser::handle_parse_error(Connection* conn, ParseResult result) {
+void RequestParser::handle_parse_error(Connection* conn, codes::ParseStatus status) {
     int http_status;
     
     // Map parser errors to HTTP status codes
-    switch (result) {
-        case PARSE_INVALID_REQUEST_LINE:
-        case PARSE_INVALID_PATH:
-        case PARSE_INVALID_QUERY_STRING:
-        case PARSE_INVALID_CHUNK_SIZE:
-        case PARSE_INVALID_CONTENT_LENGTH:
-        case PARSE_ERROR:
+    switch (status) {
+        case codes::PARSE_INVALID_REQUEST_LINE:
+        case codes::PARSE_INVALID_PATH:
+        case codes::PARSE_INVALID_QUERY_STRING:
+        case codes::PARSE_INVALID_CHUNK_SIZE:
+        case codes::PARSE_INVALID_CONTENT_LENGTH:
+        case codes::PARSE_ERROR:
             http_status = 400; // Bad Request
             break;
             
-        case PARSE_METHOD_NOT_ALLOWED:
+        case codes::PARSE_METHOD_NOT_ALLOWED:
             http_status = 405; // Method Not Allowed
             break;
             
-        case PARSE_REQUEST_TOO_LONG:
-        case PARSE_HEADER_TOO_LONG:
-        case PARSE_TOO_MANY_HEADERS:
+        case codes::PARSE_REQUEST_TOO_LONG:
+        case codes::PARSE_HEADER_TOO_LONG:
+        case codes::PARSE_TOO_MANY_HEADERS:
             http_status = 431; // Request Header Fields Too Large
             break;
             
-        case PARSE_VERSION_NOT_SUPPORTED:
+        case codes::PARSE_VERSION_NOT_SUPPORTED:
             http_status = 505; // HTTP Version Not Supported
             break;
             
-        case PARSE_CONTENT_TOO_LARGE:
+        case codes::PARSE_CONTENT_TOO_LARGE:
             http_status = 413; // Payload Too Large
             break;
             
@@ -692,8 +689,8 @@ void RequestParser::handle_parse_error(Connection* conn, ParseResult result) {
     }
     
     // Apply the appropriate error response
-    ErrorHandler::apply_to_connection(conn, http_status, config_);
+    ErrorHandler::apply_to_connection(conn, http_status, *(conn->virtual_server_));
     
     // Update connection state to writing
-    conn->state_ = Connection::CONN_WRITING;
+    conn->conn_state_ = codes::CONN_WRITING;
 }

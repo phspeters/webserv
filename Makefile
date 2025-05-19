@@ -6,22 +6,20 @@ INCLUDES = -I include
 
 VPATH = src
 FILES = main.cpp \
+		AHandler.cpp \
+		CgiHandler.cpp \
 		Connection.cpp \
 		ConnectionManager.cpp \
+		ErrorHandler.cpp \
+		FileUploadHandler.cpp \
 		HttpRequest.cpp \
 		HttpResponse.cpp \
-		RequestParser.cpp \
-		Server.cpp \
-		ServerConfig.cpp \
-		ServerManager.cpp \
-		FileUploadHandler.cpp \
-		ResponseWriter.cpp \
-		Router.cpp \
-		StaticFileHandler.cpp \
 		Logger.cpp \
-		AHandler.cpp \
-		ErrorHandler.cpp \
-		CgiHandler.cpp \
+		RequestParser.cpp \
+		ResponseWriter.cpp \
+		StaticFileHandler.cpp \
+		VirtualServer.cpp \
+		WebServer.cpp
 
 		
 OBJS = $(FILES:%.cpp=$(OBJ_DIR)/%.o)

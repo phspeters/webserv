@@ -3,23 +3,21 @@
 
 #include "webserv.hpp"
 
-// TEMP
-#define TIMEOUT 60  // Timeout in seconds
-
 // Forward declarations
 struct Connection;
-struct ServerConfig;
+struct VirtualServer;
 
 // Manages the lifecycle of active Connection objects.
 struct ConnectionManager {
    public:
-    explicit ConnectionManager(const ServerConfig& config);
+    ConnectionManager();
     ~ConnectionManager();  // Deletes all managed Connection objects
 
     // Creates a new Connection object for the given FD.
     // Returns pointer to the new Connection, or NULL on failure.
     // The ConnectionManager OWNS the returned Connection object.
-    Connection* create_connection(int client_fd);
+    Connection* create_connection(int client_fd,
+                                  const VirtualServer* default_virtual_server);
 
     // Closes and deletes the Connection object associated with the FD.
     // Handles cleanup of resources owned by the Connection.
@@ -43,8 +41,6 @@ struct ConnectionManager {
     size_t get_active_connection_count() const;
 
    private:
-    const ServerConfig& config_;  // For timeout values etc.
-
     // Storage for active connections, keyed by their file descriptor.
     // ConnectionManager owns the Connection objects pointed to.
     std::map<int, Connection*> active_connections_;

@@ -1,6 +1,6 @@
 #include "webserv.hpp"
 
-HttpRequest::HttpRequest() : parse_status_(RequestParser::PARSE_INCOMPLETE) {}
+HttpRequest::HttpRequest() {}
 
 HttpRequest::~HttpRequest() {}
 
@@ -19,8 +19,15 @@ std::string HttpRequest::get_header(const std::string& name) const {
     return "";
 }
 
-bool HttpRequest::is_valid() const {
-    return parse_status_ == RequestParser::PARSE_SUCCESS;
+void HttpRequest::set_header(const std::string& name,
+                             const std::string& value) {
+    // Case-insensitive lookup for headers
+    std::string lower_name = name;
+    for (size_t i = 0; i < lower_name.size(); ++i) {
+        lower_name[i] = std::tolower(static_cast<unsigned char>(lower_name[i]));
+    }
+
+    headers_[lower_name] = value;
 }
 
 void HttpRequest::clear() {
@@ -31,5 +38,4 @@ void HttpRequest::clear() {
     body_.clear();
     path_.clear();
     query_string_.clear();
-    parse_status_ = RequestParser::PARSE_INCOMPLETE;
 }
