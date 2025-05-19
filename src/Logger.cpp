@@ -60,3 +60,31 @@ int print_buffer(std::vector<char>& buffer) {
 
     return bytes_written;
 }
+
+int log(const std::string& message) {
+    std::cerr << message << std::endl;
+    return 0;
+}
+
+void build_mock_response(Connection* conn) {
+    HttpResponse* mock_response = conn->response_data_;
+    if (mock_response == NULL) {
+        std::cerr << "Error: response_data_ is NULL" << std::endl;
+        return;
+    }
+
+    mock_response->status_code_ = 200;
+    mock_response->status_message_ = "OK";
+    mock_response->headers_["Content-Type"] = "text/plain";
+    mock_response->headers_["Content-Length"] = "13";
+    std::string hello_str = "Hello, World!";
+    mock_response->body_.assign(hello_str.begin(), hello_str.end());
+    mock_response->headers_["Connection"] = "close";
+    mock_response->headers_["Date"] = "Wed, 21 Oct 2015 07:28:00 GMT";
+    mock_response->headers_["Server"] = "webserv/1.0";
+    mock_response->headers_["Last-Modified"] = "Wed, 21 Oct 2015 07:28:00 GMT";
+    mock_response->headers_["Content-Language"] = "en-US";
+    mock_response->headers_["Authorization"] = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
+    mock_response->headers_["Cookie"] = "sessionId=abc123";
+    mock_response->headers_["Host"] = "localhost:8080";
+}

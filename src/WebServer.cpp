@@ -37,18 +37,26 @@ WebServer::~WebServer() {
 }
 
 bool WebServer::init() {
-    // Initialize components
-    conn_manager_ = new ConnectionManager();
-    request_parser_ = new RequestParser();
-    response_writer_ = new ResponseWriter();
+    try {
+        // Initialize components
+        conn_manager_ = new ConnectionManager();
+        request_parser_ = new RequestParser();
+        response_writer_ = new ResponseWriter();
 
-    // Initialize handlers
-    static_file_handler_ = new StaticFileHandler();
-    // cgi_handler_ = new CgiHandler();
-    file_upload_handler_ = new FileUploadHandler();
+        // Initialize handlers
+        static_file_handler_ = new StaticFileHandler();
+        // cgi_handler_ = new CgiHandler();
+        file_upload_handler_ = new FileUploadHandler();
+    } catch (const std::bad_alloc& e) {
+        std::cerr << "Memory allocation failed: " << e.what() << std::endl;
+        return false;
+    }
 
     // Set up signal handlers
-    setup_signal_handlers();
+    if (!setup_signal_handlers()) {
+        std::cerr << "Failed to set up signal handlers" << std::endl;
+        return false;
+    }
 
     // Create epoll instance
     epoll_fd_ = epoll_create1(0);
@@ -294,18 +302,12 @@ void WebServer::handle_write(Connection* conn) {
     //	conn->active_handler_ = choose_handler(conn->request_data_);
     //}
 
-    // TEMP - Set default handler
-    conn->active_handler_ = static_file_handler_;
-    // TEMP
-
+    // TODO
     // Call the handler to process the request and generate a response
-    conn->active_handler_->handle(conn);
+    // conn->active_handler_->handle(conn);
 
-    // TEMP For now, just echo back the data on the buffer
-    if (print_buffer(conn->write_buffer_) < 0) {
-        handle_error(conn);
-        return;
-    }
+    // TEMP - For now, create mock response
+    build_mock_response(conn);
     // TEMP
 
     // Write the response to the client
@@ -365,7 +367,6 @@ bool WebServer::setup_listener_sockets() {
          it != port_to_hosts_.end(); ++it) {
         int port = it->first;
         std::map<std::string, std::vector<VirtualServer*> >& hosts = it->second;
-
         // If we have a wildcard for this port, only create one socket
         bool has_wildcard = (hosts.find("0.0.0.0") != hosts.end());
 
@@ -374,6 +375,8 @@ bool WebServer::setup_listener_sockets() {
             if (!create_listener_socket("0.0.0.0", port, hosts)) {
                 return false;
             }
+            std::cout << "Created wildcard listener socket for port: " << port
+                      << std::endl;
         } else {
             // Create one socket per specific host
             for (std::map<std::string, std::vector<VirtualServer*> >::iterator
@@ -382,6 +385,9 @@ bool WebServer::setup_listener_sockets() {
                 if (!create_listener_socket(host_it->first, port, hosts)) {
                     return false;
                 }
+                std::cout << "Created listener socket for host: "
+                          << host_it->first << " on port: " << port
+                          << std::endl;
             }
         }
     }
@@ -540,7 +546,7 @@ bool WebServer::update_epoll_events(int fd, uint32_t events) {
     return true;
 }
 
-void WebServer::setup_signal_handlers() {
+bool WebServer::setup_signal_handlers() {
     struct sigaction sa;
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
@@ -549,14 +555,16 @@ void WebServer::setup_signal_handlers() {
     if (sigaction(SIGINT, &sa, NULL) < 0) {
         // Handle error
         std::cerr << "Failed to set up SIGINT handler" << std::endl;
-        return;
+        return false;
     }
 
     if (sigaction(SIGTERM, &sa, NULL) < 0) {
         // Handle error
         std::cerr << "Failed to set up SIGTERM handler" << std::endl;
-        return;
+        return false;
     }
+
+    return true;
 }
 
 void WebServer::signal_handler(int signal) {

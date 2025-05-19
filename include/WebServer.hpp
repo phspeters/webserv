@@ -91,7 +91,7 @@ class WebServer {
     void remove_listener_socket(int fd);
 
     // Set up signal handlers for graceful shutdown (SIGINT, SIGTERM)
-    static void setup_signal_handlers();
+    static bool setup_signal_handlers();
     // Signal handler callback (must be static)
     static void signal_handler(int signal);
 
