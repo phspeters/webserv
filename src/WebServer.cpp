@@ -169,10 +169,10 @@ void WebServer::event_loop() {
 
     while (ready_) {
         int timed_out = cleanup_timed_out_connections();
-		if (timed_out > 0) {
-			std::cout << "Closed " << timed_out
-					  << " timed out connections." << std::endl;
-		}
+        if (timed_out > 0) {
+            std::cout << "Closed " << timed_out << " timed out connections."
+                      << std::endl;
+        }
 
         // Wait for events on the epoll instance
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
@@ -303,49 +303,50 @@ void WebServer::handle_read(Connection* conn) {
 
 void WebServer::handle_write(Connection* conn) {
     //// TODO - Check if request is valid
-    //if (!validate_request(conn)) {
-    //    // TODO - Write function to generate response based on request error
-    //    conn->response_data_ = generate_error_response(conn);
-    //} else {
-    //    // TODO - Review choose_handler function
-    //    // Route the request to the appropriate handler
-    //    if (!conn->active_handler_) {
-    //        conn->active_handler_ = choose_handler(conn);
-    //    }
-    //    // Call the handler to process the request and generate a response
-    //    conn->response_data_ = conn->active_handler_->handle(conn);
-    //}
-
-    //TEMP - Call StaticFileHandler to test
-    // conn->active_handler_ = static_file_handler_;
-    // conn->active_handler_->handle(conn);
-    // // Print the HTTP response for debugging
-    // std::cout << "\n==== HTTP RESPONSE ====\n";
-    // std::cout << "Status: " << conn->response_data_->status_code_ << " " 
-    //         << conn->response_data_->status_message_ << std::endl;
-    // std::cout << "Headers:" << std::endl;
-    // for (std::map<std::string, std::string>::const_iterator it = conn->response_data_->headers_.begin();
-    //     it != conn->response_data_->headers_.end(); ++it) {
-    //     std::cout << "  " << it->first << ": " << it->second << std::endl;
+    // if (!validate_request(conn)) {
+    //     // TODO - Write function to generate response based on request error
+    //     conn->response_data_ = generate_error_response(conn);
+    // } else {
+    //     // TODO - Review choose_handler function
+    //     // Route the request to the appropriate handler
+    //     if (!conn->active_handler_) {
+    //         conn->active_handler_ = choose_handler(conn);
+    //     }
+    //     // Call the handler to process the request and generate a response
+    //     conn->response_data_ = conn->active_handler_->handle(conn);
     // }
-    // std::cout << "Body size: " << conn->response_data_->body_.size() << " bytes" << std::endl;
-    // std::cout << "====================================" << std::endl;
 
+    // TEMP - Call StaticFileHandler to test
+    //  conn->active_handler_ = static_file_handler_;
+    //  conn->active_handler_->handle(conn);
+    //  // Print the HTTP response for debugging
+    //  std::cout << "\n==== HTTP WRITING ====\n";
+    //  std::cout << "Status: " << conn->response_data_->status_code_ << " "
+    //          << conn->response_data_->status_message_ << std::endl;
+    //  std::cout << "Headers:" << std::endl;
+    //  for (std::map<std::string, std::string>::const_iterator it =
+    //  conn->response_data_->headers_.begin();
+    //      it != conn->response_data_->headers_.end(); ++it) {
+    //      std::cout << "  " << it->first << ": " << it->second << std::endl;
+    //  }
+    //  std::cout << "Body size: " << conn->response_data_->body_.size() << "
+    //  bytes" << std::endl; std::cout << "===================================="
+    //  << std::endl;
 
     // TEMP - For now, create mock response
     build_mock_response(conn);
     // TEMP
 
     // Write the response to the client
-    codes::ResponseStatus status = response_writer_->write_response(conn);
+    codes::WriterState status = response_writer_->write_response(conn);
 
     switch (status) {
-        case codes::RESPONSE_INCOMPLETE:
+        case codes::WRITING_INCOMPLETE:
             return;
-        case codes::RESPONSE_ERROR:
+        case codes::WRITING_ERROR:
             handle_error(conn);
             return;
-        case codes::RESPONSE_COMPLETE:
+        case codes::WRITING_COMPLETE:
             break;
     }
 

@@ -9,15 +9,6 @@ struct Connection;
 // Handles file upload requests
 class FileUploadHandler : public AHandler {
    public:
-    // Upload-specific error types
-    enum UploadError {
-        UPLOAD_SUCCESS,
-        UPLOAD_BAD_REQUEST,        // General 400 errors
-        UPLOAD_UNSUPPORTED_MEDIA,  // 415 errors
-        UPLOAD_PAYLOAD_TOO_LARGE,  // 413 errors
-        UPLOAD_SERVER_ERROR        // 500 errors
-    };
-
     // Constructor takes dependencies
     FileUploadHandler();
     virtual ~FileUploadHandler();
@@ -26,7 +17,7 @@ class FileUploadHandler : public AHandler {
 
    private:
     // Error handling methods
-    void handle_upload_error(Connection* conn, UploadError error);
+    void handle_upload_error(Connection* conn, codes::UploadError error);
 
     // Helper methods
     bool parse_multipart_form_data(Connection* conn,
@@ -44,7 +35,7 @@ class FileUploadHandler : public AHandler {
                               const std::string& end_boundary,
                               const std::string& filename, bool& file_found);
     bool save_uploaded_file(HttpRequest* req, const std::string& filename,
-                            const std::vector<char>& data, UploadError& error);
+                            const std::vector<char>& data, codes::UploadError& error);
     std::string extract_boundary(const std::string& content_type);
     std::string sanitize_filename(const std::string& filename);
     std::string get_upload_directory(HttpRequest* req);

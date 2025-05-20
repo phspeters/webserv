@@ -4,28 +4,28 @@ ResponseWriter::ResponseWriter() {}
 
 ResponseWriter::~ResponseWriter() {}
 
-codes::ResponseStatus ResponseWriter::write_response(Connection* conn) {
+codes::WriterState ResponseWriter::write_response(Connection* conn) {
     // Validate connection
     if (!conn || conn->client_fd_ < 0) {
-        return codes::RESPONSE_ERROR;
+        return codes::WRITING_ERROR;
     }
 
     // If buffer is empty, prepare the response data first
     if (conn->write_buffer_.empty()) {
         // Write headers
         if (!write_headers(conn)) {
-            return codes::RESPONSE_ERROR;
+            return codes::WRITING_ERROR;
         }
 
         // Write body
         if (!write_body(conn)) {
-            return codes::RESPONSE_ERROR;
+            return codes::WRITING_ERROR;
         }
     }
 
     // Nothing to send
     if (conn->write_buffer_.empty()) {
-        return codes::RESPONSE_COMPLETE;
+        return codes::WRITING_COMPLETE;
     }
 
     // Send the response
@@ -39,7 +39,7 @@ codes::ResponseStatus ResponseWriter::write_response(Connection* conn) {
     if (bytes_written <= 0) {
         // With level-triggered epoll, if we're here, it's a real error
         // No need to check errno specifically
-        return codes::RESPONSE_ERROR;
+        return codes::WRITING_ERROR;
     }
 
     // Update the offset instead of erasing
@@ -50,11 +50,11 @@ codes::ResponseStatus ResponseWriter::write_response(Connection* conn) {
 
     // Check if we've written everything
     if (conn->write_buffer_offset_ == conn->write_buffer_.size()) {
-        return codes::RESPONSE_COMPLETE;
+        return codes::WRITING_COMPLETE;
     }
 
     // More data to send
-    return codes::RESPONSE_INCOMPLETE;
+    return codes::WRITING_INCOMPLETE;
 }
 
 bool ResponseWriter::write_headers(Connection* conn) {

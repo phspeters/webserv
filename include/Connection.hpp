@@ -49,10 +49,8 @@ struct Connection {
     //--------------------------------------
     codes::ConnectionState conn_state_;  // Current state of the connection
     codes::ParserState parser_state_;    // Current state of the parser
-
+    codes::WriterState writer_state_;    // Current state of the writer
     codes::ParseStatus parse_status_;  // Status of the last parsing attempt
-    codes::ResponseStatus
-        response_status_;  // Status of the last response attempt
 
     //--------------------------------------
     // Connection Management

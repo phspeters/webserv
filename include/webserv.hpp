@@ -1,7 +1,7 @@
 #ifndef WEBSERV_HPP
 #define WEBSERV_HPP
 
-//TODO - fix header includes
+// TODO - fix header includes
 #include <cstddef>
 #include <ctime>
 
@@ -23,6 +23,12 @@ enum ParserState {
     PARSING_COMPLETE       // Request fully parsed
 };
 
+enum WriterState {
+    WRITING_COMPLETE,    // Response fully sent
+    WRITING_INCOMPLETE,  // Partial write, needs another EPOLLOUT event
+    WRITING_ERROR        // Error occurred during writing
+};
+
 // Result of a parsing attempt
 enum ParseStatus {
     PARSE_SUCCESS,                 // Request fully parsed
@@ -42,14 +48,50 @@ enum ParseStatus {
 };
 
 enum ResponseStatus {
-    RESPONSE_COMPLETE,     // Response fully sent
-    RESPONSE_INCOMPLETE,   // Partial write, needs another EPOLLOUT event
-    RESPONSE_ERROR         // Error occurred during writing
+    // 2xx - Success
+    OK = 200,          // Request succeeded
+    CREATED = 201,     // Request succeeded and a new resource was created
+    NO_CONTENT = 204,  // Request succeeded but returns no content
+
+    // 3xx - Redirection
+    MOVED_PERMANENTLY = 301,  // Resource permanently moved to a new URL
+    FOUND = 302,              // Resource temporarily moved to a new URL
+    NOT_MODIFIED = 304,  // Resource hasn't been modified since last request
+
+    // 4xx - Client Errors
+    BAD_REQUEST = 400,   // Server cannot process the request (syntax error)
+    UNAUTHORIZED = 401,  // Authentication required
+    FORBIDDEN = 403,     // Server understood but refuses to authorize
+    NOT_FOUND = 404,     // Resource not found
+    METHOD_NOT_ALLOWED = 405,  // Request method not supported
+    REQUEST_TIMEOUT = 408,     // Server timed out waiting for request
+    CONFLICT = 409,            // Request conflict with current state of server
+    PAYLOAD_TOO_LARGE = 413,   // Request entity too large
+    URI_TOO_LONG = 414,        //  Request URI too long
+    UNSUPPORTED_MEDIA_TYPE = 415,  // Media format not supported
+
+    // 5xx - Server Errors
+    INTERNAL_SERVER_ERROR = 500,  // Generic server error
+    NOT_IMPLEMENTED = 501,        // Server does not support the functionality
+    BAD_GATEWAY = 502,  // Server acting as gateway received invalid response
+    SERVICE_UNAVAILABLE = 503,  // Server temporarily unavailable
+    GATEWAY_TIMEOUT = 504,  //  Gateway server did not receive response in time
+    HTTP_VERSION_NOT_SUPPORTED = 505  // HTTP version in request not supported
 };
+
+// Upload-specific error types
+enum UploadError {
+    UPLOAD_SUCCESS,
+    UPLOAD_BAD_REQUEST,        // General 400 errors
+    UPLOAD_UNSUPPORTED_MEDIA,  // 415 errors
+    UPLOAD_PAYLOAD_TOO_LARGE,  // 413 errors
+    UPLOAD_SERVER_ERROR        // 500 errors
+};
+
 }  // namespace codes
 
 namespace http_limits {
-const time_t TIMEOUT = 60;  // Timeout in seconds	
+const time_t TIMEOUT = 60;  // Timeout in seconds
 const size_t MAX_METHOD_LENGTH = 8;
 const size_t MAX_REQUEST_LINE_LENGTH = 8192;  // 8KB
 const size_t MAX_PATH_LENGTH = 2048;          // Path component
@@ -62,7 +104,10 @@ const size_t MAX_CONTENT_LENGTH = 10485760;  // 10MB
 const size_t MAX_CHUNK_SIZE = 1048576;       // 1MB
 }  // namespace http_limits
 
+#define CRLF "\r\n"  // Carriage return + line feed
+
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -72,7 +117,6 @@ const size_t MAX_CHUNK_SIZE = 1048576;       // 1MB
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <dirent.h>  
 
 #include <algorithm>
 #include <cstdlib>

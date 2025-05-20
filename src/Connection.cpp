@@ -11,8 +11,8 @@ Connection::Connection(int fd, const VirtualServer* default_virtual_server)
       response_data_(new HttpResponse()),
       conn_state_(codes::CONN_READING),
       parser_state_(codes::PARSING_REQUEST_LINE),
+      writer_state_(codes::WRITING_INCOMPLETE),
       parse_status_(codes::PARSE_INCOMPLETE),
-      response_status_(codes::RESPONSE_INCOMPLETE),
       cgi_pid_(-1),
       cgi_pipe_stdin_fd_(-1),
       cgi_pipe_stdout_fd_(-1),
@@ -53,7 +53,7 @@ void Connection::reset_for_keep_alive() {
     conn_state_ = codes::CONN_READING;
     parser_state_ = codes::PARSING_REQUEST_LINE;
     parse_status_ = codes::PARSE_INCOMPLETE;
-    response_status_ = codes::RESPONSE_INCOMPLETE;
+    writer_state_ = codes::WRITING_INCOMPLETE;
 
     // Close any open file descriptors
     if (static_file_fd_ >= 0) {

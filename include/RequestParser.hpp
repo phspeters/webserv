@@ -8,8 +8,6 @@ struct Connection;
 struct HttpRequest;
 struct VirtualServer;
 
-#define CRLF "\r\n"  // Carriage return + line feed
-
 // Parses HTTP requests incrementally from a Connection's read buffer.
 class RequestParser {
    public:

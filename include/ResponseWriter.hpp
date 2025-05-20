@@ -14,7 +14,7 @@ class ResponseWriter {
     ResponseWriter();
     ~ResponseWriter();
 
-    codes::ResponseStatus write_response(Connection* conn);
+    codes::WriterState write_response(Connection* conn);
 
     // Prepares the initial part of the response (status line + headers)
     // and places it into the Connection's write buffer.
