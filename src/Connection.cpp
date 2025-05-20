@@ -3,7 +3,7 @@
 Connection::Connection(int fd, const VirtualServer* default_virtual_server)
     : client_fd_(fd),
       default_virtual_server_(default_virtual_server),
-      virtual_server_(NULL),
+      virtual_server_(default_virtual_server),
       last_activity_(time(NULL)),
       chunk_remaining_bytes_(0),
       write_buffer_offset_(0),
@@ -36,6 +36,9 @@ Connection::~Connection() {
 
 // TODO implement cleanup for file_upload_handler
 void Connection::reset_for_keep_alive() {
+    // Reset virtual server
+    virtual_server_ = default_virtual_server_;
+
     // Reset write buffer and offsets
     chunk_remaining_bytes_ = 0;
     write_buffer_.clear();

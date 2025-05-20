@@ -353,7 +353,7 @@ void WebServer::handle_write(Connection* conn) {
     // TODO - Check if all error responses should close the connection
     // Check for error status codes that should close the connection
     int status_code = conn->response_data_->status_code_;
-    if (status_code >= 400) {
+    if (status_code == 400 || status_code == 413 || status_code >= 500) {
         // Close connections for client and server errors
         conn->request_data_->set_header("Connection", "close");
     }

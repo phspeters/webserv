@@ -23,7 +23,7 @@ struct Connection {
     int client_fd_;  // File descriptor for the client socket
     const VirtualServer* const
         default_virtual_server_;     // Pointer to default virtual server
-    VirtualServer* virtual_server_;  // Pointer to virtual server matching the
+    const VirtualServer* virtual_server_;  // Pointer to virtual server matching the
                                      // Host header
     time_t
         last_activity_;  // Timestamp of last read/write activity (for timeouts)
