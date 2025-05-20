@@ -560,29 +560,3 @@ bool Location::is_valid(std::string& error_msg) const {
 
     return true;
 }
-
-const Location* VirtualServer::find_matching_location(
-    const std::string& uri) const {
-    const Location* best_match = NULL;
-
-    for (std::vector<Location>::const_iterator it = locations_.begin();
-         it != locations_.end(); ++it) {
-        const Location& location = *it;
-        // Check if the request path starts with the location path
-        if (uri.find(location.path_) == 0) {
-            // Make sure we match complete segments
-            if (location.path_ == "/" ||  // Root always matches
-                uri == location.path_ ||  // Exact match
-                (uri.length() > location.path_.length() &&
-                 (uri[location.path_.length()] == '/' ||
-                  location.path_[location.path_.length() - 1] == '/'))) {
-                if (!best_match ||
-                    location.path_.length() > best_match->path_.length()) {
-                    best_match = &location;
-                }
-            }
-        }
-    }
-
-    return best_match;
-}

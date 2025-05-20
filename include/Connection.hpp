@@ -22,9 +22,9 @@ struct Connection {
     //--------------------------------------
     int client_fd_;  // File descriptor for the client socket
     const VirtualServer* const
-        default_virtual_server_;     // Pointer to default virtual server
-    const VirtualServer* virtual_server_;  // Pointer to virtual server matching the
-                                     // Host header
+        default_virtual_server_;           // Pointer to default virtual server
+    const VirtualServer* virtual_server_;  // Pointer to virtual server matching
+                                           // the Host header
     time_t
         last_activity_;  // Timestamp of last read/write activity (for timeouts)
 
@@ -50,7 +50,7 @@ struct Connection {
     codes::ConnectionState conn_state_;  // Current state of the connection
     codes::ParserState parser_state_;    // Current state of the parser
     codes::WriterState writer_state_;    // Current state of the writer
-    codes::ParseStatus parse_status_;  // Status of the last parsing attempt
+    codes::ParseStatus parse_status_;    // Status of the last parsing attempt
 
     //--------------------------------------
     // Connection Management
@@ -67,7 +67,8 @@ struct Connection {
     //--------------------------------------
     // Handler-Specific State (Example for CGI - could be a union or void*)
     //--------------------------------------
-    AHandler* active_handler_;  // Pointer to the currently active handler
+    AHandler* active_handler_;        // Pointer to the currently active handler
+    const Location* location_match_;  // Best matching location for the request
 
     // CGI State (Only relevant if active_handler is CgiHandler)
     pid_t cgi_pid_;           // Process ID of the CGI script (-1 if none)

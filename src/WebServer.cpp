@@ -294,7 +294,9 @@ void WebServer::handle_read(Connection* conn) {
     print_request(conn);
     // TEMP
 
-    // TODO - Match best location
+    // Match best location
+    conn->location_match_ = find_matching_location(conn->virtual_server_,
+                                                   conn->request_data_->path_);
 
     // Change epoll interest event to EPOLLOUT for writing
     update_epoll_events(conn->client_fd_, EPOLLOUT);
@@ -602,17 +604,41 @@ void WebServer::signal_handler(int signal) {
     }
 }
 
+const Location* WebServer::find_matching_location(
+    const VirtualServer* virtual_server, const std::string& uri) const {
+    std::vector<Location> locations_ = virtual_server->locations_;
+    const Location* best_match = NULL;
+    for (std::vector<Location>::const_iterator it = locations_.begin();
+         it != locations_.end(); ++it) {
+        const Location& location = *it;
+        // Check if the request path starts with the location path
+        if (uri.find(location.path_) == 0) {
+            // Make sure we match complete segments
+            if (location.path_ == "/" ||  // Root always matches
+                uri == location.path_ ||  // Exact match
+                (uri.length() > location.path_.length() &&
+                 (uri[location.path_.length()] == '/' ||
+                  location.path_[location.path_.length() - 1] == '/'))) {
+                if (!best_match ||
+                    location.path_.length() > best_match->path_.length()) {
+                    best_match = &location;
+                }
+            }
+        }
+    }
+
+    return best_match;
+}
+
 bool WebServer::choose_handler(Connection* conn) {
     HttpRequest* req = conn->request_data_;
 
     // Get the path from the request (already without query part)
-    const std::string& request_path = req->uri_;
+    const std::string& request_path = req->path_;
     const std::string& request_method = req->method_;
 
     // Use centralized location matching from config
-    const Location* matching_location =
-        conn->virtual_server_->find_matching_location(request_path);
-    req->location_match_ = matching_location;
+    const Location* matching_location = req->location_match_;
 
     // Check if a matching location was found
     if (!matching_location) {

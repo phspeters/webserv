@@ -80,6 +80,8 @@ class WebServer {
     void handle_write(Connection* conn);  // Handles writable client socket
     void handle_error(Connection* conn);  // Handles client socket error
 
+    const Location* find_matching_location(const VirtualServer* virtual_server,
+                                           const std::string& path) const;
     bool choose_handler(Connection* conn);
     void close_client_connection(Connection* conn);
 

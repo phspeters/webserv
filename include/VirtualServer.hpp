@@ -57,7 +57,6 @@ struct VirtualServer {
                                 std::string& value);
     static bool add_directive_value(Location& location, const std::string& key,
                                     const std::string& value);
-    const Location* find_matching_location(const std::string& uri) const;
     bool apply_defaults();
 
     // Validation methods
