@@ -168,7 +168,11 @@ void WebServer::event_loop() {
     struct epoll_event events[MAX_EPOLL_EVENTS];
 
     while (ready_) {
-        cleanup_timed_out_connections();
+        int timed_out = cleanup_timed_out_connections();
+		if (timed_out > 0) {
+			std::cout << "Closed " << timed_out
+					  << " timed out connections." << std::endl;
+		}
 
         // Wait for events on the epoll instance
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
@@ -274,9 +278,12 @@ void WebServer::handle_read(Connection* conn) {
         return;
     }
 
-    // TODO - update status inside handle_read
+    // TODO - update status inside handle_read and not inside parse
+
     // Try to parse the buffer into a full request
     codes::ParseStatus status = request_parser_->parse(conn);
+
+    // TODO - Check for Host header and match with virtual server
 
     // If request parsing is incomplete, return and wait for more data
     if (status == codes::PARSE_INCOMPLETE) {
@@ -288,7 +295,6 @@ void WebServer::handle_read(Connection* conn) {
     // TEMP
 
     // TODO - Match best location
-    // TODO - Check if request is valid
 
     // Change epoll interest event to EPOLLOUT for writing
     update_epoll_events(conn->client_fd_, EPOLLOUT);
@@ -296,15 +302,19 @@ void WebServer::handle_read(Connection* conn) {
 }
 
 void WebServer::handle_write(Connection* conn) {
-    // TODO
-    // Route the request to the appropriate handler
-    // if(!active_handler_)
-    //	conn->active_handler_ = choose_handler(conn->request_data_);
+    //// TODO - Check if request is valid
+    //if (!validate_request(conn)) {
+    //    // TODO - Write function to generate response based on request error
+    //    conn->response_data_ = generate_error_response(conn);
+    //} else {
+    //    // TODO - Review choose_handler function
+    //    // Route the request to the appropriate handler
+    //    if (!conn->active_handler_) {
+    //        conn->active_handler_ = choose_handler(conn);
+    //    }
+    //    // Call the handler to process the request and generate a response
+    //    conn->response_data_ = conn->active_handler_->handle(conn);
     //}
-
-    // TODO
-    // Call the handler to process the request and generate a response
-    // conn->active_handler_->handle(conn);
 
     // TEMP - For now, create mock response
     build_mock_response(conn);
@@ -323,6 +333,7 @@ void WebServer::handle_write(Connection* conn) {
             break;
     }
 
+    // TODO - Check if all error responses should close the connection
     // Check for error status codes that should close the connection
     int status_code = conn->response_data_->status_code_;
     if (status_code >= 400) {

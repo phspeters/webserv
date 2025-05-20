@@ -37,8 +37,8 @@ bool RequestParser::read_from_socket(Connection* conn) {
 }
 
 codes::ParseStatus RequestParser::parse(Connection* conn) {
+    // TODO - ignore body if method is not POST or PUT
     codes::ParseStatus& parse_status = conn->parse_status_;
-
     // Process as much as possible in one call
     while (!conn->read_buffer_.empty()) {
         // Process based on current state
