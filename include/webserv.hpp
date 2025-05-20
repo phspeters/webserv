@@ -72,6 +72,7 @@ const size_t MAX_CHUNK_SIZE = 1048576;       // 1MB
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <dirent.h>  
 
 #include <algorithm>
 #include <cstdlib>
