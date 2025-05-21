@@ -278,15 +278,18 @@ void WebServer::handle_read(Connection* conn) {
         return;
     }
 
-    // TODO - update status inside handle_read and not inside parse
-
     // Try to parse the buffer into a full request
-    codes::ParseStatus status = request_parser_->parse(conn);
+    conn->parse_status_ = request_parser_->parse(conn);
 
-    // TODO - Check for Host header and match with virtual server
+    // If we have completed parsing headers, we need to match the host header
+    if (conn->parse_status_ == codes::PARSE_HEADERS_COMPLETE) {
+        match_host_header(conn);
+		// Re-parse the request with the matched virtual server
+        conn->parse_status_ = request_parser_->parse(conn);
+    }
 
     // If request parsing is incomplete, return and wait for more data
-    if (status == codes::PARSE_INCOMPLETE) {
+    if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
         return;
     }
 
@@ -294,7 +297,7 @@ void WebServer::handle_read(Connection* conn) {
     print_request(conn);
     // TEMP
 
-    // Match best location
+    // Match path from uri to best location
     conn->location_match_ = find_matching_location(conn->virtual_server_,
                                                    conn->request_data_->path_);
 
@@ -352,7 +355,6 @@ void WebServer::handle_write(Connection* conn) {
             break;
     }
 
-    // TODO - Check if all error responses should close the connection
     // Check for error status codes that should close the connection
     int status_code = conn->response_data_->status_code_;
     if (status_code == 400 || status_code == 413 || status_code >= 500) {
@@ -719,4 +721,23 @@ bool WebServer::choose_handler(Connection* conn) {
         conn->active_handler_ = static_file_handler_;
         return true;
     }
+}
+
+void WebServer::match_host_header(Connection* conn) {
+    // Get Host header value
+    std::string host = conn->request_data_->get_header("Host");
+    if (host != "") {
+        // Strip port number if present
+        size_t colon_pos = host.find(':');
+        if (colon_pos != std::string::npos) {
+            host = host.substr(0, colon_pos);
+        }
+
+        // Look for matching virtual server
+        if (hostname_to_virtual_server_.find(host) !=
+            hostname_to_virtual_server_.end()) {
+            conn->virtual_server_ = hostname_to_virtual_server_[host];
+        }
+    }
+    // If no match is found, conn->virtual_server_ remains as the default
 }

@@ -31,6 +31,7 @@ enum WriterState {
 
 // Result of a parsing attempt
 enum ParseStatus {
+	PARSE_HEADERS_COMPLETE,        // Headers parsed
     PARSE_SUCCESS,                 // Request fully parsed
     PARSE_INCOMPLETE,              // Need more data
     PARSE_ERROR,                   // General parsing error

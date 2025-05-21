@@ -37,38 +37,36 @@ bool RequestParser::read_from_socket(Connection* conn) {
 }
 
 codes::ParseStatus RequestParser::parse(Connection* conn) {
-    // TODO - ignore body if method is not POST or PUT
-    codes::ParseStatus& parse_status = conn->parse_status_;
-    // Process as much as possible in one call
-    while (!conn->read_buffer_.empty()) {
+    codes::ParseStatus parse_status = codes::PARSE_INCOMPLETE;
+    if (!conn->read_buffer_.empty()) {
         // Process based on current state
         // The state transition is handled inside each parsing function
         switch (conn->parser_state_) {
             case codes::PARSING_REQUEST_LINE:
                 parse_status = parse_request_line(conn);
                 break;
+
             case codes::PARSING_HEADERS:
+                // If headers are complete, return a special status for host
+                // resolution
                 parse_status = parse_headers(conn);
                 break;
+
             case codes::PARSING_BODY:
                 parse_status = parse_body(conn);
                 break;
+
             case codes::PARSING_CHUNKED_BODY:
                 parse_status = parse_chunked_body(conn);
                 break;
+
             case codes::PARSING_COMPLETE:
                 parse_status = codes::PARSE_SUCCESS;
                 break;
         }
-
-        if (parse_status != codes::PARSE_INCOMPLETE) {
-            // Either parsing is complete or an error occurred - return to
-            // caller
-            return parse_status;
-        }
     }
 
-    return codes::PARSE_INCOMPLETE;  // More data needed
+    return parse_status;
 }
 
 codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
@@ -364,6 +362,7 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
 
     // Headers are complete, determine next parser state
     if (headers_complete) {
+		// TODO - validate required headers (Host / Content-Length or Transfer-Encoding: chunked)
         return determine_request_body_handling(conn);
     }
 
@@ -411,7 +410,7 @@ codes::ParseStatus RequestParser::process_single_header(
 
     // Store the header
     request->headers_[key] = value;
-    return codes::PARSE_SUCCESS;
+    return codes::PARSE_HEADERS_COMPLETE;
 }
 
 // Helper function to handle end-of-headers processing
