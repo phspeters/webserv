@@ -1,10 +1,67 @@
 #include "webserv.hpp"
 
+// StaticFileHandler Flow 
+
+// 1. Location Redirect Check
+// Checks if the location has a configured redirect
+// Returns 301 Moved Permanently if a redirect is configured
+
+// 2. Method Validation
+// Verifies the request uses the GET method
+// Returns 405 Method Not Allowed for non-GET requests
+
+// 3. Path Resolution
+// Converts the URI to an absolute filesystem path
+// Combines location root with the relative path portion
+
+// 4. Directory Redirect Check
+// Checks if the path is a directory but URI lacks trailing slash
+// Returns 301 Moved Permanently when trailing slash is needed
+
+// 5. Directory Index Processing
+// For directories with trailing slashes, looks for index files
+// Updates path to include index file if one exists
+// Sets up autoindex flag if needed
+
+// 6. Directory Listing Generation
+// Generates HTML directory listing if autoindex is enabled
+// Returns 403 Forbidden if autoindex is disabled
+
+// 7. File Existence Check
+// Attempts to open the file
+// Returns 404 Not Found if file doesn't exist
+
+// 8. File Permission Check
+// Checks if file is readable
+// Returns 403 Forbidden if access is denied
+
+// 9. File Type Validation
+// Verifies the file is a regular file (not a directory, device, etc.)
+// Returns appropriate error if file type isn't supported
+
+// 10. Content Type Determination
+// Sets the MIME type based on file extension
+// Defaults to application/octet-stream if type is unknown
+
+// 11. File Reading
+// Reads the file content into memory
+// Handles large files appropriately
+
+// 12. Response Generation
+// Sets status code to 200 OK for successful requests
+// Adds appropriate headers (Content-Type, Content-Length, etc.)
+// Populates response body with file content
+
+// 13. Error Handling
+// Returns 500 Internal Server Error for system-level errors
+// Ensures proper cleanup even during error conditions
+
 StaticFileHandler::StaticFileHandler() {}
 
 StaticFileHandler::~StaticFileHandler() {}
 
 void StaticFileHandler::handle(Connection* conn) {
+    
     //--CHECK Check if the request has errors to return an error response
 
     // Fluxogram 301 - when location has redirect
@@ -14,7 +71,7 @@ void StaticFileHandler::handle(Connection* conn) {
 
     // Fluxogram 405 - call error handler
     // Check if the request method is allowed (only supporting GET) // Fluxogram
-    // OK
+    // --CHECK I don't think it is necessary because of route
     if (conn->request_data_->method_ != "GET") {
         conn->response_data_->status_code_ = 405;
         conn->response_data_->status_message_ = "Method Not Allowed";

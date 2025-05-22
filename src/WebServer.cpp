@@ -321,7 +321,7 @@ void WebServer::handle_write(Connection* conn) {
     //     conn->response_data_ = conn->active_handler_->handle(conn);
     // }
 
-    // TEMP - Call StaticFileHandler to test
+    // // TEMP - Call StaticFileHandler to test
     //  conn->active_handler_ = static_file_handler_;
     //  conn->active_handler_->handle(conn);
     //  // Print the HTTP response for debugging
@@ -334,9 +334,8 @@ void WebServer::handle_write(Connection* conn) {
     //      it != conn->response_data_->headers_.end(); ++it) {
     //      std::cout << "  " << it->first << ": " << it->second << std::endl;
     //  }
-    //  std::cout << "Body size: " << conn->response_data_->body_.size() << "
-    //  bytes" << std::endl; std::cout << "===================================="
-    //  << std::endl;
+    //  std::cout << "Body size: " << conn->response_data_->body_.size() << "bytes" << std::endl; 
+    //  std::cout << "====================================" << std::endl;
 
     // TEMP - For now, create mock response
     build_mock_response(conn);
