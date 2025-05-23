@@ -48,7 +48,6 @@ class CgiHandler : public AHandler {
     CgiHandler(const CgiHandler&);
     CgiHandler& operator=(const CgiHandler&);
 
-    std::string parse_absolute_path(HttpRequest* req);
     bool extract_script_info(HttpRequest* req);
 
 };  // class CgiHandler

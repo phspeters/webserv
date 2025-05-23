@@ -72,8 +72,9 @@ bool WebServer::init() {
         return false;
     }
 
-    std::cout << "WebServer initialized successfully" << std::endl;
+    log(LOG_INFO, "WebServer initialized successfully");
 
+	log(LOG_ERROR, "Testing log function, server_name: %s; host: %s; port: %i", virtual_servers_[0].server_names_[0].c_str(), virtual_servers_[0].host_.c_str(), virtual_servers_[0].port_);
     return true;
 }
 
@@ -325,7 +326,7 @@ void WebServer::handle_write(Connection* conn) {
     //  conn->active_handler_ = static_file_handler_;
     //  conn->active_handler_->handle(conn);
     //  // Print the HTTP response for debugging
-    //  std::cout << "\n==== HTTP WRITING ====\n";
+    //  std::cout << "\n==== HTTP RESPONSE ====\n";
     //  std::cout << "Status: " << conn->response_data_->status_code_ << " "
     //          << conn->response_data_->status_message_ << std::endl;
     //  std::cout << "Headers:" << std::endl;

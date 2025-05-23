@@ -186,3 +186,39 @@ void build_mock_response(Connection* conn) {
     mock_response->headers_["Cookie"] = "sessionId=abc123";
     mock_response->headers_["Host"] = "localhost:8080";
 }
+
+std::string get_current_gmt_time() {
+    char buffer[100];
+    time_t now = time(NULL);
+    struct tm* tm_info = gmtime(&now);
+
+    strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S: ", tm_info);
+    return std::string(buffer);
+}
+
+int log(log_level level, const char* msg, ...) {
+    if (level < ACTIVE_LOG_LEVEL) {
+		return 0;
+	}
+
+	char output[8192];
+    va_list args;
+    int n;
+
+    va_start(args, msg);
+    n = vsnprintf(output, 8192, msg, args);
+
+    if (level == LOG_DEBUG)
+        std::cout << WHITE << "[DEBUG]\t";
+    else if (level == LOG_INFO)
+        std::cout << CYAN << "[INFO]\t";
+	else if (level == LOG_WARNING)
+		std::cout << MAGENTA << "[WARNING]\t";
+    else if (level == LOG_ERROR)
+        std::cout << RED << "[ERROR]\t";
+
+    std::cout << get_current_gmt_time() << output << RESET << std::endl;
+    va_end(args);
+
+	return n;
+}

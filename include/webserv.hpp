@@ -67,6 +67,7 @@ enum ResponseStatus {
     METHOD_NOT_ALLOWED = 405,  // Request method not supported
     REQUEST_TIMEOUT = 408,     // Server timed out waiting for request
     CONFLICT = 409,            // Request conflict with current state of server
+	LENGTH_REQUIRED = 411,     // Content-Length required but not provided
     PAYLOAD_TOO_LARGE = 413,   // Request entity too large
     URI_TOO_LONG = 414,        //  Request URI too long
     UNSUPPORTED_MEDIA_TYPE = 415,  // Media format not supported
@@ -120,6 +121,7 @@ const size_t MAX_CHUNK_SIZE = 1048576;       // 1MB
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstdarg>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
