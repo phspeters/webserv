@@ -115,20 +115,27 @@ void CgiHandler::handle(Connection* conn) {
             conn->response_data_->status_message_ = "Length Required";
             return;
         }
-
-        // --CHECK Max Length
-        // Check if Content-Length exceeds max allowed size (e.g., 10MB)
-        const size_t MAX_CONTENT_LENGTH = 10 * 1024 * 1024; // 10MB
+        // Check if Content-Length exceeds max allowed size from server config
+        size_t max_content_length = 0;      
+        // Get the virtual server's client_max_body_size_ setting
+        if (conn->virtual_server_) {
+            max_content_length = conn->virtual_server_->client_max_body_size_;
+        } else if (conn->default_virtual_server_) {
+            // Fall back to default virtual server if specific one isn't matched
+            max_content_length = conn->default_virtual_server_->client_max_body_size_;
+        } else {
+            // --CHECK - Should throw an error?
+            max_content_length = 1 * 1024 * 1024; // Default to 1MB if no server config is available at all
+        }
         size_t content_length = 0;
-        
         try {
             content_length = std::atoi(conn->request_data_->headers_["Content-Length"].c_str());
         } catch (...) {
             content_length = 0;
         }
-
-        if (content_length > MAX_CONTENT_LENGTH) {
-            std::cout << "Error: Request body too large: " << content_length << " bytes\n";
+        if (content_length > max_content_length) {
+            std::cout << "Error: Request body too large: " << content_length << " bytes (max: " 
+                    << max_content_length << " bytes)\n";
             std::cout << "=====================\n" << std::endl;
             conn->response_data_->status_code_ = 413;
             conn->response_data_->status_message_ = "Request Entity Too Large";
