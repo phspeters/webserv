@@ -31,18 +31,19 @@ enum WriterState {
 
 // Result of a parsing attempt
 enum ParseStatus {
-	PARSE_HEADERS_COMPLETE,        // Headers parsed
-    PARSE_SUCCESS,                 // Request fully parsed
-    PARSE_INCOMPLETE,              // Need more data
-    PARSE_ERROR,                   // General parsing error
-    PARSE_INVALID_REQUEST_LINE,    // Invalid request line
-    PARSE_METHOD_NOT_ALLOWED,      // Unsupported HTTP method
-    PARSE_INVALID_PATH,            // Invalid path in URI
-    PARSE_INVALID_QUERY_STRING,    // Invalid query string in URI
-    PARSE_VERSION_NOT_SUPPORTED,   // Unsupported HTTP version
-    PARSE_REQUEST_TOO_LONG,        // Request exceeds maximum length
-    PARSE_HEADER_TOO_LONG,         // Header exceeds maximum length
-    PARSE_TOO_MANY_HEADERS,        // Too many headers
+    PARSE_HEADERS_COMPLETE,       // Headers parsed
+    PARSE_SUCCESS,                // Request fully parsed
+    PARSE_INCOMPLETE,             // Need more data
+    PARSE_ERROR,                  // General parsing error
+    PARSE_INVALID_REQUEST_LINE,   // Invalid request line
+    PARSE_METHOD_NOT_ALLOWED,     // Unsupported HTTP method
+    PARSE_INVALID_PATH,           // Invalid path in URI
+    PARSE_INVALID_QUERY_STRING,   // Invalid query string in URI
+    PARSE_VERSION_NOT_SUPPORTED,  // Unsupported HTTP version
+    PARSE_REQUEST_TOO_LONG,       // Request exceeds maximum length
+    PARSE_MISSING_HOST_HEADER,    // Host header is missing on HTTP/1.1 requests
+    PARSE_HEADER_TOO_LONG,        // Header exceeds maximum length
+    PARSE_TOO_MANY_HEADERS,       // Too many headers
     PARSE_INVALID_CONTENT_LENGTH,  // Content-Length header is invalid
     PARSE_CONTENT_TOO_LARGE,       // Content length exceeds maximum
     PARSE_INVALID_CHUNK_SIZE       // Invalid chunk size in chunked encoding
@@ -67,7 +68,7 @@ enum ResponseStatus {
     METHOD_NOT_ALLOWED = 405,  // Request method not supported
     REQUEST_TIMEOUT = 408,     // Server timed out waiting for request
     CONFLICT = 409,            // Request conflict with current state of server
-	LENGTH_REQUIRED = 411,     // Content-Length required but not provided
+    LENGTH_REQUIRED = 411,     // Content-Length required but not provided
     PAYLOAD_TOO_LARGE = 413,   // Request entity too large
     URI_TOO_LONG = 414,        //  Request URI too long
     UNSUPPORTED_MEDIA_TYPE = 415,  // Media format not supported

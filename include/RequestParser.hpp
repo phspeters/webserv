@@ -36,7 +36,9 @@ class RequestParser {
     codes::ParseStatus parse_request_line(Connection* conn);
     bool split_request_line(HttpRequest* request, std::string& request_line);
     bool split_uri_components(HttpRequest* request);
-    std::string decode_uri(const std::string& uri);
+    std::string decode_uri_path(const std::string& uri);
+    std::string decode_uri_query(const std::string& uri);
+    inline int hex_to_int(char c);
     codes::ParseStatus validate_request_line(const HttpRequest* request);
     bool validate_method(const std::string& method);
     bool validate_path(const std::string& path);
@@ -47,6 +49,7 @@ class RequestParser {
     codes::ParseStatus parse_headers(Connection* conn);
     codes::ParseStatus process_single_header(const std::string& header_line,
                                              HttpRequest* request);
+    codes::ParseStatus validate_headers(Connection* conn);
     codes::ParseStatus determine_request_body_handling(Connection* conn);
 
     // Body parsing methods

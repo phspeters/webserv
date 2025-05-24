@@ -134,17 +134,17 @@ bool RequestParser::split_uri_components(HttpRequest* request) {
     // Check for query string ('?' delimiter)
     size_t query_pos = uri.find('?');
     if (query_pos != std::string::npos) {
-        request->path_ = decode_uri(uri.substr(0, query_pos));
+        request->path_ = decode_uri_path(uri.substr(0, query_pos));
         if (request->path_.empty()) {
             return false;  // Invalid path
         }
         request->query_string_ =
-            decode_uri(request->uri_.substr(query_pos + 1));
+            decode_uri_query(request->uri_.substr(query_pos + 1));
         if (request->query_string_.empty()) {
             return false;  // Invalid query string
         }
     } else {
-        request->path_ = decode_uri(request->uri_);
+        request->path_ = decode_uri_path(request->uri_);
         if (request->path_.empty()) {
             return false;  // Invalid path
         }
@@ -154,37 +154,93 @@ bool RequestParser::split_uri_components(HttpRequest* request) {
     return true;
 }
 
-std::string RequestParser::decode_uri(const std::string& uri) {
+std::string RequestParser::decode_uri_path(const std::string& uri) {
     std::string decoded_uri;
+    decoded_uri.reserve(uri.length());  // Performance optimization
 
     for (size_t i = 0; i < uri.length(); i++) {
         if (uri[i] == '%') {
-            // Check for valid percent-encoding
-            if (i + 2 >= uri.length() || !isxdigit(uri[i + 1]) ||
-                !isxdigit(uri[i + 2])) {
+            // Enhanced validation
+            if (i + 2 >= uri.length()) {
+                return "";  // Invalid encoding
+            }
+
+            char hex1 = uri[i + 1];
+            char hex2 = uri[i + 2];
+
+            if (!isxdigit(hex1) || !isxdigit(hex2)) {
+                return "";  // Invalid hex digits
+            }
+
+            // Convert and validate
+            int value = (hex_to_int(hex1) << 4) | hex_to_int(hex2);
+
+            // Reject null bytes and control characters
+            if (value == 0 || (value > 0 && value < 32) || value == 127) {
                 return "";
             }
 
-            // Convert hex value
-            std::string hex = uri.substr(i + 1, 2);
-            int value;
-            std::istringstream(hex) >> std::hex >> value;
-
-            // Check for control characters (which are not allowed)
-            if (value < 32 || value == 127) {
-                return "";
+            // Security: Reject double-encoded attempts
+            if (value == '%') {
+                return "";  // Potential double-encoding attack
             }
 
             decoded_uri += static_cast<char>(value);
-            i += 2;  // Skip the two hex digits
+            i += 2;
+        } else {
+            // Validate regular characters
+            unsigned char c = static_cast<unsigned char>(uri[i]);
+            if (c < 32 || c == 127) {
+                return "";  // Control characters not allowed
+            }
+            decoded_uri += uri[i];
+        }
+    }
+
+    return decoded_uri;
+}
+
+std::string RequestParser::decode_uri_query(const std::string& uri) {
+    std::string decoded_uri;
+    decoded_uri.reserve(uri.length());  // Performance optimization
+
+    for (size_t i = 0; i < uri.length(); i++) {
+        if (uri[i] == '%') {
+            // Enhanced validation
+            if (i + 2 >= uri.length()) {
+                return "";  // Invalid encoding
+            }
+
+            char hex1 = uri[i + 1];
+            char hex2 = uri[i + 2];
+
+            if (!isxdigit(hex1) || !isxdigit(hex2)) {
+                return "";  // Invalid hex digits
+            }
+
+            // Convert and validate
+            int value = (hex_to_int(hex1) << 4) | hex_to_int(hex2);
+
+            // Reject null bytes and control characters
+            if (value == 0 || (value > 0 && value < 32) || value == 127) {
+                return "";
+            }
+
+            // Security: Reject double-encoded attempts
+            if (value == '%') {
+                return "";  // Potential double-encoding attack
+            }
+
+            decoded_uri += static_cast<char>(value);
+            i += 2;
         } else if (uri[i] == '+') {
-            // In query strings, '+' becomes space
+            // Only convert + to space in query strings, not paths
             decoded_uri += ' ';
         } else {
-            // Direct character (also check for control characters)
-            if (static_cast<unsigned char>(uri[i]) < 32 ||
-                static_cast<unsigned char>(uri[i]) == 127) {
-                return "";
+            // Validate regular characters
+            unsigned char c = static_cast<unsigned char>(uri[i]);
+            if (c < 32 || c == 127) {
+                return "";  // Control characters not allowed
             }
             decoded_uri += uri[i];
         }
@@ -214,17 +270,24 @@ codes::ParseStatus RequestParser::validate_request_line(
     return codes::PARSE_SUCCESS;
 }
 
+int RequestParser::hex_to_int(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;  // Should never reach here due to isxdigit check
+}
+
 bool RequestParser::validate_method(const std::string& method) {
-    static const std::string METHODS[] = {
+    static const std::string methods[] = {
         "GET",
         "POST",
         "DELETE",
     };
-    static const std::vector<std::string> VALID_METHODS(
-        METHODS, METHODS + sizeof(METHODS) / sizeof(METHODS[0]));
+    static const std::vector<std::string> valid_methods(
+        methods, methods + sizeof(methods) / sizeof(methods[0]));
 
-    return std::find(VALID_METHODS.begin(), VALID_METHODS.end(), method) !=
-           VALID_METHODS.end();
+    return std::find(valid_methods.begin(), valid_methods.end(), method) !=
+           valid_methods.end();
 }
 
 bool RequestParser::validate_path(const std::string& path) {
@@ -362,7 +425,10 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
 
     // Headers are complete, determine next parser state
     if (headers_complete) {
-		// TODO - validate required headers (Host / Content-Length or Transfer-Encoding: chunked)
+        codes::ParseStatus parse_status = validate_headers(conn);
+        if (parse_status != codes::PARSE_SUCCESS) {
+            return parse_status;
+        }
         return determine_request_body_handling(conn);
     }
 
@@ -410,7 +476,7 @@ codes::ParseStatus RequestParser::process_single_header(
 
     // Store the header
     request->headers_[key] = value;
-    return codes::PARSE_HEADERS_COMPLETE;
+    return codes::PARSE_SUCCESS;
 }
 
 // Helper function to handle end-of-headers processing
@@ -425,7 +491,7 @@ codes::ParseStatus RequestParser::determine_request_body_handling(
         if (!transfer_encoding.empty() &&
             transfer_encoding.find("chunked") != std::string::npos) {
             conn->parser_state_ = codes::PARSING_CHUNKED_BODY;
-            return codes::PARSE_INCOMPLETE;
+            return codes::PARSE_HEADERS_COMPLETE;
         }
 
         // Check for Content-Length header
@@ -446,13 +512,42 @@ codes::ParseStatus RequestParser::determine_request_body_handling(
 
             if (body_size > 0) {
                 conn->parser_state_ = codes::PARSING_BODY;
-                return codes::PARSE_INCOMPLETE;
+                return codes::PARSE_HEADERS_COMPLETE;
             }
         }
     }
 
     // No body needed or zero-length body
     conn->parser_state_ = codes::PARSING_COMPLETE;
+    return codes::PARSE_HEADERS_COMPLETE;
+}
+
+codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
+    // Host header required for HTTP/1.1
+    HttpRequest* request = conn->request_data_;
+    if (request->version_ == "HTTP/1.1" &&
+        request->get_header("host").empty()) {
+        // Translates to response status 400
+        log(LOG_ERROR,
+            "Missing Host header in HTTP/1.1 request for connection: %i",
+            conn->client_fd_);
+        return codes::PARSE_MISSING_HOST_HEADER;
+    }
+
+    if (request->method_ == "POST" || request->method_ == "PUT") {
+        bool has_content_length =
+            !request->get_header("content-length").empty();
+        bool has_transfer_encoding =
+            !request->get_header("transfer-encoding").empty();
+
+        if (!has_content_length && !has_transfer_encoding) {
+            // Translates to response status 411
+            log(LOG_ERROR,
+                "POST/PUT without Content-Length or Transfer-Encoding");
+            return codes::PARSE_INVALID_CONTENT_LENGTH;
+        }
+    }
+
     return codes::PARSE_SUCCESS;
 }
 
@@ -661,13 +756,21 @@ void RequestParser::handle_parse_error(Connection* conn,
         case codes::PARSE_INVALID_PATH:
         case codes::PARSE_INVALID_QUERY_STRING:
         case codes::PARSE_INVALID_CHUNK_SIZE:
-        case codes::PARSE_INVALID_CONTENT_LENGTH:
+        case codes::PARSE_MISSING_HOST_HEADER:
         case codes::PARSE_ERROR:
             http_status = 400;  // Bad Request
             break;
 
         case codes::PARSE_METHOD_NOT_ALLOWED:
             http_status = 405;  // Method Not Allowed
+            break;
+
+        case codes::PARSE_INVALID_CONTENT_LENGTH:
+            http_status = 411;  // Length Required
+            break;
+
+        case codes::PARSE_CONTENT_TOO_LARGE:
+            http_status = 413;  // Payload Too Large
             break;
 
         case codes::PARSE_REQUEST_TOO_LONG:
@@ -678,10 +781,6 @@ void RequestParser::handle_parse_error(Connection* conn,
 
         case codes::PARSE_VERSION_NOT_SUPPORTED:
             http_status = 505;  // HTTP Version Not Supported
-            break;
-
-        case codes::PARSE_CONTENT_TOO_LARGE:
-            http_status = 413;  // Payload Too Large
             break;
 
         default:
