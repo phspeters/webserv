@@ -48,13 +48,13 @@ bool WebServer::init() {
         // cgi_handler_ = new CgiHandler();
         file_upload_handler_ = new FileUploadHandler();
     } catch (const std::bad_alloc& e) {
-        std::cerr << "Memory allocation failed: " << e.what() << std::endl;
+        log(LOG_ERROR, "Memory allocation failed: %s", e.what());
         return false;
     }
 
     // Set up signal handlers
     if (!setup_signal_handlers()) {
-        std::cerr << "Failed to set up signal handlers" << std::endl;
+        log(LOG_ERROR, "Failed to set up signal handlers");
         return false;
     }
 
@@ -62,7 +62,7 @@ bool WebServer::init() {
     epoll_fd_ = epoll_create1(0);
     if (epoll_fd_ < 0) {
         // Handle error
-        std::cerr << "Failed to create epoll instance" << std::endl;
+        log(LOG_ERROR, "Failed to create epoll instance");
         return false;
     }
 
@@ -74,7 +74,6 @@ bool WebServer::init() {
 
     log(LOG_INFO, "WebServer initialized successfully");
 
-	log(LOG_ERROR, "Testing log function, server_name: %s; host: %s; port: %i", virtual_servers_[0].server_names_[0].c_str(), virtual_servers_[0].host_.c_str(), virtual_servers_[0].port_);
     return true;
 }
 
@@ -84,16 +83,16 @@ bool WebServer::parse_config_file(const std::string& filename) {
     // Check file extension
     std::string::size_type pos = filename.find_last_of(".");
     if (pos == std::string::npos || filename.substr(pos) != ".conf") {
-        std::cerr << "Error: Invalid configuration file extension: " << filename
-                  << std::endl;
+        log(LOG_ERROR, "Error: Invalid configuration file extension: %s",
+            filename.c_str());
         return false;  // Invalid file extension
     }
 
     // Open the configuration file
     std::ifstream file(filename.c_str());
     if (!file.is_open()) {
-        std::cerr << "Error: Could not open configuration file: " << filename
-                  << std::endl;
+        log(LOG_ERROR, "Error: Could not open configuration file: %s",
+            filename.c_str());
         return false;  // File open error
     }
 
@@ -115,8 +114,9 @@ bool WebServer::parse_config_file(const std::string& filename) {
             if (VirtualServer::parse_server_block(file, virtual_server)) {
                 std::string error_msg;
                 if (!virtual_server.is_valid(error_msg)) {
-                    std::cerr << "Error: Invalid virtual server configuration: "
-                              << error_msg << std::endl;
+                    log(LOG_ERROR,
+                        "Error: Invalid virtual server configuration: %s",
+                        error_msg.c_str());
                     return false;  // Validation error
                 }
                 // Add to main vector
@@ -144,7 +144,7 @@ bool WebServer::parse_config_file(const std::string& filename) {
             // TEMP
 
         } else {
-            std::cerr << "Error parsing server block" << std::endl;
+            log(LOG_ERROR, "Error parsing server block");
             return false;  // Parsing error
         }
     }
@@ -159,7 +159,7 @@ void WebServer::run() {
     ready_ = true;
 
     // Start the event loop
-    std::cout << "WebServer is ready and waiting for connections" << std::endl;
+    log(LOG_INFO, "WebServer is ready and waiting for connections");
     event_loop();
 }
 
@@ -171,8 +171,7 @@ void WebServer::event_loop() {
     while (ready_) {
         int timed_out = cleanup_timed_out_connections();
         if (timed_out > 0) {
-            std::cout << "Closed " << timed_out << " timed out connections."
-                      << std::endl;
+            log(LOG_INFO, "Closed '%i' timed out connections.", timed_out);
         }
 
         // Wait for events on the epoll instance
@@ -183,7 +182,7 @@ void WebServer::event_loop() {
             if (errno == EINTR) {
                 continue;  // Interrupted by signal, continue loop
             }
-            std::cerr << "epoll_wait error: " << strerror(errno) << std::endl;
+            log(LOG_ERROR, "epoll_wait error: %s", strerror(errno));
             break;
         }
 
@@ -204,17 +203,17 @@ void WebServer::event_loop() {
             if (is_listener) {
                 if (event_flags & (EPOLLERR | EPOLLHUP)) {
                     // Handle errors on listener sockets
-                    std::cerr << "Error on listener socket " << fd << ": "
-                              << strerror(errno) << std::endl;
+                    log(LOG_ERROR, "Error on listener socket %i: %s", fd,
+                        strerror(errno));
                     remove_listener_socket(fd);
                     continue;
                 }
                 // Accept new connection on listener socket
-                std::cout << "New connection on socket: " << fd << std::endl;
+                log(LOG_INFO, "New connection on socket '%i'", fd);
                 accept_new_connection(fd);
             } else {
                 // Handle client socket event
-                std::cout << "Client event on socket " << fd << std::endl;
+                log(LOG_INFO, "Client event on socket '%i'", fd);
                 handle_client_event(fd, event_flags);
             }
         }
@@ -228,16 +227,16 @@ void WebServer::accept_new_connection(int listener_fd) {
         listener_to_default_server_.end()) {
         default_server = listener_to_default_server_[listener_fd];
     } else {
-        std::cerr << "No default server found for listener fd " << listener_fd
-                  << std::endl;
+        log(LOG_ERROR, "No default server found for listener socket '%i'",
+            listener_fd);
         return;
     }
 
     // Accept a new connection and set it to non-blocking mode
     int client_fd = accept4(listener_fd, NULL, NULL, SOCK_NONBLOCK);
     if (client_fd < 0) {
-        std::cerr << "Failed to accept new connection on fd " << listener_fd
-                  << std::endl;
+        log(LOG_ERROR, "Failed to accept new connection listener socket '%i'",
+            listener_fd);
         return;
     }
 
@@ -259,7 +258,8 @@ void WebServer::handle_client_event(int client_fd, uint32_t events) {
     Connection* conn = conn_manager_->get_connection(client_fd);
     if (!conn) {
         // Handle error
-        std::cerr << "Connection not found for fd: " << client_fd << std::endl;
+        log(LOG_ERROR, "Connection not found for client socket '%i'",
+            client_fd);
         return;
     }
 
@@ -285,7 +285,7 @@ void WebServer::handle_read(Connection* conn) {
     // If we have completed parsing headers, we need to match the host header
     if (conn->parse_status_ == codes::PARSE_HEADERS_COMPLETE) {
         match_host_header(conn);
-		// Re-parse the request with the matched virtual server
+        // Re-parse the request with the matched virtual server
         conn->parse_status_ = request_parser_->parse(conn);
     }
 
@@ -335,8 +335,9 @@ void WebServer::handle_write(Connection* conn) {
     //      it != conn->response_data_->headers_.end(); ++it) {
     //      std::cout << "  " << it->first << ": " << it->second << std::endl;
     //  }
-    //  std::cout << "Body size: " << conn->response_data_->body_.size() << "bytes" << std::endl; 
-    //  std::cout << "====================================" << std::endl;
+    //  std::cout << "Body size: " << conn->response_data_->body_.size() <<
+    //  "bytes" << std::endl; std::cout <<
+    //  "====================================" << std::endl;
 
     // TEMP - For now, create mock response
     build_mock_response(conn);
@@ -377,15 +378,15 @@ void WebServer::handle_error(Connection* conn) {
 
 void WebServer::close_client_connection(Connection* conn) {
     if (!conn) {
-        std::cerr << "Connection is invalid, cannot close." << std::endl;
+        log(LOG_ERROR, "Connection is invalid, cannot close.");
         return;
     }
 
     // First unregister from epoll (must happen before socket closure)
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, conn->client_fd_, NULL) < 0) {
         // Handle error
-        std::cerr << "Failed to unregister fd " << conn->client_fd_
-                  << " from epoll" << std::endl;
+        log(LOG_ERROR, "Failed to unregister socket %i from epoll",
+            conn->client_fd_);
         return;
     }
 
@@ -407,8 +408,6 @@ bool WebServer::setup_listener_sockets() {
             if (!create_listener_socket("0.0.0.0", port, hosts)) {
                 return false;
             }
-            std::cout << "Created wildcard listener socket for port: " << port
-                      << std::endl;
         } else {
             // Create one socket per specific host
             for (std::map<std::string, std::vector<VirtualServer*> >::iterator
@@ -417,9 +416,6 @@ bool WebServer::setup_listener_sockets() {
                 if (!create_listener_socket(host_it->first, port, hosts)) {
                     return false;
                 }
-                std::cout << "Created listener socket for host: "
-                          << host_it->first << " on port: " << port
-                          << std::endl;
             }
         }
     }
@@ -430,12 +426,12 @@ bool WebServer::setup_listener_sockets() {
 bool WebServer::create_listener_socket(
     const std::string& host, int port,
     std::map<std::string, std::vector<VirtualServer*> >& hosts) {
-    std::cout << "Creating listener for " << host << ":" << port << std::endl;
+    log(LOG_DEBUG, "Creating listener socket for host: %s on port: %i",
+        host.c_str(), port);
 
     int listener_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (listener_fd < 0) {
-        std::cerr << "Failed to create listener socket on port: " << port
-                  << std::endl;
+        log(LOG_ERROR, "Failed to create listener socket on port: %i", port);
         return false;
     }
 
@@ -443,8 +439,8 @@ bool WebServer::create_listener_socket(
     int opt = 1;
     if (setsockopt(listener_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
         0) {
-        std::cerr << "Failed to set socket options for " << host << ":" << port
-                  << std::endl;
+        log(LOG_ERROR, "Failed to set socket options for %s:%i", host.c_str(),
+            port);
         close(listener_fd);
         return false;
     }
@@ -460,28 +456,28 @@ bool WebServer::create_listener_socket(
     } else {
         addr.sin_addr.s_addr = inet_addr(host.c_str());
         if (addr.sin_addr.s_addr == INADDR_NONE) {
-            std::cerr << "Invalid IP address: " << host << std::endl;
+            log(LOG_ERROR, "Invalid IP address: %s", host.c_str());
             close(listener_fd);
             return false;
         }
     }
 
     if (bind(listener_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        std::cerr << "Failed to bind to " << host << ":" << port << std::endl;
+        log(LOG_ERROR, "Failed to bind to %s:%i", host.c_str(), port);
         close(listener_fd);
         return false;
     }
 
     if (listen(listener_fd, SOMAXCONN) < 0) {
-        std::cerr << "Failed to listen on " << host << ":" << port << std::endl;
+        log(LOG_ERROR, "Failed to listen on %s:%i", host.c_str(), port);
         close(listener_fd);
         return false;
     }
 
     // Register with epoll
     if (!register_epoll_events(listener_fd)) {
-        std::cerr << "Failed to register " << host << ":" << port
-                  << " with epoll" << std::endl;
+        log(LOG_ERROR, "Failed to register %s:%i with epoll", host.c_str(),
+            port);
         close(listener_fd);
         return false;
     }
@@ -493,7 +489,7 @@ bool WebServer::create_listener_socket(
             hosts[host][0];  // First server is default
     }
 
-    std::cout << "Listening on " << host << ":" << port << std::endl;
+    log(LOG_INFO, "Created socket for %s:%i", host.c_str(), port);
     return true;
 }
 
@@ -504,8 +500,7 @@ int WebServer::cleanup_timed_out_connections() {
 void WebServer::remove_listener_socket(int fd) {
     // First, unregister from epoll
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, NULL) < 0) {
-        std::cerr << "Failed to remove listener " << fd
-                  << " from epoll: " << strerror(errno) << std::endl;
+        log(LOG_ERROR, "Failed to remove listener '%i' from epoll: %s", fd, strerror(errno));
         // Continue anyway to clean up our internal structures
     }
 
@@ -524,15 +519,14 @@ void WebServer::remove_listener_socket(int fd) {
     // Close the socket
     close(fd);
 
-    std::cout << "Removed faulty listener socket " << fd << std::endl;
+    log(LOG_DEBUG, "Removed faulty listener socket '%i'", fd);
 }
 
 bool WebServer::set_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
         // Handle error
-        std::cerr << "Failed to get flags for socket (fd: " << fd << ")"
-                  << std::endl;
+        log(LOG_ERROR, "Failed to get flags for socket '%i'", fd);
         return false;
     }
 
@@ -540,8 +534,7 @@ bool WebServer::set_non_blocking(int fd) {
 
     if (fcntl(fd, F_SETFL, flags) == -1) {
         // Handle error
-        std::cerr << "Failed to set non-blocking mode for socket (fd: " << fd
-                  << ")" << std::endl;
+        log(LOG_ERROR, "Failed to set non-blocking mode for socket '%i'", fd);
         return false;
     }
 
@@ -556,7 +549,7 @@ bool WebServer::register_epoll_events(int fd, uint32_t events) {
 
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &event) < 0) {
         // Handle error
-        std::cerr << "Failed to register fd: " << fd << std::endl;
+        log(LOG_ERROR, "Failed to register socket '%i'", fd);
         return false;
     }
 
@@ -571,7 +564,7 @@ bool WebServer::update_epoll_events(int fd, uint32_t events) {
 
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &event) < 0) {
         // Handle error
-        std::cerr << "Failed to up epoll events for fd: " << fd << std::endl;
+        log(LOG_ERROR, "Failed to up epoll events for socket '%i'", fd);
         return false;
     }
 
@@ -586,13 +579,13 @@ bool WebServer::setup_signal_handlers() {
 
     if (sigaction(SIGINT, &sa, NULL) < 0) {
         // Handle error
-        std::cerr << "Failed to set up SIGINT handler" << std::endl;
+        log(LOG_ERROR, "Failed to set up SIGINT handler");
         return false;
     }
 
     if (sigaction(SIGTERM, &sa, NULL) < 0) {
         // Handle error
-        std::cerr << "Failed to set up SIGTERM handler" << std::endl;
+        log(LOG_ERROR, "Failed to set up SIGTERM handler");
         return false;
     }
 
@@ -602,7 +595,7 @@ bool WebServer::setup_signal_handlers() {
 void WebServer::signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         get_instance()->shutdown();
-        std::cout << "Received shutdown signal. Exiting..." << std::endl;
+        log(LOG_INFO, "Received shutdown signal. Exiting...");
     }
 }
 
