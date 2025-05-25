@@ -175,15 +175,20 @@ void WebServer::event_loop() {
         }
 
         // Wait for events on the epoll instance
-        int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
-                                      http_limits::TIMEOUT);
+        int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS, http_limits::TIMEOUT);
+        
         if (ready_events < 0) {
             // Handle error or signal interruption
             if (errno == EINTR) {
+                log(LOG_DEBUG, "event_loop: Interrupted by signal, continuing");
                 continue;  // Interrupted by signal, continue loop
             }
-            log(LOG_ERROR, "epoll_wait error: %s", strerror(errno));
+            log(LOG_ERROR, "event_loop: epoll_wait error: %s", strerror(errno));
             break;
+        }
+
+        if (ready_events > 0) {
+            log(LOG_DEBUG, "event_loop: Processing %d ready events", ready_events);
         }
 
         for (int i = 0; i < ready_events; i++) {
@@ -218,9 +223,12 @@ void WebServer::event_loop() {
             }
         }
     }
+
+    log(LOG_INFO, "event_loop: Server event loop terminated");
 }
 
 void WebServer::accept_new_connection(int listener_fd) {
+    log(LOG_DEBUG, "accept_new_connection: Processing new connection on listener_fd %d", listener_fd);
     // Find the default virtual server for this listener
     VirtualServer* default_server = NULL;
     if (listener_to_default_server_.find(listener_fd) !=
@@ -239,6 +247,8 @@ void WebServer::accept_new_connection(int listener_fd) {
             listener_fd);
         return;
     }
+
+    log(LOG_DEBUG, "accept_new_connection: Accepted new client_fd %d from listener_fd %d", client_fd, listener_fd);
 
     // Register with epoll for read events
     if (!register_epoll_events(client_fd)) {
@@ -273,17 +283,23 @@ void WebServer::handle_client_event(int client_fd, uint32_t events) {
 }
 
 void WebServer::handle_read(Connection* conn) {
+    log(LOG_DEBUG, "handle_read: Starting for client_fd %d", conn ? conn->client_fd_ : -1);
+    
     // Read data from the socket
     if (!request_parser_->read_from_socket(conn)) {
+        log(LOG_ERROR, "handle_read: Failed to read from socket for client_fd %d", conn->client_fd_);
         handle_error(conn);
         return;
     }
 
     // Try to parse the buffer into a full request
+    log(LOG_DEBUG, "handle_read: Parsing request for client_fd %d", conn->client_fd_);
     conn->parse_status_ = request_parser_->parse(conn);
+    log(LOG_DEBUG, "handle_read: Parse status %d for client_fd %d", conn->parse_status_, conn->client_fd_);
 
     // If we have completed parsing headers, we need to match the host header
     if (conn->parse_status_ == codes::PARSE_HEADERS_COMPLETE) {
+        log(LOG_DEBUG, "handle_read: Headers complete, matching host for client_fd %d", conn->client_fd_);
         match_host_header(conn);
         // Re-parse the request with the matched virtual server
         conn->parse_status_ = request_parser_->parse(conn);
@@ -291,6 +307,7 @@ void WebServer::handle_read(Connection* conn) {
 
     // If request parsing is incomplete, return and wait for more data
     if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
+        log(LOG_DEBUG, "handle_read: Parsing incomplete for client_fd %d, waiting for more data", conn->client_fd_);
         return;
     }
 
@@ -308,22 +325,44 @@ void WebServer::handle_read(Connection* conn) {
 }
 
 void WebServer::handle_write(Connection* conn) {
+    log(LOG_DEBUG, "handle_write: Starting processing for client_fd %d", conn ? conn->client_fd_ : -1);
+    
+    if (!conn) {
+        log(LOG_ERROR, "handle_write: Connection pointer is NULL");
+        return;
+    }
+    
+    if (!conn->request_data_) {
+        log(LOG_ERROR, "handle_write: Request data is NULL for client_fd %d", conn->client_fd_);
+        handle_error(conn);
+        return;
+    }
+    
+    log(LOG_DEBUG, "handle_write: Processing request method=%s, path=%s for client_fd %d", 
+        conn->request_data_->method_.c_str(),
+        conn->request_data_->path_.c_str(),
+        conn->client_fd_);
+
     //// TODO - Check if request is valid
     // if (!validate_request(conn)) {
     //     // TODO - Write function to generate response based on request error
+    //     log(LOG_WARNING, "handle_write: Invalid request from client_fd %d", conn->client_fd_);
     //     conn->response_data_ = generate_error_response(conn);
     // } else {
     //     // TODO - Review choose_handler function
     //     // Route the request to the appropriate handler
     //     if (!conn->active_handler_) {
+    //         log(LOG_DEBUG, "handle_write: Choosing handler for client_fd %d", conn->client_fd_);
     //         conn->active_handler_ = choose_handler(conn);
     //     }
     //     // Call the handler to process the request and generate a response
+    //     log(LOG_DEBUG, "handle_write: Handling request with active_handler for client_fd %d", conn->client_fd_);
     //     conn->response_data_ = conn->active_handler_->handle(conn);
     // }
 
     // // TEMP - Call StaticFileHandler to test
     //  conn->active_handler_ = static_file_handler_;
+    //  log(LOG_DEBUG, "handle_write: Using static_file_handler for client_fd %d", conn->client_fd_);
     //  conn->active_handler_->handle(conn);
     //  // Print the HTTP response for debugging
     //  std::cout << "\n==== HTTP RESPONSE ====\n";
@@ -340,33 +379,43 @@ void WebServer::handle_write(Connection* conn) {
     //  "====================================" << std::endl;
 
     // TEMP - For now, create mock response
+    log(LOG_DEBUG, "handle_write: Building mock response for client_fd %d", conn->client_fd_);
     build_mock_response(conn);
     // TEMP
 
     // Write the response to the client
+    log(LOG_DEBUG, "handle_write: Writing response to client_fd %d", conn->client_fd_);
     codes::WriterState status = response_writer_->write_response(conn);
 
     switch (status) {
         case codes::WRITING_INCOMPLETE:
+            log(LOG_DEBUG, "handle_write: Response writing incomplete for client_fd %d, will resume later", conn->client_fd_);
             return;
         case codes::WRITING_ERROR:
+            log(LOG_ERROR, "handle_write: Error writing response to client_fd %d", conn->client_fd_);
             handle_error(conn);
             return;
         case codes::WRITING_COMPLETE:
+            log(LOG_DEBUG, "handle_write: Response completely written to client_fd %d", conn->client_fd_);
             break;
     }
 
     // Check for error status codes that should close the connection
     int status_code = conn->response_data_->status_code_;
+    log(LOG_DEBUG, "handle_write: Response status code %d for client_fd %d", status_code, conn->client_fd_);
+    
     if (status_code == 400 || status_code == 413 || status_code >= 500) {
         // Close connections for client and server errors
+        log(LOG_INFO, "handle_write: Closing connection for error status %d on client_fd %d", status_code, conn->client_fd_);
         conn->request_data_->set_header("Connection", "close");
     }
 
     if (conn->is_keep_alive()) {
+        log(LOG_DEBUG, "handle_write: Keep-alive enabled, resetting connection for client_fd %d", conn->client_fd_);
         conn->reset_for_keep_alive();
         update_epoll_events(conn->client_fd_, EPOLLIN);
     } else {
+        log(LOG_DEBUG, "handle_write: Keep-alive not enabled, closing connection for client_fd %d", conn->client_fd_);
         close_client_connection(conn);
     }
 }
@@ -389,6 +438,8 @@ void WebServer::close_client_connection(Connection* conn) {
             conn->client_fd_);
         return;
     }
+    
+    log(LOG_DEBUG, "close_client_connection: Closing client_fd %d", conn->client_fd_);
 
     // Then let connection manager handle the rest
     conn_manager_->close_connection(conn);
@@ -626,6 +677,11 @@ const Location* WebServer::find_matching_location(
 }
 
 bool WebServer::choose_handler(Connection* conn) {
+    log(LOG_DEBUG, "choose_handler: Finding handler for client_fd %d, method %s, path %s", 
+        conn->client_fd_, 
+        conn->request_data_->method_.c_str(),
+        conn->request_data_->path_.c_str());
+    
     HttpRequest* req = conn->request_data_;
 
     // Get the path from the request (already without query part)
@@ -637,11 +693,7 @@ bool WebServer::choose_handler(Connection* conn) {
 
     // Check if a matching location was found
     if (!matching_location) {
-        std::cout << "\n==== ROUTER ERROR ====\n";
-        std::cout << "No matching location for path: " << request_path
-                  << std::endl;
-        std::cout << "======================\n" << std::endl;
-
+        log(LOG_WARNING, "choose_handler: No matching location for path %s", request_path.c_str());
         ErrorHandler::not_found(conn->response_data_, *(conn->virtual_server_));
         // Return default handler or handle error case
         conn->active_handler_ = static_file_handler_;

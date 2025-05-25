@@ -5,12 +5,13 @@ bool AHandler::process_location_redirect(Connection* conn) {
 
     // Check if this location has a redirect
     if (location->redirect_.empty()) {
+        log(LOG_DEBUG, "process_location_redirect: No redirect configured for location %s", 
+            location->path_.c_str());
         return false;  // No redirect
     }
 
-    std::cout << "\n==== REDIRECT ====\n";
-    std::cout << "Redirecting to: " << location->redirect_ << std::endl;
-    std::cout << "=================\n" << std::endl;
+    log(LOG_INFO, "REDIRECT: Location %s redirecting to %s", 
+        location->path_.c_str(), location->redirect_.c_str());
 
     // Set up redirect response
     conn->response_data_->status_code_ = 301;  // Moved Permanently
