@@ -6,7 +6,7 @@
 // Forward declarations
 struct Connection;
 class AHandler;
-class HttpRequest;
+struct HttpRequest;
 
 // Handles requests by executing CGI scripts.
 class CgiHandler : public AHandler {

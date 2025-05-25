@@ -5,7 +5,7 @@
 
 // Forward declaration
 struct Connection;
-class HttpRequest;
+struct HttpRequest;
 
 // Abstract base class for all request handlers.
 class AHandler {
