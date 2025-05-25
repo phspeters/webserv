@@ -544,7 +544,43 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
             // Translates to response status 411
             log(LOG_ERROR,
                 "POST/PUT without Content-Length or Transfer-Encoding");
+            return codes::PARSE_MISSING_CONTENT_LENGTH;
+        }
+
+        if (has_content_length && has_transfer_encoding) {
+            // Translates to response status 400
+            log(LOG_ERROR,
+                "POST/PUT with both Content-Length and Transfer-Encoding");
             return codes::PARSE_INVALID_CONTENT_LENGTH;
+        }
+
+        if (has_content_length) {
+            // Validate Content-Length
+            std::string content_length = request->get_header("content-length");
+            char* end_ptr;
+            size_t body_size =
+                std::strtoul(content_length.c_str(), &end_ptr, 10);
+
+            // Check for invalid Content-Length format
+            if (end_ptr == content_length.c_str() || *end_ptr != '\0') {
+                // Translates to response status 400
+                return codes::PARSE_INVALID_CONTENT_LENGTH;
+            }
+
+            if (body_size > conn->virtual_server_->client_max_body_size_) {
+                // Translates to response status 413
+                return codes::PARSE_CONTENT_TOO_LARGE;
+            }
+        }
+
+        if (has_transfer_encoding) {
+            // Validate Transfer-Encoding
+            std::string transfer_encoding =
+                request->get_header("transfer-encoding");
+            if (transfer_encoding != "chunked") {
+                // Translates to response status 501
+                return codes::PARSE_INVALID_ENCODING;
+            }
         }
     }
 
@@ -556,7 +592,7 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
     HttpRequest* request = conn->request_data_;
 
     // Get the expected body size from Content-Length
-    std::string content_length = request->get_header("Content-Length");
+    std::string content_length = request->get_header("content-length");
     size_t body_size = std::strtoul(content_length.c_str(), NULL, 10);
 
     // Check if we have enough data

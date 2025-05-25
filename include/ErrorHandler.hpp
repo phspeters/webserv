@@ -10,6 +10,10 @@ struct VirtualServer;
 
 // Centralized error handling for HTTP responses
 namespace ErrorHandler {
+
+void generate_error_response(Connection* conn);
+void generate_error_response(Connection* conn, codes::ResponseStatus status);
+
 // Main error handling method - applies error to the response
 void handle_error(HttpResponse* resp, int status_code,
                   const VirtualServer& virtual_server);

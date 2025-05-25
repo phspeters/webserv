@@ -44,8 +44,11 @@ enum ParseStatus {
     PARSE_MISSING_HOST_HEADER,    // Host header is missing on HTTP/1.1 requests
     PARSE_HEADER_TOO_LONG,        // Header exceeds maximum length
     PARSE_TOO_MANY_HEADERS,       // Too many headers
+    PARSE_MISSING_CONTENT_LENGTH,  // Content-Length or Transfer-encoding header
+                                   // is missing
     PARSE_INVALID_CONTENT_LENGTH,  // Content-Length header is invalid
     PARSE_CONTENT_TOO_LARGE,       // Content length exceeds maximum
+    PARSE_INVALID_ENCODING,        // Invalid transfer encoding
     PARSE_INVALID_CHUNK_SIZE       // Invalid chunk size in chunked encoding
 };
 
@@ -84,7 +87,7 @@ enum ResponseStatus {
 
 // Upload-specific error types
 enum UploadError {
-    UPLOAD_SUCCESS,
+    UPLOAD_SUCCESS,            // Upload completed successfully
     UPLOAD_BAD_REQUEST,        // General 400 errors
     UPLOAD_UNSUPPORTED_MEDIA,  // 415 errors
     UPLOAD_PAYLOAD_TOO_LARGE,  // 413 errors
@@ -94,17 +97,17 @@ enum UploadError {
 }  // namespace codes
 
 namespace http_limits {
-const time_t TIMEOUT = 60;  // Timeout in seconds
-const size_t MAX_METHOD_LENGTH = 8;
+const time_t TIMEOUT = 60;                    // Timeout in seconds
+const size_t MAX_METHOD_LENGTH = 8;           // HTTP method length
 const size_t MAX_REQUEST_LINE_LENGTH = 8192;  // 8KB
 const size_t MAX_PATH_LENGTH = 2048;          // Path component
 const size_t MAX_QUERY_LENGTH = 2048;         // Query string
 const size_t MAX_FRAGMENT_LENGTH = 1024;      // Fragment identifier
-const size_t MAX_HEADER_NAME_LENGTH = 256;
-const size_t MAX_HEADER_VALUE_LENGTH = 8192;
-const size_t MAX_HEADERS = 100;
-const size_t MAX_CONTENT_LENGTH = 10485760;  // 10MB
-const size_t MAX_CHUNK_SIZE = 1048576;       // 1MB
+const size_t MAX_HEADER_NAME_LENGTH = 256;    // Header name length
+const size_t MAX_HEADER_VALUE_LENGTH = 8192;  // Header value length
+const size_t MAX_HEADERS = 100;               // Maximum number of headers
+const size_t MAX_CONTENT_LENGTH = 10485760;   // 10MB
+const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 }  // namespace http_limits
 
 #define CRLF "\r\n"  // Carriage return + line feed

@@ -28,6 +28,7 @@ void build_mock_response(Connection* conn);
 
 enum log_level {
     LOG_OFF,
+    LOG_TRACE,
     LOG_DEBUG,
     LOG_INFO,
     LOG_WARNING,

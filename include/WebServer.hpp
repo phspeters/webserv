@@ -83,7 +83,8 @@ class WebServer {
     void match_host_header(Connection* conn);
     const Location* find_matching_location(const VirtualServer* virtual_server,
                                            const std::string& path) const;
-    bool choose_handler(Connection* conn);
+    bool validate_request_location(Connection* conn);
+    AHandler* choose_handler(Connection* conn);
     void close_client_connection(Connection* conn);
 
     bool setup_listener_sockets();

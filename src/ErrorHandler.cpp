@@ -1,5 +1,19 @@
 #include "webserv.hpp"
 
+void ErrorHandler::generate_error_response(Connection* conn) {
+    // TEMP
+    build_mock_response(conn);
+    // Version that generates error response based on ParseStatus (Stored in
+    // conn)
+}
+
+void ErrorHandler::generate_error_response(Connection* conn,
+                                           codes::ResponseStatus status) {
+    // TEMP
+    build_mock_response(conn);
+    // Version that generates error response based on ResponseStatus
+}
+
 void ErrorHandler::handle_error(HttpResponse* resp, int status_code,
                                 const VirtualServer& config) {
     if (!resp) {
