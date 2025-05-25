@@ -370,23 +370,23 @@ void WebServer::handle_write(Connection* conn) {
     //     conn->response_data_ = conn->active_handler_->handle(conn);
     // }
 
-    // TEMP - Call StaticFileHandler to test
-     conn->active_handler_ = static_file_handler_;
-     log(LOG_DEBUG, "handle_write: Using static_file_handler for client_fd %d", conn->client_fd_);
-     conn->active_handler_->handle(conn);
-     // Print the HTTP response for debugging
-     std::cout << "\n==== HTTP RESPONSE ====\n";
-     std::cout << "Status: " << conn->response_data_->status_code_ << " "
-             << conn->response_data_->status_message_ << std::endl;
-    std::cout << "Headers:" << std::endl;
-    for (std::map<std::string, std::string>::const_iterator it =
-         conn->response_data_->headers_.begin();
-         it != conn->response_data_->headers_.end(); ++it) {
-        std::cout << "  " << it->first << ": " << it->second << std::endl;
-    }
-    std::cout << "Body size: " << conn->response_data_->body_.size() <<
-                 "bytes" << std::endl;
-    std::cout << "====================================" << std::endl;
+    // // TEMP - Call StaticFileHandler to test
+    //  conn->active_handler_ = static_file_handler_;
+    //  log(LOG_DEBUG, "handle_write: Using static_file_handler for client_fd %d", conn->client_fd_);
+    //  conn->active_handler_->handle(conn);
+    //  // Print the HTTP response for debugging
+    //  std::cout << "\n==== HTTP RESPONSE ====\n";
+    //  std::cout << "Status: " << conn->response_data_->status_code_ << " "
+    //          << conn->response_data_->status_message_ << std::endl;
+    // std::cout << "Headers:" << std::endl;
+    // for (std::map<std::string, std::string>::const_iterator it =
+    //      conn->response_data_->headers_.begin();
+    //      it != conn->response_data_->headers_.end(); ++it) {
+    //     std::cout << "  " << it->first << ": " << it->second << std::endl;
+    // }
+    // std::cout << "Body size: " << conn->response_data_->body_.size() <<
+    //              "bytes" << std::endl;
+    // std::cout << "====================================" << std::endl;
 
     // // TEMP - Call FileUploadHandler to test
     // conn->active_handler_ = file_upload_handler_;
