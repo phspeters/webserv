@@ -29,7 +29,7 @@ class AHandler {
     // stdout virtual void on_writable(Connection* conn) {} // e.g., For CGI
     // writing stdin or sending file chunks
    protected:
-    std::string parse_absolute_path(HttpRequest* req);
+    std::string parse_absolute_path(Connection* conn);
     bool process_location_redirect(Connection* conn);
 
 };  // class Handler

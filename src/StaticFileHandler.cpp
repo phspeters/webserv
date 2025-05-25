@@ -80,7 +80,7 @@ void StaticFileHandler::handle(Connection* conn) {
         return;
     }
 
-    std::string absolute_path = parse_absolute_path(conn->request_data_);
+    std::string absolute_path = parse_absolute_path(conn);
 
     // Fluxogram 301 - check if the request should be a directory
     if (process_directory_redirect(conn, absolute_path)) {
@@ -244,7 +244,7 @@ bool StaticFileHandler::process_directory_index(Connection* conn,
     }
 
     // Get location config
-    const Location* location = conn->request_data_->location_match_;
+    const Location* location = conn->location_match_;
     std::string index = location->index_;
 
     if (!index.empty()) {

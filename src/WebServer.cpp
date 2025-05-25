@@ -318,6 +318,16 @@ void WebServer::handle_read(Connection* conn) {
     // Match path from uri to best location
     conn->location_match_ = find_matching_location(conn->virtual_server_,
                                                    conn->request_data_->path_);
+    
+    // TEMP - Print matched location
+    std::cout << "\n==== MATCHED LOCATION ====\n";
+    if (conn->location_match_) {
+        std::cout << "Matched location: " << conn->location_match_->path_
+                  << std::endl;
+    } else {
+        std::cout << "No matching location found." << std::endl;
+    }
+    std::cout << "==========================\n" << std::endl;
 
     // Change epoll interest event to EPOLLOUT for writing
     update_epoll_events(conn->client_fd_, EPOLLOUT);
@@ -360,26 +370,43 @@ void WebServer::handle_write(Connection* conn) {
     //     conn->response_data_ = conn->active_handler_->handle(conn);
     // }
 
-    // // TEMP - Call StaticFileHandler to test
-    //  conn->active_handler_ = static_file_handler_;
-    //  log(LOG_DEBUG, "handle_write: Using static_file_handler for client_fd %d", conn->client_fd_);
-    //  conn->active_handler_->handle(conn);
-    //  // Print the HTTP response for debugging
-    //  std::cout << "\n==== HTTP RESPONSE ====\n";
-    //  std::cout << "Status: " << conn->response_data_->status_code_ << " "
-    //          << conn->response_data_->status_message_ << std::endl;
-    //  std::cout << "Headers:" << std::endl;
-    //  for (std::map<std::string, std::string>::const_iterator it =
-    //  conn->response_data_->headers_.begin();
+    // TEMP - Call StaticFileHandler to test
+     conn->active_handler_ = static_file_handler_;
+     log(LOG_DEBUG, "handle_write: Using static_file_handler for client_fd %d", conn->client_fd_);
+     conn->active_handler_->handle(conn);
+     // Print the HTTP response for debugging
+     std::cout << "\n==== HTTP RESPONSE ====\n";
+     std::cout << "Status: " << conn->response_data_->status_code_ << " "
+             << conn->response_data_->status_message_ << std::endl;
+    std::cout << "Headers:" << std::endl;
+    for (std::map<std::string, std::string>::const_iterator it =
+         conn->response_data_->headers_.begin();
+         it != conn->response_data_->headers_.end(); ++it) {
+        std::cout << "  " << it->first << ": " << it->second << std::endl;
+    }
+    std::cout << "Body size: " << conn->response_data_->body_.size() <<
+                 "bytes" << std::endl;
+    std::cout << "====================================" << std::endl;
+
+    // // TEMP - Call FileUploadHandler to test
+    // conn->active_handler_ = file_upload_handler_;
+    // log(LOG_DEBUG, "handle_write: Using file_upload_handler for client_fd %d", conn->client_fd_);
+    // conn->active_handler_->handle(conn);
+    // // Print the HTTP response for debugging
+    // std::cout << "\n==== HTTP RESPONSE ====\n";
+    // std::cout << "Status: " << conn->response_data_->status_code_ << " "
+    //           << conn->response_data_->status_message_ << std::endl;
+    // std::cout << "Headers:" << std::endl;
+    // for (std::map<std::string, std::string>::const_iterator it =
+    //          conn->response_data_->headers_.begin();
     //      it != conn->response_data_->headers_.end(); ++it) {
-    //      std::cout << "  " << it->first << ": " << it->second << std::endl;
-    //  }
-    //  std::cout << "Body size: " << conn->response_data_->body_.size() <<
-    //  "bytes" << std::endl; std::cout <<
-    //  "====================================" << std::endl;
+    //     std::cout << "  " << it->first << ": " << it->second << std::endl;
+    // }
+    // std::cout << "Body size: " << conn->response_data_->body_.size() <<
+    //              " bytes" << std::endl;
+    // std::cout << "====================================" << std::endl;
 
     // TEMP - For now, create mock response
-    log(LOG_DEBUG, "handle_write: Building mock response for client_fd %d", conn->client_fd_);
     build_mock_response(conn);
     // TEMP
 
@@ -652,10 +679,12 @@ void WebServer::signal_handler(int signal) {
 
 const Location* WebServer::find_matching_location(
     const VirtualServer* virtual_server, const std::string& uri) const {
-    std::vector<Location> locations_ = virtual_server->locations_;
+    
+    // Use a reference instead of making a copy
+    const std::vector<Location>& locations_ = virtual_server->locations_;
     const Location* best_match = NULL;
-    for (std::vector<Location>::const_iterator it = locations_.begin();
-         it != locations_.end(); ++it) {
+    
+    for (std::vector<Location>::const_iterator it = locations_.begin(); it != locations_.end(); ++it) {
         const Location& location = *it;
         // Check if the request path starts with the location path
         if (uri.find(location.path_) == 0) {
@@ -663,8 +692,7 @@ const Location* WebServer::find_matching_location(
             if (location.path_ == "/" ||  // Root always matches
                 uri == location.path_ ||  // Exact match
                 (uri.length() > location.path_.length() &&
-                 (uri[location.path_.length()] == '/' ||
-                  location.path_[location.path_.length() - 1] == '/'))) {
+                 (uri[location.path_.length()] == '/' || location.path_[location.path_.length() - 1] == '/'))) {
                 if (!best_match ||
                     location.path_.length() > best_match->path_.length()) {
                     best_match = &location;
@@ -689,7 +717,7 @@ bool WebServer::choose_handler(Connection* conn) {
     const std::string& request_method = req->method_;
 
     // Use centralized location matching from config
-    const Location* matching_location = req->location_match_;
+    const Location* matching_location = conn->location_match_;
 
     // Check if a matching location was found
     if (!matching_location) {

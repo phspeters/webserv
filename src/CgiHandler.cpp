@@ -14,7 +14,7 @@ void CgiHandler::handle(Connection* conn) {
     // Extract request data
     const std::string& request_uri = conn->request_data_->uri_;
     const std::string& request_method = conn->request_data_->method_;
-    const Location* location = conn->request_data_->location_match_;
+    const Location* location = conn->location_match_;
 
     std::cout << "\n==== CGI HANDLER ====\n";
     std::cout << "Request URI: " << request_uri << std::endl;
@@ -40,7 +40,7 @@ void CgiHandler::handle(Connection* conn) {
     }
 
     // 4. Script Path Resolution
-    std::string script_path = parse_absolute_path(conn->request_data_);
+    std::string script_path = parse_absolute_path(conn);
     // --CHECK I dont think this is necessary 
     // if (script_path.empty()) {
     //     std::cout << "Error: Failed to determine CGI script path\n";

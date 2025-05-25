@@ -34,11 +34,11 @@ class FileUploadHandler : public AHandler {
                               const std::string& full_boundary,
                               const std::string& end_boundary,
                               const std::string& filename, bool& file_found);
-    bool save_uploaded_file(HttpRequest* req, const std::string& filename,
+    bool save_uploaded_file(Connection *conn, const std::string& filename,
                             const std::vector<char>& data, codes::UploadError& error);
     std::string extract_boundary(const std::string& content_type);
     std::string sanitize_filename(const std::string& filename);
-    std::string get_upload_directory(HttpRequest* req);
+    std::string get_upload_directory(Connection* conn);
     bool validate_upload_size(size_t size, size_t max_body_size);
 
     // Prevent copying

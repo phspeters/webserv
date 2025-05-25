@@ -31,7 +31,7 @@ void FileUploadHandler::handle(Connection* conn) {
     }
 
     // Verify location_match_ is set by the router
-    if (!req->location_match_) {
+    if (!conn->location_match_) {
         ErrorHandler::internal_server_error(resp, *(conn->virtual_server_));
         return;
     }
@@ -217,7 +217,6 @@ bool FileUploadHandler::extract_file_content(
     Connection* conn, const std::string& body, size_t pos, size_t& content_end,
     const std::string& full_boundary, const std::string& end_boundary,
     const std::string& filename, bool& file_found) {
-    HttpRequest* req = conn->request_data_;
 
     // Find the end of this part (next boundary)
     content_end = body.find(full_boundary, pos);
@@ -246,7 +245,7 @@ bool FileUploadHandler::extract_file_content(
 
     // Save the file
     codes::UploadError save_error = codes::UPLOAD_SUCCESS;
-    if (!save_uploaded_file(req, filename, file_data, save_error)) {
+    if (!save_uploaded_file(conn, filename, file_data, save_error)) {
         handle_upload_error(conn, save_error);
         return false;
     }
@@ -261,8 +260,8 @@ bool FileUploadHandler::validate_upload_size(size_t size,
     return size <= max_body_size;
 }
 
-std::string FileUploadHandler::get_upload_directory(HttpRequest* req) {
-    std::string base_path = parse_absolute_path(req);
+std::string FileUploadHandler::get_upload_directory(Connection* conn) {
+    std::string base_path = parse_absolute_path(conn);
 
     // Extract just the directory part (remove any filename component)
     size_t last_slash = base_path.find_last_of('/');
@@ -279,12 +278,12 @@ std::string FileUploadHandler::get_upload_directory(HttpRequest* req) {
     return upload_dir;
 }
 
-bool FileUploadHandler::save_uploaded_file(HttpRequest* req,
+bool FileUploadHandler::save_uploaded_file(Connection* conn,
                                            const std::string& filename,
                                            const std::vector<char>& data,
                                            codes::UploadError& error) {
     // Get the upload directory using root directive
-    std::string upload_dir = get_upload_directory(req);
+    std::string upload_dir = get_upload_directory(conn);
 
     // Create upload directory if it doesn't exist
     struct stat st;

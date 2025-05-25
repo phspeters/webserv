@@ -18,8 +18,8 @@ void print_request(const Connection* conn) {
         std::cout << "  " << it->first << ": " << it->second << std::endl;
     }
     std::cout << "body: " << std::endl;
-    std::cout.write(conn->request_data_->body_.data(),
-                    conn->request_data_->body_.size());
+    // std::cout.write(conn->request_data_->body_.data(),
+    //                 conn->request_data_->body_.size());
     std::cout << "Parse status: " << conn->parse_status_ << std::endl;
     std::cout << "\n====================================\n" << std::endl;
 }

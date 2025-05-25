@@ -67,7 +67,7 @@ struct Connection {
     //--------------------------------------
     // Handler-Specific State (Example for CGI - could be a union or void*)
     //--------------------------------------
-    AHandler* active_handler_;        // Pointer to the currently active handler
+    AHandler* active_handler_;        // Pointer to the currently active handler 
     const Location* location_match_;  // Best matching location for the request
 
     // CGI State (Only relevant if active_handler is CgiHandler)

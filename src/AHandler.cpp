@@ -1,7 +1,7 @@
 #include "webserv.hpp"
 
 bool AHandler::process_location_redirect(Connection* conn) {
-    const Location* location = conn->request_data_->location_match_;
+    const Location* location = conn->location_match_;
 
     // Check if this location has a redirect
     if (location->redirect_.empty()) {
@@ -22,18 +22,18 @@ bool AHandler::process_location_redirect(Connection* conn) {
     return true;  // Redirect was processed
 }
 
-std::string AHandler::parse_absolute_path(HttpRequest* req) {
-    // Extract request data
-    const std::string& request_path = req->uri_;
-    const Location* request_location = req->location_match_;
+std::string AHandler::parse_absolute_path(Connection* conn) {
+    
+    const Location* request_location = conn->location_match_;
     std::string request_root = request_location->root_;
+    const std::string& request_path = conn->request_data_->uri_;
 
     // --CHECK If the root starts with /, removed it
     if (request_root[0] == '/') {
         request_root = request_root.substr(1);
     }
 
-    std::cout << "\n==== STATIC FILE HANDLER ====\n";
+    std::cout << "\n==== PARSE ABSOLUTE PATH ====\n";
     std::cout << "Request URI: " << request_path << std::endl;
     std::cout << "Matched location: " << request_location->path_ << std::endl;
     std::cout << "Root: " << request_location->root_ << std::endl;
