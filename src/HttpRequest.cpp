@@ -14,8 +14,11 @@ std::string HttpRequest::get_header(const std::string& name) const {
     std::map<std::string, std::string>::const_iterator it =
         headers_.find(lower_name);
     if (it != headers_.end()) {
+        log(LOG_DEBUG, "Request header retrieved: '%s: %s'", lower_name.c_str(),
+            it->second.c_str());
         return it->second;
     }
+    log(LOG_DEBUG, "Request header '%s' not found", lower_name.c_str());
     return "";
 }
 
@@ -28,6 +31,8 @@ void HttpRequest::set_header(const std::string& name,
     }
 
     headers_[lower_name] = value;
+    log(LOG_DEBUG, "Request header set: '%s: %s'", lower_name.c_str(),
+        value.c_str());
 }
 
 void HttpRequest::clear() {
@@ -38,4 +43,6 @@ void HttpRequest::clear() {
     body_.clear();
     path_.clear();
     query_string_.clear();
+
+    log(LOG_TRACE, "HttpRequest cleared");
 }

@@ -10,6 +10,7 @@ void ErrorHandler::generate_error_response(Connection* conn) {
 void ErrorHandler::generate_error_response(Connection* conn,
                                            codes::ResponseStatus status) {
     // TEMP
+	(void)status;
     build_mock_response(conn);
     // Version that generates error response based on ResponseStatus
 }

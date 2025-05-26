@@ -1,17 +1,31 @@
 #include "webserv.hpp"
-HttpResponse::HttpResponse() : status_code_(200), content_length_(0) {
+
+HttpResponse::HttpResponse() : status_code_(codes::OK), content_length_(0) {
     version_ = "HTTP/1.1";
 }
 
 HttpResponse::~HttpResponse() {}
+
 void HttpResponse::set_header(const std::string& name,
                               const std::string& value) {
-    headers_[name] = value;
+    // Case-insensitive lookup for headers
+    std::string lower_name = name;
+    for (size_t i = 0; i < lower_name.size(); ++i) {
+        lower_name[i] = std::tolower(static_cast<unsigned char>(lower_name[i]));
+    }
+
+    headers_[lower_name] = value;
+
+    log(LOG_DEBUG, "Response header set: '%s: %s'", lower_name.c_str(),
+        value.c_str());
 }
 
 void HttpResponse::set_status(int code) {
     status_code_ = code;
     status_message_ = get_status_message(code);
+
+    log(LOG_DEBUG, "Response status set: %d %s", status_code_,
+        status_message_.c_str());
 }
 
 std::string HttpResponse::get_status_message(int code) {
@@ -90,6 +104,9 @@ std::string HttpResponse::get_status_message(int code) {
 std::string HttpResponse::get_status_line() const {
     std::ostringstream oss;
     oss << version_ << " " << status_code_ << " " << status_message_;
+
+    log(LOG_TRACE, "Response status line: %s", oss.str().c_str());
+
     return oss.str();
 }
 
@@ -119,6 +136,8 @@ std::string HttpResponse::get_headers_string() const {
     // End of headers
     oss << "\r\n";
 
+    log(LOG_TRACE, "Response headers string: %s", oss.str().c_str());
+
     return oss.str();
 }
 
@@ -130,4 +149,6 @@ void HttpResponse::clear() {
     body_.clear();
     content_length_ = 0;
     content_type_.clear();
+
+    log(LOG_TRACE, "HttpResponse cleared");
 }
