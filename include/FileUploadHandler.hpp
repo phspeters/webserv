@@ -40,6 +40,19 @@ class FileUploadHandler : public AHandler {
     std::string sanitize_filename(const std::string& filename);
     std::string get_upload_directory(Connection* conn);
     bool validate_upload_size(size_t size, size_t max_body_size);
+    bool ensure_upload_directory_exists(const std::string& upload_dir,
+                                        codes::UploadError& error);
+    bool create_directory_recursive(const std::string& path,
+                                    codes::UploadError& error);
+    bool validate_upload_environment(const std::string& upload_dir,
+                                     size_t file_size,
+                                     codes::UploadError& error);
+    bool check_disk_space(const std::string& upload_dir,
+                          size_t file_size,
+                          codes::UploadError& error);
+    bool write_file_to_disk(const std::string& file_path,
+                            const std::vector<char>& data,
+                            codes::UploadError& error);
 
     // Prevent copying
     FileUploadHandler(const FileUploadHandler&);

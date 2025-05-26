@@ -89,9 +89,11 @@ enum ResponseStatus {
 enum UploadError {
     UPLOAD_SUCCESS,            // Upload completed successfully
     UPLOAD_BAD_REQUEST,        // General 400 errors
+    UPLOAD_FORBIDDEN,          // 403 errors
     UPLOAD_UNSUPPORTED_MEDIA,  // 415 errors
     UPLOAD_PAYLOAD_TOO_LARGE,  // 413 errors
-    UPLOAD_SERVER_ERROR        // 500 errors
+    UPLOAD_SERVER_ERROR,        // 500 errors
+    UPLOAD_INSUFFICIENT_STORAGE  // 507 Insufficient Storage
 };
 
 }  // namespace codes

@@ -7,53 +7,86 @@ FileUploadHandler::FileUploadHandler() : AHandler() {}
 FileUploadHandler::~FileUploadHandler() {}
 
 void FileUploadHandler::handle(Connection* conn) {
-    HttpRequest* req = conn->request_data_;
-    HttpResponse* resp = conn->response_data_;
-
-    if (!req || !resp) {
-        ErrorHandler::internal_server_error(resp, *(conn->virtual_server_));
+    if (process_location_redirect(conn) || process_trailing_slash_redirect(conn)) {
         return;
     }
 
-    std::string content_type = req->get_header("content-type");
+    if (!conn->location_match_) {
+        ErrorHandler::internal_server_error(conn->response_data_, *(conn->virtual_server_));
+        return;
+    }
 
-    // Check that it's multipart/form-data
+    std::string boundary;
+    if (!validate_request(conn, boundary)) {
+        return;
+    }
+
+    if (parse_multipart_form_data(conn, boundary)) {
+        send_success_response(conn);
+    } else {
+        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+    }
+}
+
+bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
+    std::string uri = conn->request_data_->uri_;
+    const Location* location = conn->location_match_;
+    
+    // If location path ends with / but URI doesn't, redirect to add slash
+    if (!location->path_.empty() && 
+        location->path_[location->path_.length() - 1] == '/' &&
+        !uri.empty() && uri[uri.length() - 1] != '/') {
+        
+        conn->response_data_->status_code_ = 301;
+        conn->response_data_->status_message_ = "Moved Permanently";
+        conn->response_data_->headers_["Location"] = uri + "/";
+        return true;
+    }
+    return false;
+}
+
+bool FileUploadHandler::validate_request(Connection* conn, std::string& boundary) {
+    if (!conn->request_data_ || !conn->response_data_) {
+        ErrorHandler::internal_server_error(conn->response_data_, *(conn->virtual_server_));
+        return false;
+    }
+
+    std::string content_length = conn->request_data_->get_header("content-length");
+    if (content_length.empty()) {
+        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+        return false;
+    }
+
+    if (conn->request_data_->body_.size() > conn->virtual_server_->client_max_body_size_) {
+        handle_upload_error(conn, codes::UPLOAD_PAYLOAD_TOO_LARGE);
+        return false;
+    }
+
+    std::string content_type = conn->request_data_->get_header("content-type");
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
         handle_upload_error(conn, codes::UPLOAD_UNSUPPORTED_MEDIA);
-        return;
+        return false;
     }
 
-    // Extract boundary
-    std::string boundary = extract_boundary(content_type);
+    boundary = extract_boundary(content_type);
     if (boundary.empty()) {
         handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
-        return;
+        return false;
     }
 
-    // Verify location_match_ is set by the router
-    if (!conn->location_match_) {
-        ErrorHandler::internal_server_error(resp, *(conn->virtual_server_));
-        return;
-    }
+    return true;
+}
 
-    // Process the multipart form data
-    if (parse_multipart_form_data(conn, boundary)) {
-        // Success response
-        resp->status_code_ = 201;
-        resp->status_message_ = "Created";
-        resp->content_type_ = "text/html";
-        std::string body =
-            "<html><body><h1>Upload Successful</h1><p>Your file has been "
-            "uploaded successfully.</p></body></html>";
-        resp->body_.assign(body.begin(), body.end());
-        resp->content_length_ = resp->body_.size();
-    } else {
-        // Error response - specific error should have been set already
-        // Default error if not set
-        if (resp->status_code_ == 0) {
-            handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
-        }
-    }
+void FileUploadHandler::send_success_response(Connection* conn) {
+    HttpResponse* resp = conn->response_data_;
+    resp->status_code_ = 201;
+    resp->status_message_ = "Created";
+    resp->content_type_ = "text/html";
+    std::string body =
+        "<html><body><h1>Upload Successful</h1><p>Your file has been "
+        "uploaded successfully.</p></body></html>";
+    resp->body_.assign(body.begin(), body.end());
+    resp->content_length_ = resp->body_.size();
 }
 
 void FileUploadHandler::handle_upload_error(Connection* conn,
@@ -78,6 +111,16 @@ void FileUploadHandler::handle_upload_error(Connection* conn,
                                             *(conn->virtual_server_));
             break;
 
+        case codes::UPLOAD_FORBIDDEN: 
+            ErrorHandler::forbidden(conn->response_data_,
+                                   *(conn->virtual_server_));
+            break;
+
+        case codes::UPLOAD_INSUFFICIENT_STORAGE:  
+            ErrorHandler::insufficient_storage(conn->response_data_,
+                                              *(conn->virtual_server_));
+            break;
+
         case codes::UPLOAD_SERVER_ERROR:
         default:
             ErrorHandler::internal_server_error(conn->response_data_,
@@ -88,49 +131,46 @@ void FileUploadHandler::handle_upload_error(Connection* conn,
 
 bool FileUploadHandler::parse_multipart_form_data(Connection* conn,
                                                   const std::string& boundary) {
-    HttpRequest* req = conn->request_data_;
-
-    // Full boundary string in the content
+    std::string body(conn->request_data_->body_.begin(), conn->request_data_->body_.end());
     std::string full_boundary = "--" + boundary;
     std::string end_boundary = full_boundary + "--";
 
-    // Convert body to string for easier processing
-    std::string body(req->body_.begin(), req->body_.end());
-
-    // Find all parts
     size_t pos = 0;
     bool file_found = false;
 
-    while (true) {
-        // Find the start of a part
+    while (pos < body.length()) {
         pos = body.find(full_boundary, pos);
         if (pos == std::string::npos) {
-            break;  // No more parts
+            break;
         }
 
-        // Move past boundary
         pos += full_boundary.length();
+        if (pos >= body.length()) {
+            break;
+        }
 
-        // Check if we're at the end
+        // Skip CRLF after boundary
+        if (pos + 2 <= body.length() && body.substr(pos, 2) == "\r\n") {
+            pos += 2;
+        }
+
+        // Check for end boundary
         if (pos + 2 <= body.length() && body.substr(pos, 2) == "--") {
-            break;  // End boundary
+            break;
         }
 
-        // Process this part
-        if (!process_part(conn, body, full_boundary, end_boundary, pos,
-                          file_found)) {
-            return false;  // Error occurred
+        if (!process_part(conn, body, full_boundary, end_boundary, pos, file_found)) {
+            return false;
+        }
+
+        // Safety check to prevent infinite loops
+        if (pos >= body.length()) {
+            break;
         }
     }
 
-    if (!file_found) {
-        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
-        return false;
-    }
-
-    return true;
+    return file_found;
 }
-
 bool FileUploadHandler::process_part(Connection* conn, const std::string& body,
                                      const std::string& full_boundary,
                                      const std::string& end_boundary,
@@ -218,32 +258,34 @@ bool FileUploadHandler::extract_file_content(
     const std::string& full_boundary, const std::string& end_boundary,
     const std::string& filename, bool& file_found) {
 
-    // Find the end of this part (next boundary)
+    // Find next boundary 
     content_end = body.find(full_boundary, pos);
     if (content_end == std::string::npos) {
         content_end = body.find(end_boundary, pos);
         if (content_end == std::string::npos) {
             handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
-            return false;  // Invalid format
+            return false;
         }
     }
 
-    // Adjust for trailing \r\n
-    if (content_end >= 2) {
-        content_end -= 2;
-    }
-
-    // Extract file content
-    std::vector<char> file_data(body.begin() + pos, body.begin() + content_end);
-
-    // Check if file size exceeds limit
-    if (!validate_upload_size(file_data.size(),
-                              conn->virtual_server_->client_max_body_size_)) {
-        handle_upload_error(conn, codes::UPLOAD_PAYLOAD_TOO_LARGE);
+    // Bounds checking 
+    if (pos >= content_end || content_end > body.length()) {
+        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
         return false;
     }
 
-    // Save the file
+    // Remove trailing CRLF
+    content_end -= 2;
+
+    // Final validation after adjustment
+    if (pos >= content_end) {
+        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+        return false;
+    }
+
+    // Safe extraction 
+    std::vector<char> file_data(body.begin() + pos, body.begin() + content_end);
+
     codes::UploadError save_error = codes::UPLOAD_SUCCESS;
     if (!save_uploaded_file(conn, filename, file_data, save_error)) {
         handle_upload_error(conn, save_error);
@@ -252,12 +294,6 @@ bool FileUploadHandler::extract_file_content(
 
     file_found = true;
     return true;
-}
-
-bool FileUploadHandler::validate_upload_size(size_t size,
-                                             size_t max_body_size) {
-    // Just use the server-wide limit from config_
-    return size <= max_body_size;
 }
 
 std::string FileUploadHandler::get_upload_directory(Connection* conn) {
@@ -282,52 +318,97 @@ bool FileUploadHandler::save_uploaded_file(Connection* conn,
                                            const std::string& filename,
                                            const std::vector<char>& data,
                                            codes::UploadError& error) {
-    // Get the upload directory using root directive
     std::string upload_dir = get_upload_directory(conn);
-
-    // Create upload directory if it doesn't exist
-    struct stat st;
-    if (stat(upload_dir.c_str(), &st) != 0) {
-        // Directory doesn't exist, try to create it (recursively)
-        size_t pos = 0;
-        while ((pos = upload_dir.find('/', pos + 1)) != std::string::npos) {
-            if (pos > 0) {
-                std::string parent_dir = upload_dir.substr(0, pos);
-                mkdir(parent_dir.c_str(),
-                      0755);  // Ignore errors for existing dirs
-            }
-        }
-
-        // Create final directory
-        if (mkdir(upload_dir.c_str(), 0755) != 0 && errno != EEXIST) {
-            error = codes::UPLOAD_SERVER_ERROR;
-            return false;
-        }
+    
+    if (!ensure_upload_directory_exists(upload_dir, error)) {
+        return false;
     }
 
-    // Sanitize filename
     std::string safe_filename = sanitize_filename(filename);
     if (safe_filename.empty()) {
         error = codes::UPLOAD_BAD_REQUEST;
         return false;
     }
 
-    // Open file for writing
-    std::string full_path = upload_dir + safe_filename;
-    std::ofstream file(full_path.c_str(), std::ios::binary);
+    return write_file_to_disk(upload_dir + safe_filename, data, error);
+}
+
+bool FileUploadHandler::ensure_upload_directory_exists(const std::string& upload_dir,
+                                                       codes::UploadError& error) {
+    struct stat st;
+    if (stat(upload_dir.c_str(), &st) == 0) {
+        return true;  // Directory already exists
+    }
+
+    // Directory doesn't exist, create it recursively
+    return create_directory_recursive(upload_dir, error);
+}
+
+bool FileUploadHandler::create_directory_recursive(const std::string& path,
+                                                   codes::UploadError& error) {
+    size_t pos = 0;
+    while ((pos = path.find('/', pos + 1)) != std::string::npos) {
+        if (pos > 0) {
+            std::string parent_dir = path.substr(0, pos);
+            if (mkdir(parent_dir.c_str(), 0755) != 0 && errno != EEXIST) {
+                if (errno == EACCES || errno == EPERM) {
+                    error = codes::UPLOAD_FORBIDDEN;
+                } else {
+                    error = codes::UPLOAD_SERVER_ERROR;
+                }
+                return false;
+            }
+        }
+    }
+
+    // Create final directory
+    if (mkdir(path.c_str(), 0755) != 0 && errno != EEXIST) {
+        if (errno == EACCES || errno == EPERM) {
+            error = codes::UPLOAD_FORBIDDEN;
+        } else {
+            error = codes::UPLOAD_SERVER_ERROR;
+        }
+        return false;
+    }
+
+    return true;
+}
+
+bool FileUploadHandler::write_file_to_disk(const std::string& file_path,
+                                           const std::vector<char>& data,
+                                           codes::UploadError& error) {
+    if (data.empty()) {
+        error = codes::UPLOAD_BAD_REQUEST;
+        return false;
+    }
+
+    std::ofstream file(file_path.c_str(), std::ios::binary);
 
     if (!file.is_open()) {
-        error = codes::UPLOAD_SERVER_ERROR;
+        if (errno == EACCES || errno == EPERM) {
+            error = codes::UPLOAD_FORBIDDEN;
+        } else if (errno == ENOSPC) {
+            error = codes::UPLOAD_INSUFFICIENT_STORAGE;
+        } else {
+            error = codes::UPLOAD_SERVER_ERROR;
+        }
         return false;
     }
 
     // Write data
     file.write(&data[0], data.size());
 
-    // Check for errors
-    if (file.bad()) {
+    // Check for write errors
+    if (file.fail() || file.bad()) {
         file.close();
-        error = codes::UPLOAD_SERVER_ERROR;
+        // Try to remove partially written file
+        std::remove(file_path.c_str());
+        
+        if (errno == ENOSPC) {
+            error = codes::UPLOAD_INSUFFICIENT_STORAGE;
+        } else {
+            error = codes::UPLOAD_SERVER_ERROR;
+        }
         return false;
     }
 
@@ -352,6 +433,16 @@ std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
         }
     }
 
+    // Handle edge cases
+    if (safe_filename.empty() || safe_filename == "." || safe_filename == "..") {
+        return "upload_file";
+    }
+
+    // Limit filename length for filesystem compatibility
+    if (safe_filename.length() > 255) {
+        safe_filename = safe_filename.substr(0, 255);
+    }
+
     return safe_filename;
 }
 
@@ -363,6 +454,11 @@ std::string FileUploadHandler::extract_boundary(
     }
 
     boundary_pos += 9;  // Length of "boundary="
+
+    // Add bounds checking
+    if (boundary_pos >= content_type.length()) {
+        return "";
+    }
 
     // Check if boundary is quoted
     if (content_type[boundary_pos] == '"') {
