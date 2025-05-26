@@ -16,10 +16,17 @@ class FileUploadHandler : public AHandler {
     virtual void handle(Connection* conn);
 
    private:
+    // Request validation and processing
+    bool validate_request(Connection* conn, std::string& boundary);
+    bool process_trailing_slash_redirect(Connection* conn);
+    
+    // Response generation
+    void send_success_response(Connection* conn);
+    
     // Error handling methods
     void handle_upload_error(Connection* conn, codes::UploadError error);
 
-    // Helper methods
+    // Multipart form data parsing
     bool parse_multipart_form_data(Connection* conn,
                                    const std::string& boundary);
     bool process_part(Connection* conn, const std::string& body,
@@ -34,25 +41,24 @@ class FileUploadHandler : public AHandler {
                               const std::string& full_boundary,
                               const std::string& end_boundary,
                               const std::string& filename, bool& file_found);
+    
+    // File saving operations
     bool save_uploaded_file(Connection *conn, const std::string& filename,
                             const std::vector<char>& data, codes::UploadError& error);
-    std::string extract_boundary(const std::string& content_type);
-    std::string sanitize_filename(const std::string& filename);
+    bool write_file_to_disk(const std::string& file_path,
+                            const std::vector<char>& data,
+                            codes::UploadError& error);
+    
+    // Directory operations
     std::string get_upload_directory(Connection* conn);
-    bool validate_upload_size(size_t size, size_t max_body_size);
     bool ensure_upload_directory_exists(const std::string& upload_dir,
                                         codes::UploadError& error);
     bool create_directory_recursive(const std::string& path,
                                     codes::UploadError& error);
-    bool validate_upload_environment(const std::string& upload_dir,
-                                     size_t file_size,
-                                     codes::UploadError& error);
-    bool check_disk_space(const std::string& upload_dir,
-                          size_t file_size,
-                          codes::UploadError& error);
-    bool write_file_to_disk(const std::string& file_path,
-                            const std::vector<char>& data,
-                            codes::UploadError& error);
+    
+    // Utility methods
+    std::string extract_boundary(const std::string& content_type);
+    std::string sanitize_filename(const std::string& filename);
 
     // Prevent copying
     FileUploadHandler(const FileUploadHandler&);

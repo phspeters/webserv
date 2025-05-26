@@ -6,33 +6,47 @@ void ErrorHandler::get_error_info_from_parse_status(codes::ParseStatus parse_sta
                                                     int& status_code, 
                                                     std::string& message) {
     switch (parse_status) {
-        case codes::PARSE_ERROR_BAD_REQUEST:
+        case codes::PARSE_ERROR:
+        case codes::PARSE_INVALID_REQUEST_LINE:
+        case codes::PARSE_INVALID_PATH:
+        case codes::PARSE_INVALID_QUERY_STRING:
+        case codes::PARSE_MISSING_HOST_HEADER:
+        case codes::PARSE_INVALID_CONTENT_LENGTH:
             status_code = 400;
             message = "Bad Request: Invalid HTTP request format";
             break;
-        case codes::PARSE_ERROR_METHOD_NOT_ALLOWED:
+        case codes::PARSE_METHOD_NOT_ALLOWED:
             status_code = 405;
             message = "Method Not Allowed";
             break;
-        case codes::PARSE_ERROR_ENTITY_TOO_LARGE:
+        case codes::PARSE_CONTENT_TOO_LARGE:
             status_code = 413;
             message = "Payload Too Large";
             break;
-        case codes::PARSE_ERROR_URI_TOO_LONG:
+        case codes::PARSE_REQUEST_TOO_LONG:
             status_code = 414;
             message = "URI Too Long";
             break;
-        case codes::PARSE_ERROR_HEADER_TOO_LARGE:
+        case codes::PARSE_HEADER_TOO_LONG:
+        case codes::PARSE_TOO_MANY_HEADERS:
             status_code = 431;
             message = "Request Header Fields Too Large";
             break;
-        case codes::PARSE_ERROR_HTTP_VERSION_NOT_SUPPORTED:
+        case codes::PARSE_VERSION_NOT_SUPPORTED:
             status_code = 505;
             message = "HTTP Version Not Supported";
             break;
-        case codes::PARSE_ERROR_REQUEST_TIMEOUT:
-            status_code = 408;
-            message = "Request Timeout";
+        case codes::PARSE_MISSING_CONTENT_LENGTH:
+            status_code = 411;
+            message = "Length Required";
+            break;
+        case codes::PARSE_UNKNOWN_ENCODING:
+            status_code = 501;
+            message = "Not Implemented";
+            break;
+        case codes::PARSE_INVALID_CHUNK_SIZE:
+            status_code = 400;
+            message = "Bad Request: Invalid chunk size";
             break;
         default:
             status_code = 500;
@@ -45,61 +59,61 @@ void ErrorHandler::get_error_info_from_response_status(codes::ResponseStatus res
                                                       int& status_code,
                                                       std::string& message) {
     switch (response_status) {
-        case codes::RESPONSE_ERROR_BAD_REQUEST:
+        case codes::BAD_REQUEST:
             status_code = 400;
             message = "Bad Request";
             break;
-        case codes::RESPONSE_ERROR_UNAUTHORIZED:
+        case codes::UNAUTHORIZED:
             status_code = 401;
             message = "Unauthorized";
             break;
-        case codes::RESPONSE_ERROR_FORBIDDEN:
+        case codes::FORBIDDEN:
             status_code = 403;
             message = "Forbidden";
             break;
-        case codes::RESPONSE_ERROR_NOT_FOUND:
+        case codes::NOT_FOUND:
             status_code = 404;
             message = "Not Found";
             break;
-        case codes::RESPONSE_ERROR_METHOD_NOT_ALLOWED:
+        case codes::METHOD_NOT_ALLOWED:
             status_code = 405;
             message = "Method Not Allowed";
             break;
-        case codes::RESPONSE_ERROR_REQUEST_TIMEOUT:
+        case codes::REQUEST_TIMEOUT:
             status_code = 408;
             message = "Request Timeout";
             break;
-        case codes::RESPONSE_ERROR_PAYLOAD_TOO_LARGE:
+        case codes::PAYLOAD_TOO_LARGE:
             status_code = 413;
             message = "Payload Too Large";
             break;
-        case codes::RESPONSE_ERROR_UNSUPPORTED_MEDIA_TYPE:
+        case codes::UNSUPPORTED_MEDIA_TYPE:
             status_code = 415;
             message = "Unsupported Media Type";
             break;
-        case codes::RESPONSE_ERROR_TOO_MANY_REQUESTS:
-            status_code = 429;
-            message = "Too Many Requests";
-            break;
-        case codes::RESPONSE_ERROR_INTERNAL_SERVER_ERROR:
+        case codes::INTERNAL_SERVER_ERROR:
             status_code = 500;
             message = "Internal Server Error";
             break;
-        case codes::RESPONSE_ERROR_NOT_IMPLEMENTED:
+        case codes::NOT_IMPLEMENTED:
             status_code = 501;
             message = "Not Implemented";
             break;
-        case codes::RESPONSE_ERROR_BAD_GATEWAY:
+        case codes::BAD_GATEWAY:
             status_code = 502;
             message = "Bad Gateway";
             break;
-        case codes::RESPONSE_ERROR_SERVICE_UNAVAILABLE:
+        case codes::SERVICE_UNAVAILABLE:
             status_code = 503;
             message = "Service Unavailable";
             break;
-        case codes::RESPONSE_ERROR_GATEWAY_TIMEOUT:
+        case codes::GATEWAY_TIMEOUT:
             status_code = 504;
             message = "Gateway Timeout";
+            break;
+        case codes::HTTP_VERSION_NOT_SUPPORTED:
+            status_code = 505;
+            message = "HTTP Version Not Supported";
             break;
         default:
             status_code = 500;
@@ -117,7 +131,7 @@ void ErrorHandler::generate_error_response(Connection* conn) {
     }
 
     // Check if this is a valid error state
-    if (conn->parse_status_ == codes::PARSE_COMPLETE || 
+    if (conn->parse_status_ == codes::PARSE_SUCCESS || 
         conn->parse_status_ == codes::PARSE_INCOMPLETE) {
         log(LOG_WARNING, "generate_error_response called with non-error parse status: %d", 
             static_cast<int>(conn->parse_status_));
@@ -138,7 +152,6 @@ void ErrorHandler::generate_error_response(Connection* conn) {
     conn->response_data_->headers_["Date"] = get_current_gmt_time();
     
     // Update connection state
-    conn->response_status_ = codes::RESPONSE_READY;
     conn->conn_state_ = codes::CONN_WRITING;
     
     log(LOG_INFO, "Generated error response %d for client_fd %d: %s", 
@@ -165,7 +178,6 @@ void ErrorHandler::generate_error_response(Connection* conn, codes::ResponseStat
     conn->response_data_->headers_["Date"] = get_current_gmt_time();
     
     // Update connection state
-    conn->response_status_ = codes::RESPONSE_READY;
     conn->conn_state_ = codes::CONN_WRITING;
     
     log(LOG_INFO, "Generated error response %d for client_fd %d: %s", 
@@ -294,7 +306,6 @@ void ErrorHandler::apply_to_connection(Connection* conn, int status_code, const 
     conn->response_data_->headers_["Date"] = get_current_gmt_time();
 
     // Update connection state to writing
-    conn->response_status_ = codes::RESPONSE_READY;
     conn->conn_state_ = codes::CONN_WRITING;
     
     log(LOG_DEBUG, "Applied error %d to connection [fd:%d]", status_code, conn->client_fd_);
