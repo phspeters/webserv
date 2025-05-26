@@ -8,6 +8,8 @@ ConnectionManager::~ConnectionManager() {
          it != active_connections_.end(); ++it) {
         delete it->second;
     }
+
+    log(LOG_TRACE, "ConnectionManager resources cleaned up");
 }
 
 Connection* ConnectionManager::create_connection(
@@ -16,12 +18,14 @@ Connection* ConnectionManager::create_connection(
     try {
         Connection* conn = new Connection(client_fd, default_virtual_server);
         active_connections_[client_fd] = conn;
+        log(LOG_INFO, "Created new connection for client (fd: %i) on %s:%d",
+            client_fd, default_virtual_server->host_.c_str(),
+            default_virtual_server->port_);
         return conn;
     } catch (const std::exception& e) {
         // Handle error
-        std::cerr << "Failed to create connection for client (fd: " << client_fd
-                  << ")" << "on " << default_virtual_server->host_ << ":"
-                  << default_virtual_server->port_ << std::endl;
+        log(LOG_ERROR, "Failed to create connection for client (fd: %i): %s",
+            client_fd, e.what());
         return NULL;
     }
 }
@@ -34,7 +38,11 @@ void ConnectionManager::close_connection(int client_fd) {
         // Close and delete the connection
         delete it->second;
         active_connections_.erase(it);
+        log(LOG_INFO, "Closed connection for client (fd: %i)", client_fd);
+        return;
     }
+
+    log(LOG_FATAL, "Connection not found for socket '%i'", client_fd);
 }
 
 void ConnectionManager::close_connection(Connection* conn) {
@@ -45,7 +53,12 @@ void ConnectionManager::close_connection(Connection* conn) {
         // Close and delete the connection
         delete it->second;
         active_connections_.erase(it);
+        log(LOG_INFO, "Closed connection for client (fd: %i)",
+            conn->client_fd_);
+        return;
     }
+
+    log(LOG_FATAL, "Connection not found for socket '%i'", conn->client_fd_);
 }
 
 Connection* ConnectionManager::get_connection(int client_fd) {
@@ -54,9 +67,10 @@ Connection* ConnectionManager::get_connection(int client_fd) {
         active_connections_.find(client_fd);
     if (it != active_connections_.end()) {
         return it->second;
+        log(LOG_TRACE, "Retrieved connection for client (fd: %i)", client_fd);
     }
-    std::cerr << "Connection not found for client (fd: " << client_fd << ")"
-              << std::endl;
+
+    log(LOG_FATAL, "Connection not found for client (fd: %i)", client_fd);
     return NULL;  // Not found
 }
 
@@ -68,8 +82,9 @@ int ConnectionManager::close_timed_out_connections() {
         Connection* conn = it->second;
         it++;
         if (is_timed_out(conn)) {
-            std::cerr << "Connection timed out (fd: " << conn->client_fd_ << ")"
-                      << std::endl;
+            log(LOG_WARNING,
+                "Connection (fd: %i) timed out after %ld seconds, closing",
+                conn->client_fd_, http_limits::TIMEOUT);
             close_connection(conn);
             closed++;
         }

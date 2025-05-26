@@ -21,6 +21,7 @@ Connection::Connection(int fd, const VirtualServer* default_virtual_server)
       static_file_bytes_to_send_(0) {}
 
 Connection::~Connection() {
+    // Clean up owned resources
     if (request_data_) {
         delete request_data_;
     }
@@ -29,9 +30,22 @@ Connection::~Connection() {
         delete response_data_;
     }
 
+    // Close any open file descriptors
     if (client_fd_ >= 0) {
         close(client_fd_);
     }
+    if (static_file_fd_ >= 0) {
+        close(static_file_fd_);
+    }
+    if (cgi_pipe_stdin_fd_ >= 0) {
+        close(cgi_pipe_stdin_fd_);
+    }
+    if (cgi_pipe_stdout_fd_ >= 0) {
+        close(cgi_pipe_stdout_fd_);
+    }
+
+    log(LOG_TRACE, "Connection resources cleaned up for socket '%i'",
+        client_fd_);
 }
 
 // TODO implement cleanup for file_upload_handler
@@ -58,6 +72,12 @@ void Connection::reset_for_keep_alive() {
     parse_status_ = codes::PARSE_INCOMPLETE;
     writer_state_ = codes::WRITING_INCOMPLETE;
 
+    // Reset location match
+    location_match_ = NULL;
+
+    // Reset active handler
+    active_handler_ = NULL;
+
     // Close any open file descriptors
     if (static_file_fd_ >= 0) {
         close(static_file_fd_);
@@ -79,6 +99,9 @@ void Connection::reset_for_keep_alive() {
 
     // Reset activity timer
     last_activity_ = time(NULL);
+
+    log(LOG_DEBUG, "Connection reset for keep-alive on socket '%i'",
+        client_fd_);
 }
 
 bool Connection::is_readable() const {
@@ -98,10 +121,11 @@ bool Connection::is_error() const { return conn_state_ == codes::CONN_ERROR; }
 
 bool Connection::is_keep_alive() const {
     if (!request_data_) {
-        std::cout << "WARNING Request data is invalid for fd: " << client_fd_
-                  << std::endl;
+        log(LOG_FATAL, "Request data is invalid for socket '%i'", client_fd_);
         return false;
     }
+
+    log(LOG_TRACE, "Checking keep-alive for socket '%i'", client_fd_);
 
     // For HTTP/1.0: requires explicit "Connection: keep-alive"
     if (request_data_->version_ == "HTTP/1.0") {
