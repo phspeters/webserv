@@ -5,6 +5,9 @@ ResponseWriter::ResponseWriter() {}
 ResponseWriter::~ResponseWriter() {}
 
 codes::WriterState ResponseWriter::write_response(Connection* conn) {
+    log(LOG_DEBUG, "handle_write: Writing response to client_fd %d",
+        conn->client_fd_);
+
     // Validate connection
     if (!conn || conn->client_fd_ < 0) {
         return codes::WRITING_ERROR;

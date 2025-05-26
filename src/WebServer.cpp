@@ -27,15 +27,17 @@ WebServer::~WebServer() {
     for (std::vector<int>::iterator it = listener_fds_.begin();
          it != listener_fds_.end(); ++it) {
         if (*it != -1) {
+            log(LOG_TRACE, "Closing listener socket: %d", *it);
             close(*it);
         }
     }
 
     if (epoll_fd_ >= 0) {
+        log(LOG_TRACE, "Closing epoll instance: %d", epoll_fd_);
         close(epoll_fd_);
     }
 
-	log(LOG_INFO, "WebServer resources cleaned up");
+    log(LOG_INFO, "WebServer resources cleaned up");
 }
 
 bool WebServer::init() {
@@ -50,7 +52,8 @@ bool WebServer::init() {
         // cgi_handler_ = new CgiHandler();
         file_upload_handler_ = new FileUploadHandler();
     } catch (const std::bad_alloc& e) {
-        log(LOG_ERROR, "Memory allocation failed: %s", e.what());
+        log(LOG_ERROR, "WebServer components memory allocation failed: %s",
+            e.what());
         return false;
     }
 
@@ -121,6 +124,12 @@ bool WebServer::parse_config_file(const std::string& filename) {
                         error_msg.c_str());
                     return false;  // Validation error
                 }
+
+                log(LOG_DEBUG,
+                    "Parsed valid virtual server configuration for host: %s, "
+                    "port: %d",
+                    virtual_server.host_.c_str(), virtual_server.port_);
+
                 // Add to main vector
                 virtual_servers_.push_back(virtual_server);
 
@@ -141,9 +150,9 @@ bool WebServer::parse_config_file(const std::string& filename) {
                 port_to_hosts_[port][host].push_back(server_ptr);
             }
 
-            // TEMP- Print the parsed configuration
-            print_virtual_server(virtual_server);
-            // TEMP
+            if (log(LOG_TRACE, "Parsed virtual server configuration:") > 0) {
+                print_virtual_server(virtual_server);
+            }
 
         } else {
             log(LOG_ERROR, "Error parsing server block");
@@ -154,6 +163,8 @@ bool WebServer::parse_config_file(const std::string& filename) {
     // Close the file
     file.close();
 
+    log(LOG_INFO, "Parsed %zu virtual servers from configuration file",
+        virtual_servers_.size());
     return true;
 }
 
@@ -165,7 +176,10 @@ void WebServer::run() {
     event_loop();
 }
 
-void WebServer::shutdown() { ready_ = false; }
+void WebServer::shutdown() {
+    ready_ = false;
+    log(LOG_INFO, "WebServer shutdown initiated");
+}
 
 void WebServer::event_loop() {
     struct epoll_event events[MAX_EPOLL_EVENTS];
@@ -179,13 +193,8 @@ void WebServer::event_loop() {
         // Wait for events on the epoll instance
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
                                       http_limits::TIMEOUT);
-
         if (ready_events < 0) {
-            // Handle error or signal interruption
-            if (errno == EINTR) {
-                log(LOG_DEBUG, "event_loop: Interrupted by signal, continuing");
-                continue;  // Interrupted by signal, continue loop
-            }
+            // Handle error
             log(LOG_ERROR, "event_loop: epoll_wait error: %s", strerror(errno));
             break;
         }
@@ -276,7 +285,7 @@ void WebServer::handle_client_event(int client_fd, uint32_t events) {
     Connection* conn = conn_manager_->get_connection(client_fd);
     if (!conn) {
         // Handle error
-        log(LOG_ERROR, "Connection not found for client socket '%i'",
+        log(LOG_FATAL, "Connection not found for client socket '%i'",
             client_fd);
         return;
     }
@@ -304,11 +313,7 @@ void WebServer::handle_read(Connection* conn) {
     }
 
     // Try to parse the buffer into a full request
-    log(LOG_DEBUG, "handle_read: Parsing request for client_fd %d",
-        conn->client_fd_);
     conn->parse_status_ = request_parser_->parse(conn);
-    log(LOG_DEBUG, "handle_read: Parse status %d for client_fd %d",
-        conn->parse_status_, conn->client_fd_);
 
     // If we have completed parsing headers, we need to match the host header
     if (conn->parse_status_ == codes::PARSE_HEADERS_COMPLETE) {
@@ -329,9 +334,9 @@ void WebServer::handle_read(Connection* conn) {
         return;
     }
 
-    // TEMP - Print request to console
-    print_request(conn);
-    // TEMP
+    if (log(LOG_TRACE, "Printing request for debugging:") > 0) {
+        print_request(conn);
+    }
 
     // Match path from uri to best location
     conn->location_match_ = find_matching_location(conn->virtual_server_,
@@ -347,12 +352,12 @@ void WebServer::handle_write(Connection* conn) {
         conn ? conn->client_fd_ : -1);
 
     if (!conn) {
-        log(LOG_ERROR, "handle_write: Connection pointer is NULL");
+        log(LOG_FATAL, "handle_write: Connection pointer is NULL");
         return;
     }
 
     if (!conn->request_data_) {
-        log(LOG_ERROR, "handle_write: Request data is NULL for client_fd %d",
+        log(LOG_FATAL, "handle_write: Request data is NULL for client_fd %d",
             conn->client_fd_);
         handle_error(conn);
         return;
@@ -375,17 +380,15 @@ void WebServer::handle_write(Connection* conn) {
     } else {
         // Route the request to the appropriate handler
         if (!conn->active_handler_) {
-            log(LOG_DEBUG, "handle_write: Choosing handler for client_fd %d",
-                conn->client_fd_);
             conn->active_handler_ = choose_handler(conn);
         }
         // Call the handler to process the request and generate a response
+        // TODO - Move logging to handle function
         log(LOG_DEBUG,
             "handle_write: Handling request with active_handler for client_fd "
             "%d",
             conn->client_fd_);
         conn->active_handler_->handle(conn);
-        // conn->response_data_ = conn->active_handler_->handle(conn);
     }
 
     // // TEMP - Call StaticFileHandler to test
@@ -429,8 +432,6 @@ void WebServer::handle_write(Connection* conn) {
     // TEMP
 
     // Write the response to the client
-    log(LOG_DEBUG, "handle_write: Writing response to client_fd %d",
-        conn->client_fd_);
     codes::WriterState status = response_writer_->write_response(conn);
 
     switch (status) {
@@ -490,7 +491,7 @@ void WebServer::handle_error(Connection* conn) {
 
 void WebServer::close_client_connection(Connection* conn) {
     if (!conn) {
-        log(LOG_ERROR, "Connection is invalid, cannot close.");
+        log(LOG_FATAL, "Connection is invalid, cannot close.");
         return;
     }
 
@@ -665,7 +666,7 @@ bool WebServer::register_epoll_events(int fd, uint32_t events) {
 
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &event) < 0) {
         // Handle error
-        log(LOG_ERROR, "Failed to register socket '%i'", fd);
+        log(LOG_ERROR, "Failed to register socket '%i' on epoll", fd);
         return false;
     }
 
@@ -684,6 +685,7 @@ bool WebServer::update_epoll_events(int fd, uint32_t events) {
         return false;
     }
 
+    log(LOG_DEBUG, "Updated epoll events for socket '%i' to %u", fd, events);
     return true;
 }
 
@@ -812,6 +814,11 @@ bool WebServer::validate_request_location(Connection* conn) {
         }
     }
 
+    log(LOG_DEBUG,
+        "Connection '%i', Host '%s': Request method '%s' is allowed for path "
+        "'%s'",
+        conn->client_fd_, conn->virtual_server_->host_name_.c_str(),
+        request_method.c_str(), matching_location->path_.c_str());
     return true;
 }
 
@@ -827,12 +834,21 @@ AHandler* WebServer::choose_handler(Connection* conn) {
     // Return appropriate handler based on location config
     if (matching_location->cgi_enabled_) {
         // CGI handler for CGI-enabled locations
+        log(LOG_DEBUG,
+            "choose_handler: Using CgiHandler for client_fd %d, path %s",
+            conn->client_fd_, matching_location->path_.c_str());
         return cgi_handler_;
     } else if (request_method == "POST" || request_method == "DELETE") {
         // FileUploadHandler for file uploads
+        log(LOG_DEBUG,
+            "choose_handler: Using FileUploadHandler for client_fd %d, path %s",
+            conn->client_fd_, matching_location->path_.c_str());
         return file_upload_handler_;
     } else {
         // Default to StaticFileHandler for regular files
+        log(LOG_DEBUG,
+            "choose_handler: Using StaticFileHandler for client_fd %d, path %s",
+            conn->client_fd_, matching_location->path_.c_str());
         return static_file_handler_;
     }
 }
@@ -850,8 +866,19 @@ void WebServer::match_host_header(Connection* conn) {
         // Look for matching virtual server
         if (hostname_to_virtual_server_.find(host) !=
             hostname_to_virtual_server_.end()) {
+            log(LOG_DEBUG, "Matched Host header '%s' to virtual server",
+                host.c_str());
             conn->virtual_server_ = hostname_to_virtual_server_[host];
+            return;
         }
     }
-    // If no match is found, conn->virtual_server_ remains as the default
+
+    log(LOG_DEBUG, "No matching virtual server found for Host header '%s'",
+        host.c_str());
+    if (!conn->virtual_server_) {
+        // If no match found, use the default server for this connection
+        conn->virtual_server_ = conn->default_virtual_server_;
+        log(LOG_DEBUG, "Using default virtual server for connection '%i'",
+            conn->client_fd_);
+    }
 }
