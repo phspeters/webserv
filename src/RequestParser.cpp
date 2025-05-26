@@ -15,15 +15,14 @@ bool RequestParser::read_from_socket(Connection* conn) {
 
     if (bytes_read == 0) {
         // Connection closed by client
-        std::cout << "Client disconnected (fd: " << conn->client_fd_ << ")"
-                  << std::endl;
+        log(LOG_WARNING, "Client disconnected (fd: %i)", conn->client_fd_);
         return false;
     }
 
     if (bytes_read < 0) {
         // Handle error
-        std::cerr << "Read error on socket (fd: " << conn->client_fd_ << ")"
-                  << std::endl;
+        log(LOG_ERROR, "Error reading from socket (fd: %i): %s",
+            conn->client_fd_, strerror(errno));
         return false;
     }
 
@@ -33,11 +32,15 @@ bool RequestParser::read_from_socket(Connection* conn) {
     // Resize the buffer to the actual size read
     conn->read_buffer_.resize(original_size + bytes_read);
 
+    log(LOG_DEBUG, "Read %zd bytes from socket (fd: %i)", bytes_read,
+        conn->client_fd_);
+
     return true;
 }
 
 codes::ParseStatus RequestParser::parse(Connection* conn) {
     codes::ParseStatus parse_status = codes::PARSE_INCOMPLETE;
+
     if (!conn->read_buffer_.empty()) {
         // Process based on current state
         // The state transition is handled inside each parsing function
@@ -66,10 +69,15 @@ codes::ParseStatus RequestParser::parse(Connection* conn) {
         }
     }
 
+    log(LOG_DEBUG, "Parsing attempt on Connection '%i' with status: %i",
+        conn->client_fd_, parse_status);
+
     return parse_status;
 }
 
 codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
+    log(LOG_DEBUG, "Parsing request line for connection: %i", conn->client_fd_);
+
     std::vector<char>& buffer = conn->read_buffer_;
     HttpRequest* request = conn->request_data_;
 
@@ -80,8 +88,12 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
     if (line_end == buffer.end()) {
         // Not enough data yet
         if (buffer.size() > http_limits::MAX_REQUEST_LINE_LENGTH) {
+            log(LOG_ERROR, "Request line too long for connection: %i",
+                conn->client_fd_);
             return codes::PARSE_REQUEST_TOO_LONG;
         }
+        log(LOG_DEBUG, "Request line incomplete for connection: %i",
+            conn->client_fd_);
         return codes::PARSE_INCOMPLETE;
     }
 
@@ -102,6 +114,9 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
 
     // Move to header parsing
     conn->parser_state_ = codes::PARSING_HEADERS;
+    log(LOG_DEBUG, "Request line parsed successfully for connection: %i",
+        conn->client_fd_);
+
     return codes::PARSE_INCOMPLETE;
 }
 
@@ -112,6 +127,8 @@ bool RequestParser::split_request_line(HttpRequest* request,
     size_t last_space = request_line.rfind(' ');
 
     if (first_space == std::string::npos || last_space == first_space) {
+        log(LOG_ERROR, "Invalid request line format: '%s'",
+            request_line.c_str());
         return false;
     }
 
@@ -136,16 +153,19 @@ bool RequestParser::split_uri_components(HttpRequest* request) {
     if (query_pos != std::string::npos) {
         request->path_ = decode_uri_path(uri.substr(0, query_pos));
         if (request->path_.empty()) {
+            log(LOG_ERROR, "Invalid path in URI: '%s'", uri.c_str());
             return false;  // Invalid path
         }
         request->query_string_ =
             decode_uri_query(request->uri_.substr(query_pos + 1));
         if (request->query_string_.empty()) {
+            log(LOG_ERROR, "Invalid query string in URI: '%s'", uri.c_str());
             return false;  // Invalid query string
         }
     } else {
         request->path_ = decode_uri_path(request->uri_);
         if (request->path_.empty()) {
+            log(LOG_ERROR, "Invalid path in URI: '%s'", uri.c_str());
             return false;  // Invalid path
         }
         request->query_string_.clear();
@@ -197,6 +217,7 @@ std::string RequestParser::decode_uri_path(const std::string& uri) {
         }
     }
 
+    log(LOG_DEBUG, "Decoded URI path: '%s'", decoded_uri.c_str());
     return decoded_uri;
 }
 
@@ -246,34 +267,55 @@ std::string RequestParser::decode_uri_query(const std::string& uri) {
         }
     }
 
+    log(LOG_DEBUG, "Decoded URI query: '%s'", decoded_uri.c_str());
     return decoded_uri;
 }
 
 codes::ParseStatus RequestParser::validate_request_line(
     const HttpRequest* request) {
     if (!validate_method(request->method_)) {
+        log(LOG_WARNING, "Invalid HTTP method: '%s'", request->method_.c_str());
         return codes::PARSE_METHOD_NOT_ALLOWED;
     }
 
     if (!validate_path(request->path_)) {
+        log(LOG_WARNING, "Invalid path in request: '%s'",
+            request->path_.c_str());
         return codes::PARSE_INVALID_PATH;
     }
 
     if (!validate_query_string(request->query_string_)) {
+        log(LOG_WARNING, "Invalid query string in request: '%s'",
+            request->query_string_.c_str());
         return codes::PARSE_INVALID_QUERY_STRING;
     }
 
     if (!validate_http_version(request->version_)) {
+        log(LOG_WARNING, "Unsupported HTTP version: '%s'",
+            request->version_.c_str());
         return codes::PARSE_VERSION_NOT_SUPPORTED;
     }
+
+    log(LOG_DEBUG, "Request line validated successfully: '%s %s %s'",
+        request->method_.c_str(), request->path_.c_str(),
+        request->version_.c_str());
 
     return codes::PARSE_SUCCESS;
 }
 
 int RequestParser::hex_to_int(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+
+    log(LOG_FATAL, "Invalid hex character: '%c'", c);
+
     return -1;  // Should never reach here due to isxdigit check
 }
 
@@ -293,21 +335,26 @@ bool RequestParser::validate_method(const std::string& method) {
 bool RequestParser::validate_path(const std::string& path) {
     // If path is empty, it's invalid
     if (path.empty()) {
+        log(LOG_WARNING, "Empty path in request");
         return false;
     }
 
     // Check for length limit
     if (path.size() > http_limits::MAX_PATH_LENGTH) {
+        log(LOG_WARNING, "Path too long in request: '%s'", path.c_str());
         return false;
     }
 
     // Must start with a slash
     if (path[0] != '/') {
+        log(LOG_WARNING, "Path must start with a slash: '%s'", path.c_str());
         return false;
     }
 
     // Check for multiple consecutive slashes (e.g. "//home")
     if (path.find("//") != std::string::npos) {
+        log(LOG_WARNING, "Path contains multiple consecutive slashes: '%s'",
+            path.c_str());
         return false;
     }
 
@@ -316,6 +363,8 @@ bool RequestParser::validate_path(const std::string& path) {
     std::istringstream path_stream(path.substr(1));  // Skip leading '/'
     while (std::getline(path_stream, segment, '/')) {
         if (segment == ".." || segment == "." || segment.empty()) {
+            log(LOG_WARNING, "Path contains invalid segment: '%s'",
+                segment.c_str());
             return false;
         }
     }
@@ -337,20 +386,25 @@ bool RequestParser::validate_path(const std::string& path) {
         }
 
         // Reject any other characters
+        log(LOG_WARNING, "Invalid character in path: '%c' in '%s'", c,
+            path.c_str());
         return false;
     }
 
+    log(LOG_DEBUG, "Path validated successfully: '%s'", path.c_str());
     return true;
 }
 
 bool RequestParser::validate_query_string(const std::string& query_string) {
     // If query string is empty, it's valid
     if (query_string.empty()) {
+        log(LOG_DEBUG, "Empty query string is valid");
         return true;
     }
 
     // Check for length limit
     if (query_string.size() > http_limits::MAX_QUERY_LENGTH) {
+        log(LOG_WARNING, "Query string too long: '%s'", query_string.c_str());
         return false;
     }
 
@@ -371,9 +425,13 @@ bool RequestParser::validate_query_string(const std::string& query_string) {
         }
 
         // Reject any other characters
+        log(LOG_WARNING, "Invalid character in query string: '%c' in '%s'", c,
+            query_string.c_str());
         return false;
     }
 
+    log(LOG_DEBUG, "Query string validated successfully: '%s'",
+        query_string.c_str());
     return true;
 }
 
@@ -382,6 +440,7 @@ bool RequestParser::validate_http_version(const std::string& version) {
 }
 
 codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
+    log(LOG_DEBUG, "Parsing headers for connection: %i", conn->client_fd_);
     std::vector<char>& buffer = conn->read_buffer_;
     HttpRequest* request = conn->request_data_;
 
@@ -397,8 +456,12 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
         if (line_end == buffer.end()) {
             // Check header size limit before requesting more data
             if (buffer.size() > http_limits::MAX_HEADER_VALUE_LENGTH) {
+                log(LOG_ERROR, "Header value too long for connection: %i",
+                    conn->client_fd_);
                 return codes::PARSE_HEADER_TOO_LONG;
             }
+            log(LOG_DEBUG, "Headers parsing incomplete for connection: %i",
+                conn->client_fd_);
             return codes::PARSE_INCOMPLETE;
         }
 
@@ -416,6 +479,8 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
             process_single_header(header_line, request);
 
         if (parse_status != codes::PARSE_SUCCESS) {
+            log(LOG_ERROR, "Failed to parse header '%s' for connection: %i",
+                header_line.c_str(), conn->client_fd_);
             return parse_status;
         }
 
@@ -425,13 +490,20 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
 
     // Headers are complete, determine next parser state
     if (headers_complete) {
+        log(LOG_DEBUG, "Finished headers parsing for connection: %i",
+            conn->client_fd_);
         codes::ParseStatus parse_status = validate_headers(conn);
         if (parse_status != codes::PARSE_SUCCESS) {
+            log(LOG_ERROR,
+                "Header validation failed for connection: %i with status: %i",
+                conn->client_fd_, parse_status);
             return parse_status;
         }
         return determine_request_body_handling(conn);
     }
 
+    log(LOG_DEBUG, "Headers parsing incomplete for connection: %i",
+        conn->client_fd_);
     return codes::PARSE_INCOMPLETE;
 }
 
@@ -501,15 +573,6 @@ codes::ParseStatus RequestParser::determine_request_body_handling(
             size_t body_size =
                 std::strtoul(content_length.c_str(), &end_ptr, 10);
 
-            // Validate content length format
-            if (end_ptr == content_length.c_str() || *end_ptr != '\0') {
-                return codes::PARSE_INVALID_CONTENT_LENGTH;
-            }
-
-            if (body_size > conn->virtual_server_->client_max_body_size_) {
-                return codes::PARSE_CONTENT_TOO_LARGE;
-            }
-
             if (body_size > 0) {
                 conn->parser_state_ = codes::PARSING_BODY;
                 return codes::PARSE_HEADERS_COMPLETE;
@@ -563,11 +626,15 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
 
             // Check for invalid Content-Length format
             if (end_ptr == content_length.c_str() || *end_ptr != '\0') {
+                log(LOG_ERROR, "Invalid Content-Length header: '%s'",
+                    content_length.c_str());
                 // Translates to response status 400
                 return codes::PARSE_INVALID_CONTENT_LENGTH;
             }
 
             if (body_size > conn->virtual_server_->client_max_body_size_) {
+                log(LOG_ERROR, "Content-Length exceeds maximum size: %zu",
+                    body_size);
                 // Translates to response status 413
                 return codes::PARSE_CONTENT_TOO_LARGE;
             }
@@ -578,16 +645,22 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
             std::string transfer_encoding =
                 request->get_header("transfer-encoding");
             if (transfer_encoding != "chunked") {
+                log(LOG_ERROR, "Unknown Transfer-Encoding: '%s'",
+                    transfer_encoding.c_str());
                 // Translates to response status 501
-                return codes::PARSE_INVALID_ENCODING;
+                return codes::PARSE_UNKNOWN_ENCODING;
             }
         }
     }
 
+    log(LOG_DEBUG, "Headers validated successfully for connection: %i",
+        conn->client_fd_);
     return codes::PARSE_SUCCESS;
 }
 
 codes::ParseStatus RequestParser::parse_body(Connection* conn) {
+    log(LOG_DEBUG, "Parsing body for connection: %i", conn->client_fd_);
+
     std::vector<char>& buffer = conn->read_buffer_;
     HttpRequest* request = conn->request_data_;
 
@@ -597,6 +670,8 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
 
     // Check if we have enough data
     if (buffer.size() < body_size) {
+        log(LOG_DEBUG, "Body parsing incomplete for connection: %i",
+            conn->client_fd_);
         return codes::PARSE_INCOMPLETE;
     }
 
@@ -607,6 +682,8 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
     buffer.erase(buffer.begin(), buffer.begin() + body_size);
 
     // Request is complete
+    log(LOG_DEBUG, "Body parsed successfully for connection: %i",
+        conn->client_fd_);
     conn->parser_state_ = codes::PARSING_COMPLETE;
     return codes::PARSE_SUCCESS;
 }
@@ -615,6 +692,8 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
 // without needing to know the total size in advance. Each chunk has a size
 // prefix in hexadecimal notation, followed by the chunk data.
 codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
+    log(LOG_DEBUG, "Parsing chunked body for connection: %i", conn->client_fd_);
+
     std::vector<char>& buffer = conn->read_buffer_;
     HttpRequest* request = conn->request_data_;
     codes::ParseStatus parse_status;
@@ -627,6 +706,10 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                 parse_chunk_header(buffer, conn->chunk_remaining_bytes_);
 
             if (parse_status != codes::PARSE_SUCCESS) {
+                log(LOG_ERROR,
+                    "Failed to parse chunk header for "
+                    "connection: %i with status: %i",
+                    conn->client_fd_, parse_status);
                 return parse_status;  // Either incomplete or error
             }
 
@@ -634,6 +717,9 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
             if (conn->chunk_remaining_bytes_ == 0) {
                 codes::ParseStatus status = finish_chunked_parsing(buffer);
                 if (status == codes::PARSE_SUCCESS) {
+                    log(LOG_DEBUG,
+                        "Chunked body parsing complete for connection: %i",
+                        conn->client_fd_);
                     conn->parser_state_ = codes::PARSING_COMPLETE;
                 }
                 return status;
@@ -648,6 +734,9 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                             conn->virtual_server_->client_max_body_size_);
 
         if (parse_status != codes::PARSE_SUCCESS) {
+            log(LOG_ERROR,
+                "Failed to read chunk data for connection: %i with status: %i",
+                conn->client_fd_, parse_status);
             return parse_status;
         }
 
@@ -656,12 +745,18 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
             parse_status = process_chunk_terminator(buffer);
 
             if (parse_status != codes::PARSE_SUCCESS) {
+                log(LOG_ERROR,
+                    "Failed to process chunk terminator for "
+                    "connection: %i with status: %i",
+                    conn->client_fd_, parse_status);
                 return parse_status;
             }
         }
     }
 
     // Need more data
+    log(LOG_DEBUG, "Chunked body parsing incomplete for connection: %i",
+        conn->client_fd_);
     return codes::PARSE_INCOMPLETE;
 }
 
@@ -673,6 +768,7 @@ codes::ParseStatus RequestParser::parse_chunk_header(std::vector<char>& buffer,
         std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
 
     if (line_end == buffer.end()) {
+        log(LOG_DEBUG, "Chunk header parsing incomplete, need more data");
         return codes::PARSE_INCOMPLETE;  // Need more data
     }
 
@@ -696,17 +792,22 @@ codes::ParseStatus RequestParser::parse_chunk_header(std::vector<char>& buffer,
     // Ensure valid hex number
     if (end_ptr == chunk_size_line.c_str() ||
         (*end_ptr != '\0' && *end_ptr != ' ' && *end_ptr != '\t')) {
+        log(LOG_ERROR, "Invalid chunk size format: '%s'",
+            chunk_size_line.c_str());
         return codes::PARSE_INVALID_CHUNK_SIZE;
     }
 
     // Validate chunk size
     if (out_chunk_size > http_limits::MAX_CHUNK_SIZE) {
+        log(LOG_ERROR, "Chunk size exceeds maximum limit: %zu", out_chunk_size);
         return codes::PARSE_INVALID_CHUNK_SIZE;
     }
 
     // Remove chunk size line
     buffer.erase(buffer.begin(), line_end + 2);
 
+    log(LOG_DEBUG, "Parsed chunk size: %zu for connection: %i", out_chunk_size,
+        buffer.size());
     return codes::PARSE_SUCCESS;
 }
 
@@ -719,11 +820,14 @@ codes::ParseStatus RequestParser::read_chunk_data(std::vector<char>& buffer,
     size_t bytes_to_read = std::min(remaining_bytes, buffer.size());
 
     if (bytes_to_read == 0) {
+        log(LOG_DEBUG, "No chunk data to read");
         return codes::PARSE_INCOMPLETE;
     }
 
     // Validate total body size
     if (request->body_.size() + bytes_to_read > client_max_body_size) {
+        log(LOG_ERROR, "Chunked body exceeds maximum size: %zu",
+            request->body_.size() + bytes_to_read);
         return codes::PARSE_CONTENT_TOO_LARGE;
     }
 
@@ -735,6 +839,8 @@ codes::ParseStatus RequestParser::read_chunk_data(std::vector<char>& buffer,
     buffer.erase(buffer.begin(), buffer.begin() + bytes_to_read);
     remaining_bytes -= bytes_to_read;
 
+    log(LOG_DEBUG, "Read %zu bytes of chunk data for connection: %i",
+        bytes_to_read, request->body_.size());
     return codes::PARSE_SUCCESS;
 }
 
@@ -743,15 +849,19 @@ codes::ParseStatus RequestParser::process_chunk_terminator(
     std::vector<char>& buffer) {
     // Need CRLF after chunk data
     if (buffer.size() < 2) {
+        log(LOG_DEBUG, "Chunk terminator incomplete, need more data");
         return codes::PARSE_INCOMPLETE;
     }
 
     // Verify and consume CRLF
     if (buffer[0] != '\r' || buffer[1] != '\n') {
+        log(LOG_ERROR, "Invalid chunk terminator, expected CRLF");
         return codes::PARSE_ERROR;
     }
 
     buffer.erase(buffer.begin(), buffer.begin() + 2);
+    log(LOG_TRACE, "Processed chunk terminator for connection: %i",
+        buffer.size());
     return codes::PARSE_SUCCESS;
 }
 
@@ -765,6 +875,8 @@ codes::ParseStatus RequestParser::finish_chunked_parsing(
             std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
 
         if (line_end == buffer.end()) {
+            log(LOG_DEBUG,
+                "Chunked trailers parsing incomplete, need more data");
             return codes::PARSE_INCOMPLETE;  // Need more data
         }
 
@@ -772,6 +884,9 @@ codes::ParseStatus RequestParser::finish_chunked_parsing(
         if (line_end == buffer.begin()) {
             // This is the end marker - remove it and finish
             buffer.erase(buffer.begin(), buffer.begin() + 2);
+            log(LOG_DEBUG,
+                "Chunked trailers parsing complete for connection: %i",
+                buffer.size());
             return codes::PARSE_SUCCESS;
         }
 
@@ -782,6 +897,7 @@ codes::ParseStatus RequestParser::finish_chunked_parsing(
     }
 }
 
+// TODO - Move mapping function to ErrorHandler
 void RequestParser::handle_parse_error(Connection* conn,
                                        codes::ParseStatus status) {
     int http_status;

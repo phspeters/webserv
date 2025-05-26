@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    // Spin up servers and start event loop
+    // Spin up server and start event loop
     web_server.run();
 
     return EXIT_SUCCESS;

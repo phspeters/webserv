@@ -48,7 +48,7 @@ enum ParseStatus {
                                    // is missing
     PARSE_INVALID_CONTENT_LENGTH,  // Content-Length header is invalid
     PARSE_CONTENT_TOO_LARGE,       // Content length exceeds maximum
-    PARSE_INVALID_ENCODING,        // Invalid transfer encoding
+    PARSE_UNKNOWN_ENCODING,        // Unknown or unimplemented transfer encoding
     PARSE_INVALID_CHUNK_SIZE       // Invalid chunk size in chunked encoding
 };
 

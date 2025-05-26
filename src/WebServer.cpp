@@ -34,6 +34,8 @@ WebServer::~WebServer() {
     if (epoll_fd_ >= 0) {
         close(epoll_fd_);
     }
+
+	log(LOG_INFO, "WebServer resources cleaned up");
 }
 
 bool WebServer::init() {
