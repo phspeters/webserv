@@ -205,7 +205,7 @@ void CgiHandler::handle(Connection* conn) {
     // ---------- END EXECUTE THE CGI SCRIPT ----------
 }
 
-void setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
+void CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                      int cgi_to_server_pipe[2]) {
     if (pipe(server_to_cgi_pipe) == -1) {
         // Pipe creation failure
@@ -226,7 +226,7 @@ void setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
 }
 
 // TODO - Implement epoll registration
-void handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2],
+void CgiHandler::handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2],
                          int cgi_to_server_pipe[2]) {
     // Close the read-end of the pipe to CGI's stdin
     // and write-end of the pipe from CGI's stdout

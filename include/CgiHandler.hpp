@@ -43,6 +43,8 @@ class CgiHandler : public AHandler {
     bool execute_cgi_script(Connection* conn, const std::string& script_path);
     void parse_cgi_output(
         Connection* conn);  // Parses CGI headers/body separation
+    void setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2], int cgi_to_server_pipe[2]);
+    void handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2], int cgi_to_server_pipe[2]);
 
     // Prevent copying
     CgiHandler(const CgiHandler&);
