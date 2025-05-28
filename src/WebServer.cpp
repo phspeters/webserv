@@ -368,28 +368,28 @@ void WebServer::handle_write(Connection* conn) {
         conn->request_data_->method_.c_str(),
         conn->request_data_->path_.c_str(), conn->client_fd_);
 
-    if (conn->parse_status_ != codes::PARSE_SUCCESS) {
-        // TODO - Write function to generate response based on request error
-        log(LOG_WARNING, "handle_write: Invalid request from client_fd %d",
-            conn->client_fd_);
-        ErrorHandler::generate_error_response(conn);
-    } else if (!validate_request_location(conn)) {
-        log(LOG_WARNING,
-            "handle_write: Invalid request location for client_fd %d",
-            conn->client_fd_);
-    } else {
-        // Route the request to the appropriate handler
-        if (!conn->active_handler_) {
-            conn->active_handler_ = choose_handler(conn);
-        }
-        // Call the handler to process the request and generate a response
-        // TODO - Move logging to handle function
-        log(LOG_DEBUG,
-            "handle_write: Handling request with active_handler for client_fd "
-            "%d",
-            conn->client_fd_);
-        conn->active_handler_->handle(conn);
-    }
+    // if (conn->parse_status_ != codes::PARSE_SUCCESS) {
+    //     // TODO - Write function to generate response based on request error
+    //     log(LOG_WARNING, "handle_write: Invalid request from client_fd %d",
+    //         conn->client_fd_);
+    //     ErrorHandler::generate_error_response(conn);
+    // } else if (!validate_request_location(conn)) {
+    //     log(LOG_WARNING,
+    //         "handle_write: Invalid request location for client_fd %d",
+    //         conn->client_fd_);
+    // } else {
+    //     // Route the request to the appropriate handler
+    //     if (!conn->active_handler_) {
+    //         conn->active_handler_ = choose_handler(conn);
+    //     }
+    //     // Call the handler to process the request and generate a response
+    //     // TODO - Move logging to handle function
+    //     log(LOG_DEBUG,
+    //         "handle_write: Handling request with active_handler for client_fd "
+    //         "%d",
+    //         conn->client_fd_);
+    //     conn->active_handler_->handle(conn);
+    // }
 
     // // TEMP - Call StaticFileHandler to test
     //  conn->active_handler_ = static_file_handler_;
@@ -410,25 +410,24 @@ void WebServer::handle_write(Connection* conn) {
     // std::cout << "====================================" << std::endl;
 
     // // TEMP - Call FileUploadHandler to test
-    // conn->active_handler_ = file_upload_handler_;
-    // log(LOG_DEBUG, "handle_write: Using file_upload_handler for client_fd
-    // %d", conn->client_fd_); conn->active_handler_->handle(conn);
-    // // Print the HTTP response for debugging
-    // std::cout << "\n==== HTTP RESPONSE ====\n";
-    // std::cout << "Status: " << conn->response_data_->status_code_ << " "
-    //           << conn->response_data_->status_message_ << std::endl;
-    // std::cout << "Headers:" << std::endl;
-    // for (std::map<std::string, std::string>::const_iterator it =
-    //          conn->response_data_->headers_.begin();
-    //      it != conn->response_data_->headers_.end(); ++it) {
-    //     std::cout << "  " << it->first << ": " << it->second << std::endl;
-    // }
-    // std::cout << "Body size: " << conn->response_data_->body_.size() <<
-    //              " bytes" << std::endl;
-    // std::cout << "====================================" << std::endl;
+    conn->active_handler_ = file_upload_handler_;
+    log(LOG_DEBUG, "handle_write: Using file_upload_handler for client_fd %d", conn->client_fd_); conn->active_handler_->handle(conn);
+    // Print the HTTP response for debugging
+    std::cout << "\n==== HTTP RESPONSE ====\n";
+    std::cout << "Status: " << conn->response_data_->status_code_ << " "
+              << conn->response_data_->status_message_ << std::endl;
+    std::cout << "Headers:" << std::endl;
+    for (std::map<std::string, std::string>::const_iterator it =
+             conn->response_data_->headers_.begin();
+         it != conn->response_data_->headers_.end(); ++it) {
+        std::cout << "  " << it->first << ": " << it->second << std::endl;
+    }
+    std::cout << "Body size: " << conn->response_data_->body_.size() <<
+                 " bytes" << std::endl;
+    std::cout << "====================================" << std::endl;
 
     // TEMP - For now, create mock response
-    build_mock_response(conn);
+    // build_mock_response(conn);
     // TEMP
 
     // Write the response to the client

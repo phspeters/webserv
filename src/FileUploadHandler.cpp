@@ -1,6 +1,6 @@
 #include "webserv.hpp"
 
-// curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
+// curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload/
 
 FileUploadHandler::FileUploadHandler() : AHandler() {}
 
