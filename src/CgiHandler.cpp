@@ -41,13 +41,13 @@ void CgiHandler::handle(Connection* conn) {
 
     // Extract script information from the request (script_path_, path_info_,
     // query_string_)
-    if (!extract_script_info(conn->request_data_)) {
-        // Failed to extract script info, return error
-        log(LOG_ERROR, "Failed to extract CGI script information");
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
-        return;
-    }
+    // if (!extract_script_info(conn->request_data_)) {
+    //     // Failed to extract script info, return error
+    //     log(LOG_ERROR, "Failed to extract CGI script information");
+    //     ErrorHandler::generate_error_response(conn,
+    //                                           codes::INTERNAL_SERVER_ERROR);
+    //     return;
+    // }
 
     // 4. Script Path Resolution
     script_path_ = parse_absolute_path(conn);
