@@ -34,6 +34,13 @@ class WebServer {
 
     // Getter for instance
     static WebServer* get_instance() { return instance_; };
+    // Getter for the ConnectionManager
+    ConnectionManager* get_conn_manager() const { return conn_manager_; }
+
+    // TODO - Move to Utill.hpp/.cpp
+    bool set_non_blocking(int fd);
+    bool register_epoll_events(int fd, uint32_t events = EPOLLIN);
+    bool update_epoll_events(int fd, uint32_t mode);
 
    private:
     //--------------------------------------
@@ -74,7 +81,7 @@ class WebServer {
     void event_loop();
     int cleanup_timed_out_connections();
     void accept_new_connection(int listener_fd);
-    void handle_client_event(int client_fd, uint32_t event);
+    void handle_connection_event(int client_fd, uint32_t event);
 
     void handle_read(Connection* conn);   // Handles readable client socket
     void handle_write(Connection* conn);  // Handles writable client socket
@@ -91,9 +98,6 @@ class WebServer {
     bool create_listener_socket(
         const std::string& host, int port,
         std::map<std::string, std::vector<VirtualServer*> >& hosts);
-    bool set_non_blocking(int fd);
-    bool register_epoll_events(int fd, uint32_t events = EPOLLIN);
-    bool update_epoll_events(int fd, uint32_t mode);
     void remove_listener_socket(int fd);
 
     // Set up signal handlers for graceful shutdown (SIGINT, SIGTERM)

@@ -33,18 +33,20 @@ class CgiHandler : public AHandler {
         Connection* conn);  // Called when CGI stdin pipe is writable
 
    private:
-    std::string script_path_;   // Path to the CGI script
-    std::string path_info_;     // Path info for the CGI script
-    std::string query_string_;  // Query string for the CGI script
-
     // Helper methods for setting up environment, parsing CGI headers etc. go in
     // .cpp
-    bool setup_cgi_environment(Connection* conn);
-    bool execute_cgi_script(Connection* conn, const std::string& script_path);
+    bool validate_cgi_request(Connection* conn);
+    bool setup_cgi_execution(Connection* conn);
+    bool setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
+                         int cgi_to_server_pipe[2]);
+    void handle_child_pipes(Connection* conn, int server_to_cgi_pipe[2],
+                            int cgi_to_server_pipe[2]);
+    void setup_cgi_environment(Connection* conn);
+    void execute_cgi_script(Connection* conn);
+    bool handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2],
+                             int cgi_to_server_pipe[2]);
     void parse_cgi_output(
         Connection* conn);  // Parses CGI headers/body separation
-    void setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2], int cgi_to_server_pipe[2]);
-    void handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2], int cgi_to_server_pipe[2]);
 
     // Prevent copying
     CgiHandler(const CgiHandler&);

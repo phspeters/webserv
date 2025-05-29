@@ -50,7 +50,9 @@ struct Connection {
     codes::ConnectionState conn_state_;  // Current state of the connection
     codes::ParserState parser_state_;    // Current state of the parser
     codes::WriterState writer_state_;    // Current state of the writer
-    codes::ParseStatus parse_status_;    // Status of the last parsing attempt
+    codes::CgiHandlerState
+        cgi_handler_state_;            // State of the CGI handler (if active)
+    codes::ParseStatus parse_status_;  // Status of the last parsing attempt
 
     //--------------------------------------
     // Connection Management
@@ -67,15 +69,14 @@ struct Connection {
     //--------------------------------------
     // Handler-Specific State (Example for CGI - could be a union or void*)
     //--------------------------------------
-    AHandler* active_handler_;        // Pointer to the currently active handler 
+    AHandler* active_handler_;        // Pointer to the currently active handler
     const Location* location_match_;  // Best matching location for the request
 
     // CGI State (Only relevant if active_handler is CgiHandler)
     pid_t cgi_pid_;           // Process ID of the CGI script (-1 if none)
     int cgi_pipe_stdin_fd_;   // FD for writing request body TO CGI (-1 if none)
     int cgi_pipe_stdout_fd_;  // FD for reading response FROM CGI (-1 if none)
-    // Add more CGI state flags as needed (e.g., headers parsed, body
-    // writing/reading state)
+    std::string script_path_;  // Path to the CGI script
 
     // Static File State (Only relevant if active_handler is StaticFileHandler)
     int static_file_fd_;        // FD of the file being sent (-1 if none)

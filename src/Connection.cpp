@@ -12,6 +12,7 @@ Connection::Connection(int fd, const VirtualServer* default_virtual_server)
       conn_state_(codes::CONN_READING),
       parser_state_(codes::PARSING_REQUEST_LINE),
       writer_state_(codes::WRITING_INCOMPLETE),
+      cgi_handler_state_(codes::CGI_HANDLER_IDLE),
       parse_status_(codes::PARSE_INCOMPLETE),
       cgi_pid_(-1),
       cgi_pipe_stdin_fd_(-1),
@@ -37,10 +38,13 @@ Connection::~Connection() {
     if (static_file_fd_ >= 0) {
         close(static_file_fd_);
     }
+    WebServer* web_server = WebServer::get_instance();
     if (cgi_pipe_stdin_fd_ >= 0) {
+        web_server->get_conn_manager()->unregister_pipe(cgi_pipe_stdin_fd_);
         close(cgi_pipe_stdin_fd_);
     }
     if (cgi_pipe_stdout_fd_ >= 0) {
+        web_server->get_conn_manager()->unregister_pipe(cgi_pipe_stdout_fd_);
         close(cgi_pipe_stdout_fd_);
     }
 
@@ -69,8 +73,9 @@ void Connection::reset_for_keep_alive() {
     // Reset state variables
     conn_state_ = codes::CONN_READING;
     parser_state_ = codes::PARSING_REQUEST_LINE;
-    parse_status_ = codes::PARSE_INCOMPLETE;
     writer_state_ = codes::WRITING_INCOMPLETE;
+    cgi_handler_state_ = codes::CGI_HANDLER_IDLE;
+    parse_status_ = codes::PARSE_INCOMPLETE;
 
     // Reset location match
     location_match_ = NULL;
@@ -83,11 +88,14 @@ void Connection::reset_for_keep_alive() {
         close(static_file_fd_);
         static_file_fd_ = -1;
     }
+    WebServer* web_server = WebServer::get_instance();
     if (cgi_pipe_stdin_fd_ >= 0) {
+        web_server->get_conn_manager()->unregister_pipe(cgi_pipe_stdin_fd_);
         close(cgi_pipe_stdin_fd_);
         cgi_pipe_stdin_fd_ = -1;
     }
     if (cgi_pipe_stdout_fd_ >= 0) {
+        web_server->get_conn_manager()->unregister_pipe(cgi_pipe_stdout_fd_);
         close(cgi_pipe_stdout_fd_);
         cgi_pipe_stdout_fd_ = -1;
     }
@@ -96,6 +104,7 @@ void Connection::reset_for_keep_alive() {
     static_file_offset_ = 0;
     static_file_bytes_to_send_ = 0;
     cgi_pid_ = -1;
+    script_path_.clear();
 
     // Reset activity timer
     last_activity_ = time(NULL);

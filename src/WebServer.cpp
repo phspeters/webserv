@@ -195,6 +195,11 @@ void WebServer::event_loop() {
                                       http_limits::TIMEOUT);
         if (ready_events < 0) {
             // Handle error
+            if (errno == EINTR) {
+                // Interrupted by a signal, continue the loop
+                log(LOG_DEBUG, "event_loop: epoll_wait interrupted by signal");
+                continue;
+            }
             log(LOG_ERROR, "event_loop: epoll_wait error: %s", strerror(errno));
             break;
         }
@@ -232,7 +237,7 @@ void WebServer::event_loop() {
             } else {
                 // Handle client socket event
                 log(LOG_INFO, "Client event on socket '%i'", fd);
-                handle_client_event(fd, event_flags);
+                handle_connection_event(fd, event_flags);
             }
         }
     }
@@ -281,7 +286,7 @@ void WebServer::accept_new_connection(int listener_fd) {
     }
 }
 
-void WebServer::handle_client_event(int client_fd, uint32_t events) {
+void WebServer::handle_connection_event(int client_fd, uint32_t events) {
     Connection* conn = conn_manager_->get_connection(client_fd);
     if (!conn) {
         // Handle error
@@ -290,6 +295,7 @@ void WebServer::handle_client_event(int client_fd, uint32_t events) {
         return;
     }
 
+	// TODO - Use state machine to handle different events
     if (events & EPOLLIN) {
         handle_read(conn);
     } else if (events & EPOLLOUT) {
@@ -344,7 +350,7 @@ void WebServer::handle_read(Connection* conn) {
 
     // Change epoll interest event to EPOLLOUT for writing
     update_epoll_events(conn->client_fd_, EPOLLOUT);
-    conn->conn_state_ = codes::CONN_WRITING;
+    conn->conn_state_ = codes::CONN_PROCESSING;
 }
 
 void WebServer::handle_write(Connection* conn) {
@@ -368,28 +374,35 @@ void WebServer::handle_write(Connection* conn) {
         conn->request_data_->method_.c_str(),
         conn->request_data_->path_.c_str(), conn->client_fd_);
 
-    // if (conn->parse_status_ != codes::PARSE_SUCCESS) {
-    //     // TODO - Write function to generate response based on request error
-    //     log(LOG_WARNING, "handle_write: Invalid request from client_fd %d",
-    //         conn->client_fd_);
-    //     ErrorHandler::generate_error_response(conn);
-    // } else if (!validate_request_location(conn)) {
-    //     log(LOG_WARNING,
-    //         "handle_write: Invalid request location for client_fd %d",
-    //         conn->client_fd_);
-    // } else {
-    //     // Route the request to the appropriate handler
-    //     if (!conn->active_handler_) {
-    //         conn->active_handler_ = choose_handler(conn);
-    //     }
-    //     // Call the handler to process the request and generate a response
-    //     // TODO - Move logging to handle function
-    //     log(LOG_DEBUG,
-    //         "handle_write: Handling request with active_handler for client_fd "
-    //         "%d",
-    //         conn->client_fd_);
-    //     conn->active_handler_->handle(conn);
-    // }
+    if (conn->parse_status_ != codes::PARSE_SUCCESS) {
+        log(LOG_WARNING, "handle_write: Invalid request from client_fd %d",
+            conn->client_fd_);
+        ErrorHandler::generate_error_response(conn);
+    }
+
+    if (conn->conn_state_ == codes::CONN_PROCESSING ||
+        conn->conn_state_ == codes::CONN_CGI_EXEC) {
+        // TODO - debate if we should move validate_request_location to
+        // handle()
+        if (!validate_request_location(conn)) {
+            log(LOG_WARNING,
+                "handle_write: Invalid request location for client_fd %d",
+                conn->client_fd_);
+        } else {
+            // Route the request to the appropriate handler
+            if (!conn->active_handler_) {
+                conn->active_handler_ = choose_handler(conn);
+            }
+            // Call the handler to process the request and generate a response
+            // TODO - Move logging to handle function
+            log(LOG_DEBUG,
+                "handle_write: Handling request with active_handler for "
+                "client_fd "
+                "%d",
+                conn->client_fd_);
+            conn->active_handler_->handle(conn);
+        }
+    }
 
     // // TEMP - Call StaticFileHandler to test
     //  conn->active_handler_ = static_file_handler_;
@@ -411,7 +424,9 @@ void WebServer::handle_write(Connection* conn) {
 
     // // TEMP - Call FileUploadHandler to test
     conn->active_handler_ = file_upload_handler_;
-    log(LOG_DEBUG, "handle_write: Using file_upload_handler for client_fd %d", conn->client_fd_); conn->active_handler_->handle(conn);
+    log(LOG_DEBUG, "handle_write: Using file_upload_handler for client_fd %d",
+        conn->client_fd_);
+    conn->active_handler_->handle(conn);
     // Print the HTTP response for debugging
     std::cout << "\n==== HTTP RESPONSE ====\n";
     std::cout << "Status: " << conn->response_data_->status_code_ << " "
@@ -422,64 +437,68 @@ void WebServer::handle_write(Connection* conn) {
          it != conn->response_data_->headers_.end(); ++it) {
         std::cout << "  " << it->first << ": " << it->second << std::endl;
     }
-    std::cout << "Body size: " << conn->response_data_->body_.size() <<
-                 " bytes" << std::endl;
+    std::cout << "Body size: " << conn->response_data_->body_.size() << " bytes"
+              << std::endl;
     std::cout << "====================================" << std::endl;
 
     // TEMP - For now, create mock response
     // build_mock_response(conn);
     // TEMP
 
-    // Write the response to the client
-    codes::WriterState status = response_writer_->write_response(conn);
+    if (conn->conn_state_ == codes::CONN_WRITING) {
+        // Write the response to the client
+        codes::WriterState status = response_writer_->write_response(conn);
 
-    switch (status) {
-        case codes::WRITING_INCOMPLETE:
-            log(LOG_DEBUG,
-                "handle_write: Response writing incomplete for client_fd %d, "
-                "will resume later",
-                conn->client_fd_);
-            return;
-        case codes::WRITING_ERROR:
-            log(LOG_ERROR,
-                "handle_write: Error writing response to client_fd %d",
-                conn->client_fd_);
-            handle_error(conn);
-            return;
-        case codes::WRITING_COMPLETE:
-            log(LOG_DEBUG,
-                "handle_write: Response completely written to client_fd %d",
-                conn->client_fd_);
-            break;
-    }
+        switch (status) {
+            case codes::WRITING_INCOMPLETE:
+                log(LOG_DEBUG,
+                    "handle_write: Response writing incomplete for client_fd "
+                    "%d, "
+                    "will resume later",
+                    conn->client_fd_);
+                return;
+            case codes::WRITING_ERROR:
+                log(LOG_ERROR,
+                    "handle_write: Error writing response to client_fd %d",
+                    conn->client_fd_);
+                handle_error(conn);
+                return;
+            case codes::WRITING_COMPLETE:
+                log(LOG_DEBUG,
+                    "handle_write: Response completely written to client_fd %d",
+                    conn->client_fd_);
+                break;
+        }
 
-    // Check for error status codes that should close the connection
-    int status_code = conn->response_data_->status_code_;
-    log(LOG_DEBUG, "handle_write: Response status code %d for client_fd %d",
-        status_code, conn->client_fd_);
-
-    if (status_code == 400 || status_code == 413 || status_code >= 500) {
-        // Close connections for client and server errors
-        log(LOG_INFO,
-            "handle_write: Closing connection for error status %d on client_fd "
-            "%d",
+        // Check for error status codes that should close the connection
+        int status_code = conn->response_data_->status_code_;
+        log(LOG_DEBUG, "handle_write: Response status code %d for client_fd %d",
             status_code, conn->client_fd_);
-        conn->request_data_->set_header("Connection", "close");
-    }
 
-    if (conn->is_keep_alive()) {
-        log(LOG_DEBUG,
-            "handle_write: Keep-alive enabled, resetting connection for "
-            "client_fd %d",
-            conn->client_fd_);
-        conn->reset_for_keep_alive();
-        update_epoll_events(conn->client_fd_, EPOLLIN);
-    } else {
-        log(LOG_DEBUG,
-            "handle_write: Keep-alive not enabled, closing connection for "
-            "client_fd %d",
-            conn->client_fd_);
-        close_client_connection(conn);
+        if (status_code == 400 || status_code == 413 || status_code >= 500) {
+            // Close connections for client and server errors
+            log(LOG_INFO,
+                "handle_write: Closing connection for error status %d on "
+                "client_fd "
+                "%d",
+                status_code, conn->client_fd_);
+            conn->request_data_->set_header("Connection", "close");
+        }
+
+        if (conn->is_keep_alive()) {
+            log(LOG_DEBUG,
+                "handle_write: Keep-alive enabled, resetting connection for "
+                "client_fd %d",
+                conn->client_fd_);
+            conn->reset_for_keep_alive();
+            update_epoll_events(conn->client_fd_, EPOLLIN);
+        } else {
+            log(LOG_DEBUG,
+                "handle_write: Keep-alive not enabled, closing connection for "
+                "client_fd %d",
+                conn->client_fd_);
+            close_client_connection(conn);
+        }
     }
 }
 
@@ -638,6 +657,7 @@ void WebServer::remove_listener_socket(int fd) {
     log(LOG_DEBUG, "Removed faulty listener socket '%i'", fd);
 }
 
+// TODO - Move to Utils.hpp/.cpp
 bool WebServer::set_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
@@ -657,6 +677,7 @@ bool WebServer::set_non_blocking(int fd) {
     return true;
 }
 
+// TODO - Move to Utils.hpp/.cpp
 bool WebServer::register_epoll_events(int fd, uint32_t events) {
     struct epoll_event event;
     memset(&event, 0, sizeof(event));
@@ -672,6 +693,7 @@ bool WebServer::register_epoll_events(int fd, uint32_t events) {
     return true;
 }
 
+// TODO - Move to Utils.hpp/.cpp
 bool WebServer::update_epoll_events(int fd, uint32_t events) {
     struct epoll_event event;
     memset(&event, 0, sizeof(event));
@@ -692,17 +714,30 @@ bool WebServer::setup_signal_handlers() {
     struct sigaction sa;
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
+    sa.sa_flags = SA_RESTART;
 
     if (sigaction(SIGINT, &sa, NULL) < 0) {
-        // Handle error
         log(LOG_ERROR, "Failed to set up SIGINT handler");
         return false;
     }
 
     if (sigaction(SIGTERM, &sa, NULL) < 0) {
-        // Handle error
         log(LOG_ERROR, "Failed to set up SIGTERM handler");
+        return false;
+    }
+
+    if (sigaction(SIGPIPE, &sa, NULL) < 0) {
+        log(LOG_ERROR, "Failed to set up SIGPIPE handler");
+        return false;
+    }
+
+    struct sigaction sa_chld;
+    sa_chld.sa_handler = signal_handler;
+    sigemptyset(&sa_chld.sa_mask);
+    sa_chld.sa_flags =
+        SA_RESTART | SA_NOCLDSTOP;  // Avoids stopping on child exit
+    if (sigaction(SIGCHLD, &sa_chld, NULL) < 0) {
+        log(LOG_ERROR, "Failed to set up SIGPIPE handler");
         return false;
     }
 
@@ -713,6 +748,17 @@ void WebServer::signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         get_instance()->shutdown();
         log(LOG_INFO, "Received shutdown signal. Exiting...");
+    } else if (signal == SIGPIPE) {
+        // Ignore SIGPIPE to prevent crashes on broken pipes
+        log(LOG_DEBUG, "Received SIGPIPE, ignoring");
+    } else if (signal == SIGCHLD) {
+        // Reap zombie processes
+        int saved_errno = errno;  // Preserve errno
+        while (waitpid(-1, NULL, WNOHANG) > 0) {
+            // Child reaped. You could log here if desired.
+            log(LOG_DEBUG, "SIGCHLD handler: Reaped a child process.");
+        }
+        errno = saved_errno;  // Restore errno
     }
 }
 
@@ -836,18 +882,21 @@ AHandler* WebServer::choose_handler(Connection* conn) {
         log(LOG_DEBUG,
             "choose_handler: Using CgiHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
+        conn->conn_state_ = codes::CONN_CGI_EXEC;
         return cgi_handler_;
     } else if (request_method == "POST" || request_method == "DELETE") {
         // FileUploadHandler for file uploads
         log(LOG_DEBUG,
             "choose_handler: Using FileUploadHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
+        conn->conn_state_ = codes::CONN_PROCESSING;
         return file_upload_handler_;
     } else {
         // Default to StaticFileHandler for regular files
         log(LOG_DEBUG,
             "choose_handler: Using StaticFileHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
+        conn->conn_state_ = codes::CONN_PROCESSING;
         return static_file_handler_;
     }
 }

@@ -40,10 +40,14 @@ struct ConnectionManager {
     // Get the number of active connections
     size_t get_active_connection_count() const;
 
+    void register_pipe(int pipe_fd, Connection* conn);
+    void unregister_pipe(int pipe_fd);
+
    private:
     // Storage for active connections, keyed by their file descriptor.
     // ConnectionManager owns the Connection objects pointed to.
     std::map<int, Connection*> active_connections_;
+    std::map<int, Connection*> active_pipes_;  // For managing pipes (e.g., CGI)
 
     // Prevent copying
     ConnectionManager(const ConnectionManager&);

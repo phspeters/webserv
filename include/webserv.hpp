@@ -9,8 +9,8 @@ namespace codes {
 enum ConnectionState {
     CONN_READING,     // Waiting for/reading request data
     CONN_PROCESSING,  // Request received, handler is processing
-    CONN_WRITING,     // Handler generated response, sending data
     CONN_CGI_EXEC,    // Special state for active CGI execution
+    CONN_WRITING,     // Handler generated response, sending data
     CONN_ERROR        // Connection encountered an error
 };
 
@@ -21,6 +21,14 @@ enum ParserState {
     PARSING_BODY,          // Normal body
     PARSING_CHUNKED_BODY,  // Chunked transfer encoding
     PARSING_COMPLETE       // Request fully parsed
+};
+
+enum CgiHandlerState {
+    CGI_HANDLER_IDLE,
+    CGI_HANDLER_WRITING_TO_PIPE,   // Writing request body to CGI stdin
+    CGI_HANDLER_READING_FROM_PIPE, // Reading response from CGI stdout
+    CGI_HANDLER_COMPLETE,          // CGI script finished, response (or error) captured
+    CGI_HANDLER_ERROR
 };
 
 enum WriterState {
@@ -124,6 +132,7 @@ const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>

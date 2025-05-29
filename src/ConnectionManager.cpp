@@ -101,3 +101,21 @@ bool ConnectionManager::is_timed_out(Connection* conn) {
 size_t ConnectionManager::get_active_connection_count() const {
     return active_connections_.size();
 }
+
+void ConnectionManager::register_pipe(int pipe_fd, Connection* conn) {
+    // Register a pipe with the connection manager
+    active_pipes_[pipe_fd] = conn;
+    log(LOG_INFO, "Registered pipe (fd: %i) for connection (fd: %i)", pipe_fd,
+        conn->client_fd_);
+}
+
+void ConnectionManager::unregister_pipe(int pipe_fd) {
+    // Unregister a pipe from the connection manager
+    std::map<int, Connection*>::iterator it = active_pipes_.find(pipe_fd);
+    if (it != active_pipes_.end()) {
+        active_pipes_.erase(it);
+        log(LOG_INFO, "Unregistered pipe (fd: %i)", pipe_fd);
+    } else {
+        log(LOG_WARNING, "Pipe (fd: %i) not found for unregistration", pipe_fd);
+    }
+}
