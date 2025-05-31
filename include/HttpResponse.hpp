@@ -34,7 +34,6 @@ struct HttpResponse {
     //--------------------------------------
     void set_header(const std::string& name, const std::string& value);
     void set_status(int code);
-    static std::string get_status_message(int code);
 
     // Method to generate the full status line + headers string
     std::string get_headers_string() const;

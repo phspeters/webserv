@@ -71,7 +71,7 @@ bool ResponseWriter::write_headers(Connection* conn) {
     std::stringstream headers;
 
     headers << resp->version_ << " " << resp->status_code_ << " "
-            << HttpResponse::get_status_message(resp->status_code_) << "\r\n";
+            << get_status_message(resp->status_code_) << "\r\n";
 
     // Add Date header if not present
     if (resp->headers_.find("Date") == resp->headers_.end()) {
@@ -122,26 +122,6 @@ bool ResponseWriter::write_body(Connection* conn) {
                                    resp->body_.begin(), resp->body_.end());
     }
     return true;
-}
-
-// Generates a standard error response using ErrorHandler
-// and writes it to the connection's write buffer.
-void ResponseWriter::write_error_response(Connection* conn) {
-    if (!conn || !conn->response_data_) {
-        return;
-    }
-
-    int status_code = conn->response_data_->status_code_;
-    if (status_code <= 0) {
-        status_code = 500;  // Default to internal server error
-    }
-
-    ErrorHandler::apply_to_connection(conn, status_code,
-                                      *(conn->virtual_server_));
-
-    // Write the response to the buffer
-    write_headers(conn);
-    write_body(conn);
 }
 
 std::string ResponseWriter::get_current_gmt_time() const {

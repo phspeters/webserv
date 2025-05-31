@@ -27,10 +27,6 @@ class RequestParser {
     // - Returns the result status.
     codes::ParseStatus parse(Connection* conn);
 
-    // TODO - move response related functions to appropriate handler or to
-    // handle_write
-    void handle_parse_error(Connection* conn, codes::ParseStatus parse_status);
-
    private:
     // Request line parsing methods
     codes::ParseStatus parse_request_line(Connection* conn);

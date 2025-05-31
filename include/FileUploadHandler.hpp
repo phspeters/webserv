@@ -22,9 +22,6 @@ class FileUploadHandler : public AHandler {
     
     // Response generation
     void send_success_response(Connection* conn);
-    
-    // Error handling methods
-    void handle_upload_error(Connection* conn, codes::UploadError error);
 
     // Multipart form data parsing
     bool parse_multipart_form_data(Connection* conn,
@@ -43,18 +40,16 @@ class FileUploadHandler : public AHandler {
                               const std::string& filename, bool& file_found);
     
     // File saving operations
-    bool save_uploaded_file(Connection *conn, const std::string& filename,
-                            const std::vector<char>& data, codes::UploadError& error);
-    bool write_file_to_disk(const std::string& file_path,
-                            const std::vector<char>& data,
-                            codes::UploadError& error);
+    bool save_uploaded_file(Connection* conn, const std::string& filename,
+                            const std::vector<char>& data);
+    bool write_file_to_disk(Connection* conn, const std::string& file_path,
+                            const std::vector<char>& data);
     
     // Directory operations
     std::string get_upload_directory(Connection* conn);
-    bool ensure_upload_directory_exists(const std::string& upload_dir,
-                                        codes::UploadError& error);
-    bool create_directory_recursive(const std::string& path,
-                                    codes::UploadError& error);
+    bool ensure_upload_directory_exists(Connection* conn, 
+                                        const std::string& upload_dir);
+    bool create_directory_recursive(Connection* conn, const std::string& path);
     
     // Utility methods
     std::string extract_boundary(const std::string& content_type);

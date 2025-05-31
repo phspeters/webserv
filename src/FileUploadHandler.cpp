@@ -16,8 +16,7 @@ void FileUploadHandler::handle(Connection* conn) {
     }
 
     if (!conn->location_match_) {
-        ErrorHandler::internal_server_error(conn->response_data_,
-                                            *(conn->virtual_server_));
+        ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
         return;
     }
 
@@ -29,7 +28,7 @@ void FileUploadHandler::handle(Connection* conn) {
     if (parse_multipart_form_data(conn, boundary)) {
         send_success_response(conn);
     } else {
-        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
     }
 
     conn->conn_state_ = codes::CONN_WRITING;
@@ -40,13 +39,14 @@ bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
     const Location* location = conn->location_match_;
 
     // If location path ends with / but URI doesn't, redirect to add slash
-    if (!location->path_.empty() &&
-        location->path_[location->path_.length() - 1] == '/' && !uri.empty() &&
-        uri[uri.length() - 1] != '/') {
-        // conn->response_data_->status_code_ = 301;
-        // conn->response_data_->status_message_ = "Moved Permanently";
+    if (!location->path_.empty() && 
+        location->path_[location->path_.length() - 1] == '/' &&
+        !uri.empty() && uri[uri.length() - 1] != '/') {
+        
         ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
+        
         conn->response_data_->headers_["Location"] = uri + "/";
+
         return true;
     }
     return false;
@@ -55,33 +55,31 @@ bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
 bool FileUploadHandler::validate_request(Connection* conn,
                                          std::string& boundary) {
     if (!conn->request_data_ || !conn->response_data_) {
-        ErrorHandler::internal_server_error(conn->response_data_,
-                                            *(conn->virtual_server_));
+        ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
         return false;
     }
 
     std::string content_length =
         conn->request_data_->get_header("content-length");
     if (content_length.empty()) {
-        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
         return false;
     }
 
-    if (conn->request_data_->body_.size() >
-        conn->virtual_server_->client_max_body_size_) {
-        handle_upload_error(conn, codes::UPLOAD_PAYLOAD_TOO_LARGE);
+    if (conn->request_data_->body_.size() > conn->virtual_server_->client_max_body_size_) {
+        ErrorHandler::generate_error_response(conn, codes::PAYLOAD_TOO_LARGE);
         return false;
     }
 
     std::string content_type = conn->request_data_->get_header("content-type");
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
-        handle_upload_error(conn, codes::UPLOAD_UNSUPPORTED_MEDIA);
+        ErrorHandler::generate_error_response(conn, codes::UNSUPPORTED_MEDIA_TYPE);
         return false;
     }
 
     boundary = extract_boundary(content_type);
     if (boundary.empty()) {
-        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
         return false;
     }
 
@@ -98,46 +96,6 @@ void FileUploadHandler::send_success_response(Connection* conn) {
         "uploaded successfully.</p></body></html>";
     resp->body_.assign(body.begin(), body.end());
     resp->content_length_ = resp->body_.size();
-}
-
-void FileUploadHandler::handle_upload_error(Connection* conn,
-                                            codes::UploadError error) {
-    if (!conn || !conn->response_data_) {
-        return;
-    }
-
-    switch (error) {
-        case codes::UPLOAD_BAD_REQUEST:
-            ErrorHandler::bad_request(conn->response_data_,
-                                      *(conn->virtual_server_));
-            break;
-
-        case codes::UPLOAD_UNSUPPORTED_MEDIA:
-            ErrorHandler::unsupported_media_type(conn->response_data_,
-                                                 *(conn->virtual_server_));
-            break;
-
-        case codes::UPLOAD_PAYLOAD_TOO_LARGE:
-            ErrorHandler::payload_too_large(conn->response_data_,
-                                            *(conn->virtual_server_));
-            break;
-
-        case codes::UPLOAD_FORBIDDEN:
-            ErrorHandler::forbidden(conn->response_data_,
-                                    *(conn->virtual_server_));
-            break;
-
-        case codes::UPLOAD_INSUFFICIENT_STORAGE:
-            ErrorHandler::insufficient_storage(conn->response_data_,
-                                               *(conn->virtual_server_));
-            break;
-
-        case codes::UPLOAD_SERVER_ERROR:
-        default:
-            ErrorHandler::internal_server_error(conn->response_data_,
-                                                *(conn->virtual_server_));
-            break;
-    }
 }
 
 bool FileUploadHandler::parse_multipart_form_data(Connection* conn,
@@ -194,7 +152,7 @@ bool FileUploadHandler::process_part(Connection* conn, const std::string& body,
     std::string headers;
 
     if (!extract_part_headers(body, pos, headers_end, headers)) {
-        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
         return false;
     }
 
@@ -213,7 +171,7 @@ bool FileUploadHandler::process_part(Connection* conn, const std::string& body,
                 pos = content_end;
             } else {
                 // Can't find next boundary, something's wrong
-                handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+                ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
                 return false;
             }
         }
@@ -276,14 +234,14 @@ bool FileUploadHandler::extract_file_content(
     if (content_end == std::string::npos) {
         content_end = body.find(end_boundary, pos);
         if (content_end == std::string::npos) {
-            handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+            ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
             return false;
         }
     }
 
     // Bounds checking
     if (pos >= content_end || content_end > body.length()) {
-        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
         return false;
     }
 
@@ -292,16 +250,14 @@ bool FileUploadHandler::extract_file_content(
 
     // Final validation after adjustment
     if (pos >= content_end) {
-        handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
+        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
         return false;
     }
 
     // Safe extraction
     std::vector<char> file_data(body.begin() + pos, body.begin() + content_end);
 
-    codes::UploadError save_error = codes::UPLOAD_SUCCESS;
-    if (!save_uploaded_file(conn, filename, file_data, save_error)) {
-        handle_upload_error(conn, save_error);
+     if (!save_uploaded_file(conn, filename, file_data)) {
         return false;
     }
 
@@ -329,45 +285,46 @@ std::string FileUploadHandler::get_upload_directory(Connection* conn) {
 
 bool FileUploadHandler::save_uploaded_file(Connection* conn,
                                            const std::string& filename,
-                                           const std::vector<char>& data,
-                                           codes::UploadError& error) {
+                                           const std::vector<char>& data) {
     std::string upload_dir = get_upload_directory(conn);
-
-    if (!ensure_upload_directory_exists(upload_dir, error)) {
+    
+    if (!ensure_upload_directory_exists(conn, upload_dir)) {
         return false;
     }
 
     std::string safe_filename = sanitize_filename(filename);
     if (safe_filename.empty()) {
-        error = codes::UPLOAD_BAD_REQUEST;
+        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
+
         return false;
     }
 
-    return write_file_to_disk(upload_dir + safe_filename, data, error);
+    std::string full_path = upload_dir + safe_filename;
+
+    return write_file_to_disk(conn, full_path, data);
 }
 
-bool FileUploadHandler::ensure_upload_directory_exists(
-    const std::string& upload_dir, codes::UploadError& error) {
+bool FileUploadHandler::ensure_upload_directory_exists(Connection* conn, 
+                                                       const std::string& upload_dir) {
     struct stat st;
     if (stat(upload_dir.c_str(), &st) == 0) {
         return true;  // Directory already exists
     }
 
     // Directory doesn't exist, create it recursively
-    return create_directory_recursive(upload_dir, error);
+    return create_directory_recursive(conn, upload_dir);
 }
 
-bool FileUploadHandler::create_directory_recursive(const std::string& path,
-                                                   codes::UploadError& error) {
+bool FileUploadHandler::create_directory_recursive(Connection* conn, const std::string& path) {
     size_t pos = 0;
     while ((pos = path.find('/', pos + 1)) != std::string::npos) {
         if (pos > 0) {
             std::string parent_dir = path.substr(0, pos);
             if (mkdir(parent_dir.c_str(), 0755) != 0 && errno != EEXIST) {
                 if (errno == EACCES || errno == EPERM) {
-                    error = codes::UPLOAD_FORBIDDEN;
+                    ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
                 } else {
-                    error = codes::UPLOAD_SERVER_ERROR;
+                    ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
                 }
                 return false;
             }
@@ -377,9 +334,9 @@ bool FileUploadHandler::create_directory_recursive(const std::string& path,
     // Create final directory
     if (mkdir(path.c_str(), 0755) != 0 && errno != EEXIST) {
         if (errno == EACCES || errno == EPERM) {
-            error = codes::UPLOAD_FORBIDDEN;
+            ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
         } else {
-            error = codes::UPLOAD_SERVER_ERROR;
+            ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
         }
         return false;
     }
@@ -387,11 +344,10 @@ bool FileUploadHandler::create_directory_recursive(const std::string& path,
     return true;
 }
 
-bool FileUploadHandler::write_file_to_disk(const std::string& file_path,
-                                           const std::vector<char>& data,
-                                           codes::UploadError& error) {
+bool FileUploadHandler::write_file_to_disk(Connection* conn, const std::string& file_path,
+                                           const std::vector<char>& data) {
     if (data.empty()) {
-        error = codes::UPLOAD_BAD_REQUEST;
+        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
         return false;
     }
 
@@ -399,11 +355,11 @@ bool FileUploadHandler::write_file_to_disk(const std::string& file_path,
 
     if (!file.is_open()) {
         if (errno == EACCES || errno == EPERM) {
-            error = codes::UPLOAD_FORBIDDEN;
+            ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
         } else if (errno == ENOSPC) {
-            error = codes::UPLOAD_INSUFFICIENT_STORAGE;
+            ErrorHandler::generate_error_response(conn, codes::INSUFFICIENT_STORAGE);
         } else {
-            error = codes::UPLOAD_SERVER_ERROR;
+            ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
         }
         return false;
     }
@@ -418,9 +374,9 @@ bool FileUploadHandler::write_file_to_disk(const std::string& file_path,
         std::remove(file_path.c_str());
 
         if (errno == ENOSPC) {
-            error = codes::UPLOAD_INSUFFICIENT_STORAGE;
+            ErrorHandler::generate_error_response(conn, codes::INSUFFICIENT_STORAGE);
         } else {
-            error = codes::UPLOAD_SERVER_ERROR;
+            ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
         }
         return false;
     }

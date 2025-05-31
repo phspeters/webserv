@@ -61,6 +61,8 @@ enum ParseStatus {
 };
 
 enum ResponseStatus {
+    UNDEFINED = 0,     // Undefined status, used for initial state
+    
     // 2xx - Success
     OK = 200,          // Request succeeded
     CREATED = 201,     // Request succeeded and a new resource was created
@@ -83,6 +85,7 @@ enum ResponseStatus {
     PAYLOAD_TOO_LARGE = 413,   // Request entity too large
     URI_TOO_LONG = 414,        //  Request URI too long
     UNSUPPORTED_MEDIA_TYPE = 415,  // Media format not supported
+    HEADER_TOO_LONG = 431,  // Request header fields too large
 
     // 5xx - Server Errors
     INTERNAL_SERVER_ERROR = 500,  // Generic server error
@@ -90,18 +93,9 @@ enum ResponseStatus {
     BAD_GATEWAY = 502,  // Server acting as gateway received invalid response
     SERVICE_UNAVAILABLE = 503,  // Server temporarily unavailable
     GATEWAY_TIMEOUT = 504,  //  Gateway server did not receive response in time
-    HTTP_VERSION_NOT_SUPPORTED = 505  // HTTP version in request not supported
-};
+    HTTP_VERSION_NOT_SUPPORTED = 505,  // HTTP version in request not supported
+    INSUFFICIENT_STORAGE  = 507 // Insufficient Storage
 
-// Upload-specific error types
-enum UploadError {
-    UPLOAD_SUCCESS,            // Upload completed successfully
-    UPLOAD_BAD_REQUEST,        // General 400 errors
-    UPLOAD_FORBIDDEN,          // 403 errors
-    UPLOAD_UNSUPPORTED_MEDIA,  // 415 errors
-    UPLOAD_PAYLOAD_TOO_LARGE,  // 413 errors
-    UPLOAD_SERVER_ERROR,        // 500 errors
-    UPLOAD_INSUFFICIENT_STORAGE  // 507 Insufficient Storage
 };
 
 }  // namespace codes
@@ -119,6 +113,7 @@ const size_t MAX_HEADERS = 100;               // Maximum number of headers
 const size_t MAX_CONTENT_LENGTH = 10485760;   // 10MB
 const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 }  // namespace http_limits
+
 
 #define CRLF "\r\n"  // Carriage return + line feed
 
@@ -166,5 +161,6 @@ const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 
 // utils
 std::string trim(const std::string& str);
+std::string get_status_message(int code);
 
 #endif

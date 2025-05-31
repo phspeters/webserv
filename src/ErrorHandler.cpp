@@ -1,10 +1,9 @@
 #include "webserv.hpp"
 
-// ==================== ERROR INFO MAPPING ====================
+int ErrorHandler::get_parse_message_status(codes::ParseStatus parse_status) {
 
-void ErrorHandler::get_error_info_from_parse_status(codes::ParseStatus parse_status, 
-                                                    int& status_code, 
-                                                    std::string& message) {
+    int status_code = 500;  // Default to Internal Server Error
+
     switch (parse_status) {
         case codes::PARSE_ERROR:
         case codes::PARSE_INVALID_REQUEST_LINE:
@@ -12,119 +11,40 @@ void ErrorHandler::get_error_info_from_parse_status(codes::ParseStatus parse_sta
         case codes::PARSE_INVALID_QUERY_STRING:
         case codes::PARSE_MISSING_HOST_HEADER:
         case codes::PARSE_INVALID_CONTENT_LENGTH:
-            status_code = 400;
-            message = "Bad Request: Invalid HTTP request format";
+        case codes::PARSE_INVALID_CHUNK_SIZE:
+            status_code = codes::BAD_REQUEST;
             break;
         case codes::PARSE_METHOD_NOT_ALLOWED:
-            status_code = 405;
-            message = "Method Not Allowed";
+            status_code = codes::METHOD_NOT_ALLOWED;
             break;
         case codes::PARSE_CONTENT_TOO_LARGE:
-            status_code = 413;
-            message = "Payload Too Large";
+            status_code = codes::PAYLOAD_TOO_LARGE;
             break;
         case codes::PARSE_REQUEST_TOO_LONG:
-            status_code = 414;
-            message = "URI Too Long";
+            status_code = codes::URI_TOO_LONG;
             break;
         case codes::PARSE_HEADER_TOO_LONG:
         case codes::PARSE_TOO_MANY_HEADERS:
-            status_code = 431;
-            message = "Request Header Fields Too Large";
+            status_code = codes::HEADER_TOO_LONG;
             break;
         case codes::PARSE_VERSION_NOT_SUPPORTED:
-            status_code = 505;
-            message = "HTTP Version Not Supported";
+            status_code = codes::HTTP_VERSION_NOT_SUPPORTED;
             break;
         case codes::PARSE_MISSING_CONTENT_LENGTH:
-            status_code = 411;
-            message = "Length Required";
+            status_code = codes::LENGTH_REQUIRED;
             break;
         case codes::PARSE_UNKNOWN_ENCODING:
-            status_code = 501;
-            message = "Not Implemented";
-            break;
-        case codes::PARSE_INVALID_CHUNK_SIZE:
-            status_code = 400;
-            message = "Bad Request: Invalid chunk size";
+            status_code = codes::NOT_IMPLEMENTED;
             break;
         default:
-            status_code = 500;
-            message = "Internal Server Error";
+            status_code = codes::INTERNAL_SERVER_ERROR;
             break;
     }
+
+    return status_code;
 }
 
-void ErrorHandler::get_error_info_from_response_status(codes::ResponseStatus response_status,
-                                                      int& status_code,
-                                                      std::string& message) {
-    switch (response_status) {
-        case codes::BAD_REQUEST:
-            status_code = 400;
-            message = "Bad Request";
-            break;
-        case codes::UNAUTHORIZED:
-            status_code = 401;
-            message = "Unauthorized";
-            break;
-        case codes::FORBIDDEN:
-            status_code = 403;
-            message = "Forbidden";
-            break;
-        case codes::NOT_FOUND:
-            status_code = 404;
-            message = "Not Found";
-            break;
-        case codes::METHOD_NOT_ALLOWED:
-            status_code = 405;
-            message = "Method Not Allowed";
-            break;
-        case codes::REQUEST_TIMEOUT:
-            status_code = 408;
-            message = "Request Timeout";
-            break;
-        case codes::PAYLOAD_TOO_LARGE:
-            status_code = 413;
-            message = "Payload Too Large";
-            break;
-        case codes::UNSUPPORTED_MEDIA_TYPE:
-            status_code = 415;
-            message = "Unsupported Media Type";
-            break;
-        case codes::INTERNAL_SERVER_ERROR:
-            status_code = 500;
-            message = "Internal Server Error";
-            break;
-        case codes::NOT_IMPLEMENTED:
-            status_code = 501;
-            message = "Not Implemented";
-            break;
-        case codes::BAD_GATEWAY:
-            status_code = 502;
-            message = "Bad Gateway";
-            break;
-        case codes::SERVICE_UNAVAILABLE:
-            status_code = 503;
-            message = "Service Unavailable";
-            break;
-        case codes::GATEWAY_TIMEOUT:
-            status_code = 504;
-            message = "Gateway Timeout";
-            break;
-        case codes::HTTP_VERSION_NOT_SUPPORTED:
-            status_code = 505;
-            message = "HTTP Version Not Supported";
-            break;
-        default:
-            status_code = 500;
-            message = "Internal Server Error";
-            break;
-    }
-}
-
-// ==================== MAIN ERROR RESPONSE GENERATORS ====================
-
-void ErrorHandler::generate_error_response(Connection* conn) {
+void ErrorHandler::generate_error_response(Connection* conn, codes::ResponseStatus status_code) {
     if (!conn || !conn->response_data_) {
         log(LOG_ERROR, "generate_error_response: Invalid connection or response data");
         return;
@@ -139,39 +59,15 @@ void ErrorHandler::generate_error_response(Connection* conn) {
     }
 
     // Get error info from parse status
-    int status_code;
-    std::string error_message;
-    get_error_info_from_parse_status(conn->parse_status_, status_code, error_message);
-    
-    // Generate the error response
-    handle_error(conn->response_data_, status_code, *conn->virtual_server_);
-    
-    // Set additional headers
-    conn->response_data_->headers_["Connection"] = "close";
-    conn->response_data_->headers_["Server"] = "webserv/1.0";
-    conn->response_data_->headers_["Date"] = get_current_gmt_time();
-    
-    // Update connection state
-    conn->conn_state_ = codes::CONN_WRITING;
-    
-    log(LOG_INFO, "Generated error response %d for client_fd %d: %s", 
-        status_code, conn->client_fd_, error_message.c_str());
-}
+    if (status_code == codes::UNDEFINED) {
+        int parse_status_code = get_parse_message_status(conn->parse_status_);
+        handle_error(conn->response_data_, parse_status_code, *conn->virtual_server_);
 
-void ErrorHandler::generate_error_response(Connection* conn, codes::ResponseStatus status) {
-    if (!conn || !conn->response_data_) {
-        log(LOG_ERROR, "generate_error_response: Invalid connection or response data");
-        return;
     }
-    
-    // Get error info from response status
-    int status_code;
-    std::string error_message;
-    get_error_info_from_response_status(status, status_code, error_message);
-    
-    // Generate the error response
-    handle_error(conn->response_data_, status_code, *conn->virtual_server_);
-    
+    else { // Use provided status code
+        handle_error(conn->response_data_, status_code, *conn->virtual_server_);
+    }
+   
     // Set additional headers
     conn->response_data_->headers_["Connection"] = "close";
     conn->response_data_->headers_["Server"] = "webserv/1.0";
@@ -181,10 +77,9 @@ void ErrorHandler::generate_error_response(Connection* conn, codes::ResponseStat
     conn->conn_state_ = codes::CONN_WRITING;
     
     log(LOG_INFO, "Generated error response %d for client_fd %d: %s", 
-        status_code, conn->client_fd_, error_message.c_str());
+        status_code, conn->client_fd_);
 }
 
-// ==================== CORE ERROR HANDLING ====================
 
 void ErrorHandler::handle_error(HttpResponse* resp, int status_code, const VirtualServer& config) {
     if (!resp) {
@@ -198,7 +93,7 @@ void ErrorHandler::handle_error(HttpResponse* resp, int status_code, const Virtu
 
     // Set status code and message
     resp->status_code_ = status_code;
-    resp->status_message_ = HttpResponse::get_status_message(status_code);
+    resp->status_message_ = get_status_message(status_code);
 
     // Get error page content (custom or default)
     std::string content = get_error_page_content(status_code, config);
@@ -216,99 +111,6 @@ void ErrorHandler::handle_error(HttpResponse* resp, int status_code, const Virtu
     
     log(LOG_DEBUG, "Generated error page for status %d (%zu bytes)", 
         status_code, resp->body_.size());
-}
-
-// ==================== SPECIFIC ERROR METHODS ====================
-
-void ErrorHandler::bad_request(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 400, config);
-}
-
-void ErrorHandler::unauthorized(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 401, config);
-}
-
-void ErrorHandler::forbidden(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 403, config);
-}
-
-void ErrorHandler::not_found(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 404, config);
-}
-
-void ErrorHandler::method_not_allowed(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 405, config);
-}
-
-void ErrorHandler::request_timeout(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 408, config);
-}
-
-void ErrorHandler::payload_too_large(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 413, config);
-}
-
-void ErrorHandler::unsupported_media_type(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 415, config);
-}
-
-void ErrorHandler::too_many_requests(HttpResponse* resp, const VirtualServer& config, int retry_after) {
-    handle_error(resp, 429, config);
-
-    // Add Retry-After header
-    std::ostringstream ss;
-    ss << retry_after;
-    resp->headers_["Retry-After"] = ss.str();
-}
-
-void ErrorHandler::internal_server_error(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 500, config);
-}
-
-void ErrorHandler::not_implemented(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 501, config);
-}
-
-void ErrorHandler::bad_gateway(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 502, config);
-}
-
-void ErrorHandler::service_unavailable(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 503, config);
-}
-
-void ErrorHandler::gateway_timeout(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 504, config);
-}
-
-void ErrorHandler::http_version_not_supported(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 505, config);
-}
-
-void ErrorHandler::insufficient_storage(HttpResponse* resp, const VirtualServer& config) {
-    handle_error(resp, 507, config);
-}
-
-// ==================== CONNECTION UTILITIES ====================
-
-void ErrorHandler::apply_to_connection(Connection* conn, int status_code, const VirtualServer& virtual_server) {
-    if (!conn || !conn->response_data_) {
-        log(LOG_ERROR, "apply_to_connection: Invalid connection data");
-        return;
-    }
-
-    // Apply error to response
-    handle_error(conn->response_data_, status_code, virtual_server);
-
-    // Set connection headers
-    conn->response_data_->headers_["Connection"] = "close";
-    conn->response_data_->headers_["Server"] = "webserv/1.0";
-    conn->response_data_->headers_["Date"] = get_current_gmt_time();
-
-    // Update connection state to writing
-    conn->conn_state_ = codes::CONN_WRITING;
-    
-    log(LOG_DEBUG, "Applied error %d to connection [fd:%d]", status_code, conn->client_fd_);
 }
 
 // ==================== ERROR PAGE GENERATION ====================
@@ -343,7 +145,7 @@ std::string ErrorHandler::get_error_page_content(int status_code, const VirtualS
 
     // No custom page or couldn't read it, generate default
     log(LOG_DEBUG, "Generating default error page for status %d", status_code);
-    return generate_default_error_page(status_code, HttpResponse::get_status_message(status_code));
+    return generate_default_error_page(status_code, get_status_message(status_code));
 }
 
 std::string ErrorHandler::generate_default_error_page(int status_code, const std::string& status_message) {

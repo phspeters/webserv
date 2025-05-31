@@ -24,14 +24,7 @@ class ResponseWriter {
 
     bool write_body(Connection* conn);
 
-    // Generates a standard error response (e.g., 404 Not Found, 500 Internal
-    // Server Error) directly into the connection's write buffer. Populates
-    // conn->response_data with minimal info.
-    void write_error_response(Connection* conn);
-
    private:
-    std::string get_status_message(
-        int code) const;  // Helper to get text for status code
     std::string get_current_gmt_time() const;  // Helper for Date header
 
     // Prevent copying

@@ -146,7 +146,7 @@ void print_virtual_server(const VirtualServer& virtual_server) {
 void log_client_error(int status_code, const Connection* conn,
                       const VirtualServer& virtual_server) {
     std::cerr << "Client error " << status_code << " ("
-              << HttpResponse::get_status_message(status_code)
+              << get_status_message(status_code)
               << ") for connection " << conn->client_fd_ << " on ";
 
     if (!virtual_server.server_names_.empty()) {
