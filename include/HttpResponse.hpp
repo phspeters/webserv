@@ -4,8 +4,8 @@
 #include "webserv.hpp"
 
 // Represents an HTTP Response to be sent back to the client.
-// An instance of this is typically created by a handler
-// and pointed to by Connection::response_data.
+// An instance of this is owned by Connection and pointed to by
+// Connection::response_data_.
 struct HttpResponse {
     //--------------------------------------
     // Response Data Members
@@ -17,12 +17,7 @@ struct HttpResponse {
 
     std::map<std::string, std::string> headers_;  // Response headers
 
-    std::vector<char> body_;  // Response body content (if generated in memory)
-
-    // State flags (might be managed in Connection instead, depending on design)
-    // bool        headers_built; // Indicate if headers string is ready
-    // bool        headers_sent;
-    // bool        body_sent;
+    std::vector<char> body_;  // Response body content
 
     // Often useful to store these explicitly for header generation
     size_t content_length_;
@@ -41,11 +36,10 @@ struct HttpResponse {
     void set_status(int code);
     static std::string get_status_message(int code);
 
-    // Method to generate the full status line + headers string (implementation
-    // in .cpp)
+    // Method to generate the full status line + headers string
     std::string get_headers_string() const;
 
-    // Method to generate the status line only (implementation in .cpp)
+    // Method to generate the status line only
     std::string get_status_line() const;
 
     void clear();

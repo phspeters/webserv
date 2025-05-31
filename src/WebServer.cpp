@@ -9,7 +9,7 @@ WebServer::WebServer()
       request_parser_(NULL),
       response_writer_(NULL),
       static_file_handler_(NULL),
-      // cgi_handler_(NULL),
+      cgi_handler_(NULL),
       file_upload_handler_(NULL) {
     instance_ = this;
 }
@@ -20,7 +20,7 @@ WebServer::~WebServer() {
     delete request_parser_;
     delete response_writer_;
     delete static_file_handler_;
-    // delete cgi_handler_;
+    delete cgi_handler_;
     delete file_upload_handler_;
 
     // Close listener sockets if they are open
@@ -295,7 +295,7 @@ void WebServer::handle_connection_event(int client_fd, uint32_t events) {
         return;
     }
 
-	// TODO - Use state machine to handle different events
+    // TODO - Use state machine to handle different events
     if (events & EPOLLIN) {
         handle_read(conn);
     } else if (events & EPOLLOUT) {

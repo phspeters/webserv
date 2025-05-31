@@ -390,7 +390,7 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
         return;
     }
 
-    // Clear the request body after writing
+    // Clear written bytes from request body after writing
     conn->request_data_->body_.erase(
         conn->request_data_->body_.begin(),
         conn->request_data_->body_.begin() + bytes_written);
@@ -419,4 +419,53 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
 }
 
 // TODO - Read from CGI's stdout pipe and handle the response
-void CgiHandler::handle_cgi_read(Connection* conn) {}
+void CgiHandler::handle_cgi_read(Connection* conn) {
+    WebServer* web_server = WebServer::get_instance();
+
+    // Read from CGI's stdout pipe
+    char buffer[4096];  // Buffer size can be adjusted as needed
+    ssize_t bytes_read =
+        read(conn->cgi_pipe_stdout_fd_, buffer, sizeof(buffer));
+
+    if (bytes_read < 0) {
+        log(LOG_ERROR, "Failed to read from CGI stdout pipe: %s",
+            strerror(errno));
+        ErrorHandler::generate_error_response(conn,
+                                              codes::INTERNAL_SERVER_ERROR);
+        return;
+    } else if (bytes_read == 0) {
+        // EOF reached, CGI script has finished execution
+        conn->cgi_handler_state_ = codes::CGI_HANDLER_COMPLETE;
+        web_server->get_conn_manager()->unregister_pipe(
+            conn->cgi_pipe_stdout_fd_);
+        close(conn->cgi_pipe_stdout_fd_);
+        conn->cgi_pipe_stdout_fd_ = -1;  // Mark as closed
+        log(LOG_DEBUG, "CGI script completed for client %d", conn->client_fd_);
+        conn->conn_state_ = codes::CONN_WRITING;  // Switch to writing state
+        return;
+    }
+    // If we reach here, bytes_read > 0, meaning we have data to process
+    log(LOG_DEBUG, "Read %zd bytes from CGI stdout for client %d", bytes_read,
+        conn->client_fd_);
+
+    parse_cgi_output(conn, buffer, bytes_read);
+    if (conn->cgi_handler_state_ != codes::CGI_HANDLER_COMPLETE) {
+        log(LOG_DEBUG,
+            "CGI still processing for client %d, waiting for more data",
+            conn->client_fd_);
+        return;
+    }
+
+    // If we reach here, CGI response is complete
+    log(LOG_DEBUG, "CGI response complete for client %d", conn->client_fd_);
+    conn->conn_state_ = codes::CONN_WRITING;  // Switch to writing state
+    web_server->get_conn_manager()->unregister_pipe(conn->cgi_pipe_stdout_fd_);
+    close(conn->cgi_pipe_stdout_fd_);
+    conn->cgi_pipe_stdout_fd_ = -1;  // Mark as closed
+}
+
+void CgiHandler::parse_cgi_output(Connection* conn, char* buffer,
+                                  ssize_t bytes_read) {
+    // Set the response data in the connection
+    conn->cgi_handler_state_ = codes::CGI_HANDLER_COMPLETE;
+}
