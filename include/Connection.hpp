@@ -35,6 +35,9 @@ struct Connection {
     size_t chunk_remaining_bytes_;    // Remaining bytes in the current chunk
     std::vector<char> write_buffer_;  // Buffer for outgoing data to client
     size_t write_buffer_offset_;  // How much of the write_buffer has been sent
+    std::vector<char>
+        cgi_read_buffer_;  // Buffer for writing to CGI stdin (if active)
+    size_t cgi_read_buffer_offset_;  // Offset for CGI write buffer
 
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)

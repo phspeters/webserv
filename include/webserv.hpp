@@ -25,9 +25,10 @@ enum ParserState {
 
 enum CgiHandlerState {
     CGI_HANDLER_IDLE,
-    CGI_HANDLER_WRITING_TO_PIPE,   // Writing request body to CGI stdin
-    CGI_HANDLER_READING_FROM_PIPE, // Reading response from CGI stdout
-    CGI_HANDLER_COMPLETE,          // CGI script finished, response (or error) captured
+    CGI_HANDLER_WRITING_TO_PIPE,    // Writing request body to CGI stdin
+    CGI_HANDLER_READING_FROM_PIPE,  // Reading response from CGI stdout
+    CGI_HANDLER_HEADERS_PARSED,     // Headers parsed, waiting for body
+    CGI_HANDLER_COMPLETE,  // CGI script finished, response (or error) captured
     CGI_HANDLER_ERROR
 };
 
@@ -61,8 +62,8 @@ enum ParseStatus {
 };
 
 enum ResponseStatus {
-    UNDEFINED = 0,     // Undefined status, used for initial state
-    
+    UNDEFINED = 0,  // Undefined status, used for initial state
+
     // 2xx - Success
     OK = 200,          // Request succeeded
     CREATED = 201,     // Request succeeded and a new resource was created
@@ -85,7 +86,7 @@ enum ResponseStatus {
     PAYLOAD_TOO_LARGE = 413,   // Request entity too large
     URI_TOO_LONG = 414,        //  Request URI too long
     UNSUPPORTED_MEDIA_TYPE = 415,  // Media format not supported
-    HEADER_TOO_LONG = 431,  // Request header fields too large
+    HEADER_TOO_LONG = 431,         // Request header fields too large
 
     // 5xx - Server Errors
     INTERNAL_SERVER_ERROR = 500,  // Generic server error
@@ -94,7 +95,7 @@ enum ResponseStatus {
     SERVICE_UNAVAILABLE = 503,  // Server temporarily unavailable
     GATEWAY_TIMEOUT = 504,  //  Gateway server did not receive response in time
     HTTP_VERSION_NOT_SUPPORTED = 505,  // HTTP version in request not supported
-    INSUFFICIENT_STORAGE  = 507 // Insufficient Storage
+    INSUFFICIENT_STORAGE = 507         // Insufficient Storage
 
 };
 
@@ -113,7 +114,6 @@ const size_t MAX_HEADERS = 100;               // Maximum number of headers
 const size_t MAX_CONTENT_LENGTH = 10485760;   // 10MB
 const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 }  // namespace http_limits
-
 
 #define CRLF "\r\n"  // Carriage return + line feed
 

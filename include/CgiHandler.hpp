@@ -46,15 +46,11 @@ class CgiHandler : public AHandler {
     bool handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2],
                              int cgi_to_server_pipe[2]);
     void parse_cgi_output(
-        Connection* conn, char* buffer,
-        ssize_t bytes_read);  // Parses CGI headers/body separation
+        Connection* conn);  // Parses CGI headers/body separation
 
     // Prevent copying
     CgiHandler(const CgiHandler&);
     CgiHandler& operator=(const CgiHandler&);
-
-    bool extract_script_info(HttpRequest* req);
-
 };  // class CgiHandler
 
 #endif  // CGIHANDLER_HPP

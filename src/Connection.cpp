@@ -7,6 +7,7 @@ Connection::Connection(int fd, const VirtualServer* default_virtual_server)
       last_activity_(time(NULL)),
       chunk_remaining_bytes_(0),
       write_buffer_offset_(0),
+	  cgi_read_buffer_offset_(0),
       request_data_(new HttpRequest()),
       response_data_(new HttpResponse()),
       conn_state_(codes::CONN_READING),
@@ -61,6 +62,8 @@ void Connection::reset_for_keep_alive() {
     chunk_remaining_bytes_ = 0;
     write_buffer_.clear();
     write_buffer_offset_ = 0;
+	cgi_read_buffer_.clear();
+	cgi_read_buffer_offset_ = 0;
 
     // Reset request/response
     if (request_data_) {
