@@ -1,12 +1,13 @@
 #include "webserv.hpp"
 
-// curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload/
+// curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
 
 FileUploadHandler::FileUploadHandler() : AHandler() {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
 void FileUploadHandler::handle(Connection* conn) {
+
     if (process_location_redirect(conn) || process_trailing_slash_redirect(conn)) {
         return;
     }
@@ -26,6 +27,8 @@ void FileUploadHandler::handle(Connection* conn) {
     } else {
         handle_upload_error(conn, codes::UPLOAD_BAD_REQUEST);
     }
+
+    conn->conn_state_ = codes::CONN_WRITING;
 }
 
 bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
@@ -37,8 +40,9 @@ bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
         location->path_[location->path_.length() - 1] == '/' &&
         !uri.empty() && uri[uri.length() - 1] != '/') {
         
-        conn->response_data_->status_code_ = 301;
-        conn->response_data_->status_message_ = "Moved Permanently";
+        // conn->response_data_->status_code_ = 301;
+        // conn->response_data_->status_message_ = "Moved Permanently";
+        ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
         conn->response_data_->headers_["Location"] = uri + "/";
         return true;
     }
@@ -171,6 +175,7 @@ bool FileUploadHandler::parse_multipart_form_data(Connection* conn,
 
     return file_found;
 }
+
 bool FileUploadHandler::process_part(Connection* conn, const std::string& body,
                                      const std::string& full_boundary,
                                      const std::string& end_boundary,

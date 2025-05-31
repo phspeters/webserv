@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Manager - Upload & Delete</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #74ebd5, #ACB6E5);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .container {
+            text-align: center;
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        h1 {
+            font-size: 3rem;
+            color: #74ebd5;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+            letter-spacing: -1px;
+            margin-bottom: 1rem;
+            transform: translateY(20px);
+            opacity: 0;
+            animation: fadeInUp 1s forwards 0.3s;
+        }
+        
+        .subtitle {
+            color: rgba(116, 235, 213, 0.8);
+            margin-bottom: 2rem;
+            font-weight: 300;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 1s forwards 0.6s;
+        }
+        
+        .file-upload-section {
+            margin-bottom: 2rem;
+            padding: 2rem;
+            border: 2px dashed #74ebd5;
+            border-radius: 15px;
+            background: rgba(116, 235, 213, 0.05);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 1s forwards 0.9s;
+            transition: all 0.3s ease;
+        }
+        
+        .file-upload-section:hover {
+            background: rgba(116, 235, 213, 0.1);
+            border-color: #ACB6E5;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input {
+            position: absolute;
+            left: -9999px;
+            opacity: 0;
+        }
+        
+        .file-input-label {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #74ebd5, #ACB6E5);
+            color: white;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        
+        .file-input-label:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        
+        .file-info {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(116, 235, 213, 0.1);
+            border-radius: 10px;
+            color: #74ebd5;
+            font-weight: 600;
+            display: none;
+        }
+        
+        .file-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            font-size: 0.9em;
+            text-align: left;
+        }
+        
+        .file-detail-item {
+            background: rgba(255, 255, 255, 0.5);
+            padding: 0.5rem;
+            border-radius: 5px;
+        }
+        
+        .file-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        .preview-container {
+            margin-top: 1rem;
+            display: none;
+        }
+        
+        .preview-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 1s forwards 1.2s;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 30px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-upload {
+            background: linear-gradient(135deg, #74ebd5, #ACB6E5);
+            color: white;
+        }
+        
+        .btn-delete {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            color: white;
+        }
+        
+        .btn-back {
+            background: white;
+            color: #74ebd5;
+            border: 2px solid #74ebd5;
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: default;
+            transform: none;
+        }
+        
+        .status-message {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 10px;
+            font-weight: 600;
+            display: none;
+        }
+        
+        .status-success {
+            background: rgba(46, 204, 113, 0.1);
+            color: #27ae60;
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }
+        
+        .status-error {
+            background: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+        
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .circle {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .circle-1 {
+            width: 300px;
+            height: 300px;
+            top: -100px;
+            left: -100px;
+            animation: float 8s infinite ease-in-out;
+        }
+        
+        .circle-2 {
+            width: 200px;
+            height: 200px;
+            bottom: -50px;
+            right: 100px;
+            animation: float 12s infinite ease-in-out;
+        }
+        
+        .circle-3 {
+            width: 400px;
+            height: 400px;
+            bottom: -200px;
+            left: 10%;
+            animation: float 15s infinite ease-in-out;
+        }
+        
+        .circle-4 {
+            width: 100px;
+            height: 100px;
+            top: 20%;
+            right: 10%;
+            animation: float 10s infinite ease-in-out;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) rotate(0deg);
+            }
+            50% {
+                transform: translateY(-20px) rotate(5deg);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 2rem;
+                margin: 1rem;
+            }
+            
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .file-details {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .container {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="circle circle-1"></div>
+    <div class="circle circle-2"></div>
+    <div class="circle circle-3"></div>
+    <div class="circle circle-4"></div>
+    
+    <div class="container">
+        <h1>File Manager</h1>
+        <p class="subtitle">Upload and manage your files</p>
+        
+        <form id="uploadForm" enctype="multipart/form-data">
+            <div class="file-upload-section">
+                <div class="file-input-wrapper">
+                    <input type="file" id="fileInput" name="file" class="file-input">
+                    <label for="fileInput" class="file-input-label">
+                        📁 Choose Any File
+                    </label>
+                </div>
+                
+                <div class="file-icon" id="fileIcon"></div>
+                
+                <div class="file-info" id="fileInfo">
+                    <div id="fileName"></div>
+                    <div class="file-details">
+                        <div class="file-detail-item">
+                            <strong>Size:</strong> <span id="fileSize"></span>
+                        </div>
+                        <div class="file-detail-item">
+                            <strong>Type:</strong> <span id="fileType"></span>
+                        </div>
+                        <div class="file-detail-item">
+                            <strong>Last Modified:</strong> <span id="fileModified"></span>
+                        </div>
+                        <div class="file-detail-item">
+                            <strong>Extension:</strong> <span id="fileExtension"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="preview-container" id="previewContainer">
+                    <img id="previewImage" class="preview-image" alt="Preview">
+                </div>
+            </div>
+        </form>
+        
+        <div class="button-group">
+            <button type="button" class="btn btn-upload" id="uploadBtn" disabled>
+                🚀 Upload File
+            </button>
+            <button type="button" class="btn btn-delete" id="deleteBtn">
+                🗑️ Delete File
+            </button>
+            <a href="index.html" class="btn btn-back">
+                ← Back to Home
+            </a>
+        </div>
+        
+        <div class="status-message" id="statusMessage"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const fileType = document.getElementById('fileType');
+        const fileModified = document.getElementById('fileModified');
+        const fileExtension = document.getElementById('fileExtension');
+        const fileIcon = document.getElementById('fileIcon');
+        const previewContainer = document.getElementById('previewContainer');
+        const previewImage = document.getElementById('previewImage');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const deleteBtn = document.getElementById('deleteBtn');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // Handle file selection
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            
+            if (file) {
+                displayFileInfo(file);
+                uploadBtn.disabled = false;
+                hideStatusMessage();
+            } else {
+                resetFileSelection();
+            }
+        });
+
+        function displayFileInfo(file) {
+            // Show file info section
+            fileInfo.style.display = 'block';
+            
+            // Basic file information
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileType.textContent = file.type || 'Unknown';
+            fileModified.textContent = formatDate(new Date(file.lastModified));
+            
+            // File extension
+            const ext = getFileExtension(file.name);
+            fileExtension.textContent = ext || 'None';
+            
+            // Show appropriate icon
+            const icon = getFileIcon(file);
+            fileIcon.textContent = icon;
+            fileIcon.style.display = 'block';
+            
+            // Show preview for images only
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                    previewContainer.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewContainer.style.display = 'none';
+            }
+        }
+
+        function getFileIcon(file) {
+            const type = file.type.toLowerCase();
+            const ext = getFileExtension(file.name).toLowerCase();
+            
+            // Image files
+            if (type.startsWith('image/')) return '🖼️';
+            
+            // Video files
+            if (type.startsWith('video/')) return '🎥';
+            
+            // Audio files
+            if (type.startsWith('audio/')) return '🎵';
+            
+            // Document files
+            if (type.includes('pdf')) return '📄';
+            if (type.includes('word') || ext === 'doc' || ext === 'docx') return '📝';
+            if (type.includes('excel') || ext === 'xls' || ext === 'xlsx') return '📊';
+            if (type.includes('powerpoint') || ext === 'ppt' || ext === 'pptx') return '📋';
+            
+            // Text files
+            if (type.startsWith('text/') || ext === 'txt') return '📄';
+            if (ext === 'md' || ext === 'markdown') return '📝';
+            
+            // Code files
+            if (['js', 'ts', 'jsx', 'tsx'].includes(ext)) return '⚡';
+            if (['html', 'htm', 'xml'].includes(ext)) return '🌐';
+            if (['css', 'scss', 'sass', 'less'].includes(ext)) return '🎨';
+            if (['py', 'pyc', 'pyo'].includes(ext)) return '🐍';
+            if (['java', 'class', 'jar'].includes(ext)) return '☕';
+            if (['cpp', 'c', 'h', 'hpp'].includes(ext)) return '⚙️';
+            if (['php'].includes(ext)) return '🐘';
+            if (['rb', 'ruby'].includes(ext)) return '💎';
+            if (['go'].includes(ext)) return '🐹';
+            if (['rs', 'rust'].includes(ext)) return '🦀';
+            
+            // Archive files
+            if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return '📦';
+            
+            // Executable files
+            if (['exe', 'msi', 'dmg', 'pkg', 'deb', 'rpm'].includes(ext)) return '⚡';
+            
+            // Default
+            return '📄';
+        }
+
+        function getFileExtension(filename) {
+            const parts = filename.split('.');
+            return parts.length > 1 ? parts.pop() : '';
+        }
+
+        function formatDate(date) {
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        // Handle upload
+        uploadBtn.addEventListener('click', function() {
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showStatusMessage('Please select a file first.', 'error');
+                return;
+            }
+
+            // Disable button during upload
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '⏳ Uploading...';
+
+            // Create FormData
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Upload file
+            fetch('/upload/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.text();
+                }
+                throw new Error(`Upload failed: ${response.status}`);
+            })
+            .then(data => {
+                showStatusMessage(`File "${file.name}" uploaded successfully! 🎉`, 'success');
+                resetFileSelection();
+            })
+            .catch(error => {
+                console.error('Upload error:', error);
+                showStatusMessage(`Upload failed: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = '🚀 Upload File';
+            });
+        });
+
+        // Handle delete
+        deleteBtn.addEventListener('click', function() {
+            const filename = prompt('Enter the filename to delete (e.g., document.pdf):');
+            
+            if (!filename) {
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+                return;
+            }
+
+            // Disable button during delete
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '⏳ Deleting...';
+
+            // Delete file
+            fetch(`/delete/${encodeURIComponent(filename)}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.text();
+                }
+                throw new Error(`Delete failed: ${response.status}`);
+            })
+            .then(data => {
+                showStatusMessage(`File "${filename}" deleted successfully! 🗑️`, 'success');
+            })
+            .catch(error => {
+                console.error('Delete error:', error);
+                showStatusMessage(`Delete failed: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = '🗑️ Delete File';
+            });
+        });
+
+        // Utility functions
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function resetFileSelection() {
+            fileInput.value = '';
+            fileInfo.style.display = 'none';
+            fileIcon.style.display = 'none';
+            previewContainer.style.display = 'none';
+            uploadBtn.disabled = true;
+        }
+
+        function showStatusMessage(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message status-${type}`;
+            statusMessage.style.display = 'block';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(hideStatusMessage, 5000);
+        }
+
+        function hideStatusMessage() {
+            statusMessage.style.display = 'none';
+        }
+
+        // Drag and drop functionality
+        const uploadSection = document.querySelector('.file-upload-section');
+
+        uploadSection.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#ACB6E5';
+            uploadSection.style.background = 'rgba(172, 182, 229, 0.1)';
+        });
+
+        uploadSection.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#74ebd5';
+            uploadSection.style.background = 'rgba(116, 235, 213, 0.05)';
+        });
+
+        uploadSection.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#74ebd5';
+            uploadSection.style.background = 'rgba(116, 235, 213, 0.05)';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        });
+    </script>
+</body>
+</html>

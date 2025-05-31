@@ -66,8 +66,8 @@ Connection* ConnectionManager::get_connection(int client_fd) {
     std::map<int, Connection*>::iterator it =
         active_connections_.find(client_fd);
     if (it != active_connections_.end()) {
-        return it->second;
         log(LOG_TRACE, "Retrieved connection for client (fd: %i)", client_fd);
+        return it->second;
     }
 
     log(LOG_FATAL, "Connection not found for client (fd: %i)", client_fd);

@@ -17,8 +17,7 @@ bool AHandler::process_location_redirect(Connection* conn) {
     conn->response_data_->status_code_ = 301;  // Moved Permanently
     conn->response_data_->status_message_ = "Moved Permanently";
     conn->response_data_->headers_["Location"] = location->redirect_;
-    // conn->state_ = Connection::CONN_WRITING;
-
+    conn->conn_state_  = codes::CONN_WRITING;
     return true;  // Redirect was processed
 }
 
