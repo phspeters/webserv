@@ -23,6 +23,7 @@ void CgiHandler::handle(Connection* conn) {
             handle_cgi_read(conn);
             break;
         case codes::CGI_HANDLER_COMPLETE:
+        case codes::CGI_HANDLER_ERROR:
             conn->conn_state_ = codes::CONN_WRITING;
             break;
     }
@@ -269,6 +270,9 @@ void CgiHandler::handle_child_pipes(Connection* conn, int server_to_cgi_pipe[2],
     // Close the original pipe file descriptors in the child process
     close(server_to_cgi_pipe[1]);
     close(cgi_to_server_pipe[0]);
+
+    /// TEMP
+    (void)conn;
 }
 
 // TODO - Include any other necessary environment variables for CGI execution
@@ -467,5 +471,7 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
 void CgiHandler::parse_cgi_output(Connection* conn, char* buffer,
                                   ssize_t bytes_read) {
     // Set the response data in the connection
+    (void)bytes_read;
+    (void)buffer;
     conn->cgi_handler_state_ = codes::CGI_HANDLER_COMPLETE;
 }
