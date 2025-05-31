@@ -14,10 +14,8 @@ bool AHandler::process_location_redirect(Connection* conn) {
         location->path_.c_str(), location->redirect_.c_str());
 
     // Set up redirect response
-    conn->response_data_->status_code_ = 301;  // Moved Permanently
-    conn->response_data_->status_message_ = "Moved Permanently";
+    ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
     conn->response_data_->headers_["Location"] = location->redirect_;
-    conn->conn_state_  = codes::CONN_WRITING;
     return true;  // Redirect was processed
 }
 
@@ -31,11 +29,6 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     if (request_root[0] == '/') {
         request_root = request_root.substr(1);
     }
-
-    std::cout << "\n==== PARSE ABSOLUTE PATH ====\n";
-    std::cout << "Request URI: " << request_path << std::endl;
-    std::cout << "Matched location: " << request_location->path_ << std::endl;
-    std::cout << "Root: " << request_location->root_ << std::endl;
 
     // Calculate the path relative to the location
     std::string relative_path = "";
@@ -57,13 +50,9 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
         }
     }
 
-    std::string absolute_path;
-
-    absolute_path = request_root + relative_path;
-
-    std::cout << "Relative path: " << relative_path << std::endl;
-    std::cout << "Absolute path: " << absolute_path << std::endl;
-    std::cout << "============================\n" << std::endl;
+    std::string absolute_path = request_root + relative_path;
+    log(LOG_DEBUG, "parse_absolute_path: Request root: %s, Relative path: %s, Absolute path: %s",
+        request_root.c_str(), relative_path.c_str(), absolute_path.c_str());
 
     return (absolute_path);
 }
@@ -95,10 +84,8 @@ bool AHandler::process_directory_redirect(Connection* conn,
             redirect_url += "?" + query;
         }
 
-        conn->response_data_->status_code_ = 301;
-        conn->response_data_->status_message_ = "Moved Permanently";
+        ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
         conn->response_data_->headers_["Location"] = redirect_url;
-        // conn->state_ = Connection::CONN_WRITING;
         return true;
     }
 
@@ -299,7 +286,7 @@ void AHandler::generate_directory_listing(
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->headers_["Content-Type"] = "text/html";
     conn->response_data_->body_.assign(html.begin(), html.end());
-    // conn->state_ = Connection::CONN_WRITING;
+    conn->conn_state_ = codes::CONN_WRITING;
 
     // Clean up
     closedir(dir);

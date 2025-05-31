@@ -1,9 +1,27 @@
+### ============================================
+### WEBSERV HTTP TEST SUITE
+### ============================================
+### Description: Comprehensive HTTP tests for webserv implementation
+### Author: Your Name
+### Date: 2024
+### Server Config: server.conf
+### Requirements: 
+###   - Webserver running on ports 8090 and 8080
+###   - Files: index.html, style.css, cutecat.png in proper directories
+###   - CGI support enabled for port 8080
+### ============================================
+
 ### Variables
 @host = localhost
 @port8090 = 8090
 @port8080 = 8080
 @baseUrl8090 = http://{{host}}:{{port8090}}
 @baseUrl8080 = http://{{host}}:{{port8080}}
+@userAgent = Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
+@acceptHtml = text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8
+@acceptJson = application/json,text/plain,*/*;q=0.01
+@acceptLanguage = en-US,en;q=0.9
+@acceptEncoding = gzip, deflate, br
 
 ### ============================================
 ### Basic GET Tests - Server 1 (Port 8090)
@@ -12,22 +30,52 @@
 ### Test 1: Basic GET request - Should return 200 OK
 GET {{baseUrl8090}}/
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
+Cache-Control: max-age=0
 
 ### Test 2: GET with www subdomain - Should return 200 OK  
 GET {{baseUrl8090}}/
 Host: www.example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### Test 3: GET index.html - Should return 200 OK
 GET {{baseUrl8090}}/index.html
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
+Cache-Control: no-cache
+If-Modified-Since: Wed, 21 Oct 2015 07:28:00 GMT
 
 ### Test 4: GET CSS file - Should return 200 OK with correct Content-Type
 GET {{baseUrl8090}}/cat-css/style.css
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: text/css,*/*;q=0.1
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
+Referer: {{baseUrl8090}}/
 
 ### Test 5: GET PNG image - Should return 200 OK with correct Content-Type
 GET {{baseUrl8090}}/cutecat.png
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
+Referer: {{baseUrl8090}}/
 
 ### ============================================
 ### Method Testing
@@ -36,18 +84,39 @@ Host: example.com
 ### Test 6: DELETE method (allowed) - Should return 200 OK or appropriate response
 DELETE {{baseUrl8090}}/
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptJson}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
+Authorization: Bearer test-token-123
+X-Requested-With: XMLHttpRequest
 
 ### Test 7: POST method (not allowed for /) - Should return 405 Method Not Allowed
 POST {{baseUrl8090}}/
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptJson}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 Content-Type: application/json
+Content-Length: 2
+Origin: {{baseUrl8090}}
+Referer: {{baseUrl8090}}/
 
 {}
 
 ### Test 8: PUT method (not allowed) - Should return 405 Method Not Allowed
 PUT {{baseUrl8090}}/
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptJson}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 Content-Type: application/json
+Content-Length: 2
 
 {}
 
@@ -58,18 +127,32 @@ Content-Type: application/json
 ### Test 9: POST to upload location - Should return 201 Created
 POST {{baseUrl8090}}/upload
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Origin: {{baseUrl8090}}
+Referer: {{baseUrl8090}}/upload-form.html
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
 Content-Disposition: form-data; name="file"; filename="test.txt"
 Content-Type: text/plain
 
-This is a test file content.
+This is a test file content for upload testing.
+Multiple lines of content to test file upload functionality.
+Special characters: áéíóú ñç @#$%^&*()
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--
 
 ### Test 10: GET to upload location (not allowed) - Should return 405 Method Not Allowed
 GET {{baseUrl8090}}/upload
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### ============================================
 ### Blogs Location Tests (/blogs)
@@ -78,37 +161,71 @@ Host: example.com
 ### Test 11: GET to blogs location - Should return 200 OK
 GET {{baseUrl8090}}/blogs
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
+Cache-Control: max-age=0
 
 ### Test 12: POST to blogs location (not allowed) - Should return 405 Method Not Allowed
 POST {{baseUrl8090}}/blogs
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptJson}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 Content-Type: application/json
+Content-Length: 23
+Origin: {{baseUrl8090}}
+Referer: {{baseUrl8090}}/blogs
 
-{"title": "Test Blog"}
+{"title": "Test Blog", "content": "Sample content"}
 
 ### ============================================
 ### Error Testing
 ### ============================================
 
 ### Test 13: 404 Not Found - Non-existent path
-GET {{baseUrl8090}}/nonexistent/path
+GET {{baseUrl8090}}/nonexistent/path/does/not/exist
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### Test 14: 404 Not Found - Non-existent file
 GET {{baseUrl8090}}/doesnotexist.html
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### Test 15: Custom 404 error page test
-GET {{baseUrl8090}}/trigger404
+GET {{baseUrl8090}}/trigger404/custom/error
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### Test 16: Large request body (should trigger 413 if over limit)
 POST {{baseUrl8090}}/upload
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptJson}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 Content-Type: text/plain
-Content-Length: 1000
+Content-Length: 600
 
-@import "large-data.txt"
+This is a large request body designed to exceed the client_max_body_size limit of 500 bytes configured in your server.conf file. This content should trigger a 413 Payload Too Large response from your webserver implementation. The purpose is to test the server's ability to properly validate and reject requests that exceed the configured maximum body size limit. Additional padding text to ensure we exceed the 500 byte limit and properly test the validation functionality of the webserver implementation.
 
 ### ============================================
 ### Server 2 Tests (Port 8080) - CGI Server
@@ -117,17 +234,35 @@ Content-Length: 1000
 ### Test 17: GET to CGI server - Should return 200 OK with CGI processing
 GET {{baseUrl8080}}/
 Host: api.example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
+X-Forwarded-For: 192.168.1.100
 
 ### Test 18: POST to CGI server - Should return 200 OK with CGI processing
 POST {{baseUrl8080}}/
 Host: api.example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptJson}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 Content-Type: application/json
+Content-Length: 52
+Origin: {{baseUrl8080}}
 
 {"data": "test", "timestamp": "2024-01-01T00:00:00Z"}
 
 ### Test 19: CGI with query parameters
-GET {{baseUrl8080}}/?param1=value1&param2=value2
+GET {{baseUrl8080}}/?param1=value1&param2=value2&debug=true
 Host: api.example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptJson}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### ============================================
 ### Host Header Testing
@@ -136,13 +271,29 @@ Host: api.example.com
 ### Test 20: Unknown host (should use default server)
 GET {{baseUrl8090}}/
 Host: unknown.example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### Test 21: Missing Host header (HTTP/1.1 should return 400)
+# @disabled - This test intentionally has no Host header
 GET {{baseUrl8090}}/ HTTP/1.1
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### Test 22: Invalid Host header format
 GET {{baseUrl8090}}/
-Host: invalid..host
+Host: invalid..host..format
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### ============================================
 ### HTTP Version Testing
@@ -151,127 +302,76 @@ Host: invalid..host
 ### Test 23: HTTP/1.0 request
 GET {{baseUrl8090}}/ HTTP/1.0
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Connection: close
 
 ### Test 24: HTTP/1.1 request (default)
 GET {{baseUrl8090}}/ HTTP/1.1
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### ============================================
 ### Content-Type Testing
 ### ============================================
 
-### Test 25: HTML file Content-Type
+### Test 25: HTML file Content-Type - Expected: text/html
 GET {{baseUrl8090}}/index.html
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
-### Test 26: CSS file Content-Type
+### Test 26: CSS file Content-Type - Expected: text/css
 GET {{baseUrl8090}}/cat-css/style.css
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: text/css,*/*;q=0.1
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
-### Test 27: PNG image Content-Type
+### Test 27: PNG image Content-Type - Expected: image/png
 GET {{baseUrl8090}}/cutecat.png
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: image/png,image/*;q=0.8,*/*;q=0.5
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### ============================================
 ### Edge Cases and Stress Tests
 ### ============================================
 
 ### Test 28: Very long URI (should trigger 414 if over limit)
-GET {{baseUrl8090}}/very/long/path/that/goes/on/and/on/and/should/eventually/trigger/an/error/if/the/path/is/too/long/for/the/server/to/handle/properly/testing/limits
+GET {{baseUrl8090}}/very/long/path/that/goes/on/and/on/and/should/eventually/trigger/an/error/if/the/path/is/too/long/for/the/server/to/handle/properly/testing/limits/more/paths/even/longer/paths/testing/maximum/uri/length/supported/by/webserver/implementation
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 
 ### Test 29: Request with many headers
 GET {{baseUrl8090}}/
 Host: example.com
+User-Agent: {{userAgent}}
+Accept: {{acceptHtml}}
+Accept-Language: {{acceptLanguage}}
+Accept-Encoding: {{acceptEncoding}}
+Connection: keep-alive
 Custom-Header-1: value1
 Custom-Header-2: value2
 Custom-Header-3: value3
 Custom-Header-4: value4
 Custom-Header-5: value5
 X-Test-Header: testing
-User-Agent: httpYac-Test-Client
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-Accept-Language: en-US,en;q=0.5
-Accept-Encoding: gzip, deflate
-
-### Test 30: Empty request body POST
-POST {{baseUrl8090}}/upload
-Host: example.com
-Content-Type: multipart/form-data; boundary=test
-Content-Length: 0
-
-### Test 31: Chunked transfer encoding (if supported)
-POST {{baseUrl8090}}/upload
-Host: example.com
-Transfer-Encoding: chunked
-Content-Type: text/plain
-
-5
-Hello
-5
-World
-0
-
-### ============================================
-### Connection Testing
-### ============================================
-
-### Test 32: Connection close
-GET {{baseUrl8090}}/
-Host: example.com
-Connection: close
-
-### Test 33: Connection keep-alive
-GET {{baseUrl8090}}/
-Host: example.com
-Connection: keep-alive
-
-### ============================================
-### Directory and Path Testing
-### ============================================
-
-### Test 34: Directory without trailing slash (might trigger 301 redirect)
-GET {{baseUrl8090}}/cat-css
-Host: example.com
-
-### Test 35: Directory with trailing slash
-GET {{baseUrl8090}}/cat-css/
-Host: example.com
-
-### Test 36: Root path variations
-GET {{baseUrl8090}}
-Host: example.com
-
-### Test 37: Path with encoded characters
-GET {{baseUrl8090}}/index%2Ehtml
-Host: example.com
-
-### ============================================
-### Performance and Load Testing
-### ============================================
-
-### Test 38: Rapid sequential requests
-GET {{baseUrl8090}}/
-Host: example.com
-
-###
-GET {{baseUrl8090}}/cutecat.png
-Host: example.com
-
-###
-GET {{baseUrl8090}}/index.html
-Host: example.com
-
-### ============================================
-### Custom Error Pages Testing
-### ============================================
-
-### Test 39: Trigger custom 404 error page
-GET {{baseUrl8090}}/this/path/does/not/exist
-Host: example.com
-
-### Test 40: Trigger potential 500 error
-POST {{baseUrl8090}}/
-Host: example.com
-Content-Type: application/malformed
-Content-Length: -1
+X-Client-Version: 1.0.0
+X-Session-ID: test

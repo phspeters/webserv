@@ -61,6 +61,7 @@ StaticFileHandler::StaticFileHandler() {}
 StaticFileHandler::~StaticFileHandler() {}
 
 void StaticFileHandler::handle(Connection* conn) {
+    
     log(LOG_DEBUG, "StaticFileHandler::handle called for client_fd %d",
         conn->client_fd_);
     //--CHECK Check if the request has errors to return an error response
@@ -74,10 +75,10 @@ void StaticFileHandler::handle(Connection* conn) {
     // Check if the request method is allowed (only supporting GET) // Fluxogram
     // --CHECK I don't think it is necessary because of route
     if (conn->request_data_->method_ != "GET") {
-        conn->response_data_->status_code_ = 405;
-        conn->response_data_->status_message_ = "Method Not Allowed";
+        ErrorHandler::generate_error_response(conn, codes::METHOD_NOT_ALLOWED);
         conn->response_data_->headers_["Allow"] = "GET";
-        // conn->state_ = Connection::CONN_WRITING;
+        log(LOG_DEBUG, "StaticFileHandler::handle: Method not allowed for client_fd %d",
+            conn->client_fd_);
         return;
     }
 
@@ -85,6 +86,8 @@ void StaticFileHandler::handle(Connection* conn) {
 
     // Fluxogram 301 - check if the request should be a directory
     if (process_directory_redirect(conn, absolute_path)) {
+        log(LOG_DEBUG, "StaticFileHandler::handle: Directory redirect for client_fd %d",
+            conn->client_fd_);
         return;  // Redirect was set up, we're done
     }
 
@@ -92,6 +95,8 @@ void StaticFileHandler::handle(Connection* conn) {
     if (process_directory_index(conn, absolute_path, need_autoindex)) {
         if (need_autoindex) {
             generate_directory_listing(conn, absolute_path);
+            log(LOG_DEBUG, "StaticFileHandler::handle: Autoindex generated for client_fd %d",
+                conn->client_fd_);
             return;
         }
     }
@@ -102,20 +107,22 @@ void StaticFileHandler::handle(Connection* conn) {
         // Fluxogram 404 - request resource not found - call error handler
         if (errno == ENOENT) {
             // File not found
-            conn->response_data_->status_code_ = 404;
-            conn->response_data_->status_message_ = "Not Found";
+            ErrorHandler::generate_error_response(conn, codes::NOT_FOUND);
+            log(LOG_DEBUG, "StaticFileHandler::handle: File not found for client_fd %d",
+                conn->client_fd_);
             // Not in the Fluxogram, but possible 403 - call error handler
         } else if (errno == EACCES) {
             // Permission denied
-            conn->response_data_->status_code_ = 403;
-            conn->response_data_->status_message_ = "Forbidden";
+            ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+            log(LOG_DEBUG, "StaticFileHandler::handle: Permission denied for client_fd %d",
+                conn->client_fd_);
             // Not in the Fluxogram, but possible 500 - call error handler
         } else {
             // Other error
-            conn->response_data_->status_code_ = 500;
-            conn->response_data_->status_message_ = "Internal Server Error";
+            ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
+            log(LOG_DEBUG, "StaticFileHandler::handle: Internal server error for client_fd %d",
+                conn->client_fd_);
         }
-        // conn->state_ = Connection::CONN_WRITING;
         return;
     }
 
@@ -124,9 +131,9 @@ void StaticFileHandler::handle(Connection* conn) {
     struct stat file_info;
     if (fstat(fd, &file_info) == -1) {
         close(fd);
-        conn->response_data_->status_code_ = 500;
-        conn->response_data_->status_message_ = "Internal Server Error";
-        // conn->state_ = Connection::CONN_WRITING;
+        ErrorHandler::generate_error_response(conn,codes::INTERNAL_SERVER_ERROR);
+        log(LOG_DEBUG, "StaticFileHandler::handle: fstat failed for client_fd %d",
+            conn->client_fd_);
         return;
     }
 
@@ -134,9 +141,9 @@ void StaticFileHandler::handle(Connection* conn) {
     // Not in the Fluxogram, but possible 403 - call error handler
     if (!S_ISREG(file_info.st_mode)) {
         close(fd);
-        conn->response_data_->status_code_ = 403;
-        conn->response_data_->status_message_ = "Forbidden";
-        // conn->state_ = Connection::CONN_WRITING;
+        ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+        log(LOG_DEBUG, "StaticFileHandler::handle: File is not a regular file for client_fd %d",
+            conn->client_fd_);
         return;
     }
 
@@ -145,7 +152,6 @@ void StaticFileHandler::handle(Connection* conn) {
     size_t dot_pos = absolute_path.find_last_of('.');
     if (dot_pos != std::string::npos) {
         std::string extension = absolute_path.substr(dot_pos + 1);
-
         // Map common extensions to MIME types
         if (extension == "html" || extension == "htm") {
             content_type = "text/html";
@@ -171,9 +177,9 @@ void StaticFileHandler::handle(Connection* conn) {
 
     // Not in the Fluxogram, but possible 500 - call error handler
     if (bytes_read != file_info.st_size) {
-        conn->response_data_->status_code_ = 500;
-        conn->response_data_->status_message_ = "Internal Server Error";
-        // conn->state_ = Connection::CONN_WRITING;
+        ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
+        log(LOG_DEBUG, "StaticFileHandler::handle: Read error for client_fd %d",
+            conn->client_fd_);
         return;
     }
 
@@ -193,7 +199,7 @@ void StaticFileHandler::handle(Connection* conn) {
     conn->response_data_->headers_ = headers;
     conn->response_data_->body_.assign(file_content.begin(),
                                        file_content.end());
-
-    // Update connection state
-    // conn->state_ = Connection::CONN_WRITING;
+    conn->conn_state_ = codes::CONN_WRITING;
+    log(LOG_DEBUG, "StaticFileHandler::handle: File served successfully for client_fd %d",
+        conn->client_fd_);
 }

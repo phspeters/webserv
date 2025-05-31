@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>42 Symbol</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      background: linear-gradient(135deg, #000000, #1c1c1c);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .logo {
+      font-size: 10rem;
+      font-weight: bold;
+      color: white;
+      position: relative;
+      background: linear-gradient(45deg, #00ffff, #0044ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: shine 4s infinite alternate;
+    }
+
+    @keyframes shine {
+      0% {
+        filter: drop-shadow(0 0 5px #00ffff);
+      }
+      100% {
+        filter: drop-shadow(0 0 20px #0044ff);
+      }
+    }
+
+    .credit {
+      position: absolute;
+      bottom: 20px;
+      color: #888;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">42</div>
+  <div class="credit">Inspired by 42 School</div>
+</body>
+</html>

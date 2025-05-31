@@ -63,6 +63,7 @@ int print_buffer(std::vector<char>& buffer) {
 
 void print_virtual_server(const VirtualServer& virtual_server) {
     std::cout << "---------- SERVER CONFIG ----------" << std::endl;
+    std::cout << "Host Name: " << virtual_server.host_name_ << std::endl;
     std::cout << "Host: " << virtual_server.host_ << std::endl;
     std::cout << "Port: " << virtual_server.port_ << std::endl;
 
