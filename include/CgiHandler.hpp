@@ -39,7 +39,7 @@ class CgiHandler : public AHandler {
     bool setup_cgi_execution(Connection* conn);
     bool setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                          int cgi_to_server_pipe[2]);
-    void handle_child_pipes(Connection* conn, int server_to_cgi_pipe[2],
+    void handle_child_pipes(int server_to_cgi_pipe[2],
                             int cgi_to_server_pipe[2]);
     void setup_cgi_environment(Connection* conn);
     void execute_cgi_script(Connection* conn);

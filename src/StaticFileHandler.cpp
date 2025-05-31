@@ -1,6 +1,6 @@
 #include "webserv.hpp"
 
-// StaticFileHandler Flow 
+// StaticFileHandler Flow
 
 // 1. Location Redirect Check
 // Checks if the location has a configured redirect
@@ -61,7 +61,8 @@ StaticFileHandler::StaticFileHandler() {}
 StaticFileHandler::~StaticFileHandler() {}
 
 void StaticFileHandler::handle(Connection* conn) {
-    
+    log(LOG_DEBUG, "StaticFileHandler::handle called for client_fd %d",
+        conn->client_fd_);
     //--CHECK Check if the request has errors to return an error response
 
     // Fluxogram 301 - when location has redirect

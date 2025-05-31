@@ -5,8 +5,8 @@ RequestParser::RequestParser() {}
 RequestParser::~RequestParser() {}
 
 bool RequestParser::read_from_socket(Connection* conn) {
-	log(LOG_DEBUG, "Reading from socket (fd: %i)", conn->client_fd_);
-	
+    log(LOG_DEBUG, "Reading from socket (fd: %i)", conn->client_fd_);
+
     // Resize the read buffer to accommodate incoming data
     size_t original_size = conn->read_buffer_.size();
     conn->read_buffer_.resize(original_size + 4096);
@@ -41,10 +41,16 @@ bool RequestParser::read_from_socket(Connection* conn) {
 }
 
 codes::ParseStatus RequestParser::parse(Connection* conn) {
-    log(LOG_DEBUG, "Starting parsing attempt on Connection '%i'", conn->client_fd_);
-	
-	codes::ParseStatus parse_status = codes::PARSE_INCOMPLETE;
-    if (!conn->read_buffer_.empty()) {
+    log(LOG_DEBUG, "Starting parsing attempt on Connection '%i'",
+        conn->client_fd_);
+
+    if (conn->parser_state_ == codes::PARSING_COMPLETE) {
+        return codes::PARSE_SUCCESS;  // Already complete
+    }
+
+    codes::ParseStatus parse_status = codes::PARSE_INCOMPLETE;
+    while (!conn->read_buffer_.empty() &&
+           conn->parser_state_ != codes::PARSING_COMPLETE) {
         // Process based on current state
         // The state transition is handled inside each parsing function
         switch (conn->parser_state_) {
@@ -72,7 +78,8 @@ codes::ParseStatus RequestParser::parse(Connection* conn) {
         }
     }
 
-    log(LOG_DEBUG, "Finished parsing attempt on Connection '%i' with status: %i",
+    log(LOG_DEBUG,
+        "Finished parsing attempt on Connection '%i' with status: %i",
         conn->client_fd_, parse_status);
 
     return parse_status;
@@ -109,6 +116,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
     // Validate components
     codes::ParseStatus validation_status = validate_request_line(request);
     if (validation_status != codes::PARSE_SUCCESS) {
+        // Return the specific validation error
         return validation_status;
     }
 

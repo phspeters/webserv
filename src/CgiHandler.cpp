@@ -5,6 +5,9 @@ CgiHandler::CgiHandler() {}
 CgiHandler::~CgiHandler() {}
 
 void CgiHandler::handle(Connection* conn) {
+    log(LOG_DEBUG, "CgiHandler: Starting processing for client_fd %d",
+        conn->client_fd_);
+
     switch (conn->cgi_handler_state_) {
         case codes::CGI_HANDLER_IDLE:
             // Initial state, ready to start CGI execution
@@ -156,7 +159,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
         return false;
     } else if (pid == 0) {
         // This code runs ONLY in the CHILD process
-        handle_child_pipes(conn, server_to_cgi_pipe, cgi_to_server_pipe);
+        handle_child_pipes(server_to_cgi_pipe, cgi_to_server_pipe);
         setup_cgi_environment(conn);
         execute_cgi_script(conn);
     } else {
@@ -241,7 +244,7 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
     return true;
 }
 
-void CgiHandler::handle_child_pipes(Connection* conn, int server_to_cgi_pipe[2],
+void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
                                     int cgi_to_server_pipe[2]) {
     // Close the read-end of the pipe to CGI's stdin
     close(server_to_cgi_pipe[0]);
@@ -270,9 +273,6 @@ void CgiHandler::handle_child_pipes(Connection* conn, int server_to_cgi_pipe[2],
     // Close the original pipe file descriptors in the child process
     close(server_to_cgi_pipe[1]);
     close(cgi_to_server_pipe[0]);
-
-    /// TEMP
-    (void)conn;
 }
 
 // TODO - Include any other necessary environment variables for CGI execution
@@ -470,8 +470,58 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
 
 void CgiHandler::parse_cgi_output(Connection* conn, char* buffer,
                                   ssize_t bytes_read) {
-    // Set the response data in the connection
-    (void)bytes_read;
-    (void)buffer;
+    //// Set the response data in the connection
+    // std::string response_str(buffer, bytes_read);
+    // std::istringstream response_data(response_str);
+
+    // std::string line;
+    // if (!std::getline(response_data, line) || line.empty()) {
+    //     log(LOG_ERROR, "Empty CGI response received for client %d",
+    //         conn->client_fd_);
+    //     ErrorHandler::generate_error_response(conn,
+    //                                           codes::INTERNAL_SERVER_ERROR);
+    //     return;
+    // }
+    // if (line.empty()) {
+    //     log(LOG_ERROR, "Empty CGI response received for client %d",
+    //         conn->client_fd_);
+    //     ErrorHandler::generate_error_response(conn,
+    //                                           codes::INTERNAL_SERVER_ERROR);
+    //     return;
+    // }
+    // while (!line.empty()) {
+    //     if (line == "\r\n") {
+    //         // End of headers, stop processing
+    //         log(LOG_DEBUG, "End of CGI headers for client %d",
+    //             conn->client_fd_);
+    //         break;
+    //     }
+    //     size_t colon_pos = line.find(':');
+    //     if (colon_pos == std::string::npos) {
+    //         log(LOG_ERROR, "Invalid CGI header line for client %d: %s",
+    //             conn->client_fd_, line.c_str());
+    //         ErrorHandler::generate_error_response(conn,
+    //                                               codes::INTERNAL_SERVER_ERROR);
+    //         return;
+    //     }
+    //     std::string header_name = line.substr(0, colon_pos);
+    //     std::string header_value = line.substr(colon_pos + 1);
+    //     // Trim leading whitespace from header value
+    //     trim(header_value);
+    //     if (header_value.empty()) {
+    //         log(LOG_ERROR, "Empty CGI header value for client %d: %s",
+    //             conn->client_fd_, header_name.c_str());
+    //         ErrorHandler::generate_error_response(conn,
+    //                                               codes::INTERNAL_SERVER_ERROR);
+    //         return;
+    //     }
+    //     conn->response_data_->headers_[header_name] = header_value;
+    //     log(LOG_DEBUG, "CGI header: %s: %s", header_name.c_str(),
+    //         header_value.c_str());
+    //     line = std::getline(response_data);
+
+    //}
+    (void)buffer;      // Suppress unused variable warning
+    (void)bytes_read;  // Suppress unused variable warning
     conn->cgi_handler_state_ = codes::CGI_HANDLER_COMPLETE;
 }
