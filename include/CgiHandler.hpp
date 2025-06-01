@@ -41,12 +41,16 @@ class CgiHandler : public AHandler {
                          int cgi_to_server_pipe[2]);
     void handle_child_pipes(int server_to_cgi_pipe[2],
                             int cgi_to_server_pipe[2]);
-    void setup_cgi_environment(Connection* conn);
-    void execute_cgi_script(Connection* conn);
+    std::vector<char*> create_cgi_envp(Connection* conn);
+    void execute_cgi_script(Connection* conn, char** envp);
     bool handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2],
                              int cgi_to_server_pipe[2]);
     void parse_cgi_output(
         Connection* conn);  // Parses CGI headers/body separation
+    void finalize_cgi_response(Connection* conn);
+    void finalize_cgi_error(Connection* conn, codes::ResponseStatus status);
+    bool set_status_line(Connection* conn);
+    void cleanup_cgi_resources(Connection* conn, bool kill_child = false);
 
     // Prevent copying
     CgiHandler(const CgiHandler&);

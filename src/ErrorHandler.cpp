@@ -1,7 +1,6 @@
 #include "webserv.hpp"
 
 int ErrorHandler::get_parse_message_status(codes::ParseStatus parse_status) {
-
     int status_code = 500;  // Default to Internal Server Error
 
     switch (parse_status) {
@@ -44,16 +43,19 @@ int ErrorHandler::get_parse_message_status(codes::ParseStatus parse_status) {
     return status_code;
 }
 
-void ErrorHandler::generate_error_response(Connection* conn, codes::ResponseStatus status_code) {
+void ErrorHandler::generate_error_response(Connection* conn,
+                                           codes::ResponseStatus status_code) {
     if (!conn || !conn->response_data_) {
-        log(LOG_ERROR, "generate_error_response: Invalid connection or response data");
+        log(LOG_ERROR,
+            "generate_error_response: Invalid connection or response data");
         return;
     }
 
     // Check if this is a valid error state
-    if (conn->parse_status_ == codes::PARSE_SUCCESS || 
+    if (conn->parse_status_ == codes::PARSE_SUCCESS ||
         conn->parse_status_ == codes::PARSE_INCOMPLETE) {
-        log(LOG_WARNING, "generate_error_response called with non-error parse status: %d", 
+        log(LOG_WARNING,
+            "generate_error_response called with non-error parse status: %d",
             static_cast<int>(conn->parse_status_));
         return;
     }
@@ -61,27 +63,27 @@ void ErrorHandler::generate_error_response(Connection* conn, codes::ResponseStat
     // Get error info from parse status
     if (status_code == codes::UNDEFINED) {
         int parse_status_code = get_parse_message_status(conn->parse_status_);
-        handle_error(conn->response_data_, parse_status_code, *conn->virtual_server_);
+        handle_error(conn->response_data_, parse_status_code,
+                     *conn->virtual_server_);
 
-    }
-    else { // Use provided status code
+    } else {  // Use provided status code
         handle_error(conn->response_data_, status_code, *conn->virtual_server_);
     }
-   
+
     // Set additional headers
-    conn->response_data_->headers_["Connection"] = "close";
-    conn->response_data_->headers_["Server"] = "webserv/1.0";
-    conn->response_data_->headers_["Date"] = get_current_gmt_time();
-    
+    conn->response_data_->set_header("connection", "close");
+    conn->response_data_->set_header("server", "webserv/1.0");
+    conn->response_data_->set_header("date", get_current_gmt_time());
+
     // Update connection state
     conn->conn_state_ = codes::CONN_WRITING;
-    
-    log(LOG_INFO, "Generated error response %d for client_fd %d: %s", 
+
+    log(LOG_INFO, "Generated error response %d for client_fd %d: %s",
         status_code, conn->client_fd_);
 }
 
-
-void ErrorHandler::handle_error(HttpResponse* resp, int status_code, const VirtualServer& config) {
+void ErrorHandler::handle_error(HttpResponse* resp, int status_code,
+                                const VirtualServer& config) {
     if (!resp) {
         log(LOG_ERROR, "handle_error: NULL response pointer");
         return;
@@ -100,24 +102,26 @@ void ErrorHandler::handle_error(HttpResponse* resp, int status_code, const Virtu
 
     // Set response body and headers
     resp->body_.assign(content.begin(), content.end());
-    
+
     // Set headers
-    resp->headers_["Content-Type"] = "text/html; charset=UTF-8";
-    
+    resp->set_header("Content-Type", "text/html; charset=UTF-8");
+
     // Convert size to string (C++98 compatible)
     std::ostringstream content_length;
     content_length << resp->body_.size();
-    resp->headers_["Content-Length"] = content_length.str();
-    
-    log(LOG_DEBUG, "Generated error page for status %d (%zu bytes)", 
+    resp->set_header("Content-Length", content_length.str());
+
+    log(LOG_DEBUG, "Generated error page for status %d (%zu bytes)",
         status_code, resp->body_.size());
 }
 
 // ==================== ERROR PAGE GENERATION ====================
 
-std::string ErrorHandler::get_error_page_content(int status_code, const VirtualServer& config) {
+std::string ErrorHandler::get_error_page_content(int status_code,
+                                                 const VirtualServer& config) {
     // Check if custom error page is configured
-    std::map<int, std::string>::const_iterator it = config.error_pages_.find(status_code);
+    std::map<int, std::string>::const_iterator it =
+        config.error_pages_.find(status_code);
 
     if (it != config.error_pages_.end()) {
         // Custom error page found, try to read the file
@@ -133,31 +137,37 @@ std::string ErrorHandler::get_error_page_content(int status_code, const VirtualS
             file.close();
 
             if (!content.empty()) {
-                log(LOG_DEBUG, "Loaded custom error page: %s", error_page_path.c_str());
+                log(LOG_DEBUG, "Loaded custom error page: %s",
+                    error_page_path.c_str());
                 return content;
             } else {
-                log(LOG_WARNING, "Custom error page is empty: %s", error_page_path.c_str());
+                log(LOG_WARNING, "Custom error page is empty: %s",
+                    error_page_path.c_str());
             }
         } else {
-            log(LOG_WARNING, "Could not read custom error page: %s", error_page_path.c_str());
+            log(LOG_WARNING, "Could not read custom error page: %s",
+                error_page_path.c_str());
         }
     }
 
     // No custom page or couldn't read it, generate default
     log(LOG_DEBUG, "Generating default error page for status %d", status_code);
-    return generate_default_error_page(status_code, get_status_message(status_code));
+    return generate_default_error_page(status_code,
+                                       get_status_message(status_code));
 }
 
-std::string ErrorHandler::generate_default_error_page(int status_code, const std::string& status_message) {
+std::string ErrorHandler::generate_default_error_page(
+    int status_code, const std::string& status_message) {
     std::ostringstream html;
-    
+
     std::ostringstream status_code_str;
     status_code_str << status_code;
 
     html << "<!DOCTYPE html>\n"
          << "<html>\n"
          << "<head>\n"
-         << "    <title>" << status_code_str.str() << " " << status_message << "</title>\n"
+         << "    <title>" << status_code_str.str() << " " << status_message
+         << "</title>\n"
          << "    <meta charset=\"UTF-8\">\n"
          << "    <style>\n"
          << "        body {\n"
@@ -203,10 +213,13 @@ std::string ErrorHandler::generate_default_error_page(int status_code, const std
          << "</head>\n"
          << "<body>\n"
          << "    <div class=\"container\">\n"
-         << "        <div class=\"error-code\">" << status_code_str.str() << "</div>\n"
-         << "        <div class=\"error-message\">" << status_message << "</div>\n"
+         << "        <div class=\"error-code\">" << status_code_str.str()
+         << "</div>\n"
+         << "        <div class=\"error-message\">" << status_message
+         << "</div>\n"
          << "        <div class=\"error-description\">\n"
-         << "            The server encountered an error and could not complete your request.\n"
+         << "            The server encountered an error and could not "
+            "complete your request.\n"
          << "        </div>\n"
          << "        <div class=\"footer\">\n"
          << "            webserv/1.0\n"

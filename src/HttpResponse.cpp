@@ -28,6 +28,24 @@ void HttpResponse::set_status(int code) {
         status_message_.c_str());
 }
 
+std::string HttpResponse::get_header(const std::string& name) const {
+    // Case-insensitive lookup for headers
+    std::string lower_name = name;
+    for (size_t i = 0; i < lower_name.size(); ++i) {
+        lower_name[i] = std::tolower(static_cast<unsigned char>(lower_name[i]));
+    }
+
+    std::map<std::string, std::string>::const_iterator it =
+        headers_.find(lower_name);
+    if (it != headers_.end()) {
+        log(LOG_DEBUG, "Response header retrieved: '%s: %s'",
+            lower_name.c_str(), it->second.c_str());
+        return it->second;
+    }
+    log(LOG_DEBUG, "Response header '%s' not found", lower_name.c_str());
+    return "";
+}
+
 std::string HttpResponse::get_status_line() const {
     std::ostringstream oss;
     oss << version_ << " " << status_code_ << " " << status_message_;

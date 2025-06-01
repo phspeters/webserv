@@ -9,11 +9,11 @@ bool RequestParser::read_from_socket(Connection* conn) {
 
     // Resize the read buffer to accommodate incoming data
     size_t original_size = conn->read_buffer_.size();
-    conn->read_buffer_.resize(original_size + 4096);
+    conn->read_buffer_.resize(original_size + CHUNK_SIZE);
 
     // Read data from the client socket
-    ssize_t bytes_read =
-        recv(conn->client_fd_, &conn->read_buffer_[original_size], 4096, 0);
+    ssize_t bytes_read = recv(
+        conn->client_fd_, &conn->read_buffer_[original_size], CHUNK_SIZE, 0);
 
     if (bytes_read == 0) {
         // Connection closed by client

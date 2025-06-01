@@ -9,6 +9,8 @@
 #include <iostream>
 #include <string>
 
+#define CHUNK_SIZE 4096
+
 class SimpleHttpClient {
    private:
     int sockfd_;
@@ -71,7 +73,7 @@ class SimpleHttpClient {
     }
 
     std::string receive_response() {
-        char buffer[4096];
+        char buffer[CHUNK_SIZE];
         std::string response;
         ssize_t bytes_read;
 

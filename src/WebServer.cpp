@@ -733,7 +733,7 @@ bool WebServer::setup_signal_handlers() {
     sa_chld.sa_flags =
         SA_RESTART | SA_NOCLDSTOP;  // Avoids stopping on child exit
     if (sigaction(SIGCHLD, &sa_chld, NULL) < 0) {
-        log(LOG_ERROR, "Failed to set up SIGPIPE handler");
+        log(LOG_ERROR, "Failed to set up SIGCHLD handler");
         return false;
     }
 
@@ -750,9 +750,10 @@ void WebServer::signal_handler(int signal) {
     } else if (signal == SIGCHLD) {
         // Reap zombie processes
         int saved_errno = errno;  // Preserve errno
-        while (waitpid(-1, NULL, WNOHANG) > 0) {
-            // Child reaped. You could log here if desired.
-            log(LOG_DEBUG, "SIGCHLD handler: Reaped a child process.");
+        pid_t pid;
+        while (pid = waitpid(-1, NULL, WNOHANG) > 0) {
+            // Child reaped
+            log(LOG_DEBUG, "SIGCHLD handler: Reaped child process '%d'.", pid);
         }
         errno = saved_errno;  // Restore errno
     }

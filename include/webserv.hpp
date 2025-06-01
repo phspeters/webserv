@@ -28,8 +28,8 @@ enum CgiHandlerState {
     CGI_HANDLER_WRITING_TO_PIPE,    // Writing request body to CGI stdin
     CGI_HANDLER_READING_FROM_PIPE,  // Reading response from CGI stdout
     CGI_HANDLER_HEADERS_PARSED,     // Headers parsed, waiting for body
-    CGI_HANDLER_COMPLETE,  // CGI script finished, response (or error) captured
-    CGI_HANDLER_ERROR
+    CGI_HANDLER_COMPLETE,           // CGI script finished
+    CGI_HANDLER_ERROR               // Error occurred during CGI handling
 };
 
 enum WriterState {
@@ -116,6 +116,7 @@ const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 }  // namespace http_limits
 
 #define CRLF "\r\n"  // Carriage return + line feed
+#define CHUNK_SIZE 4096
 
 #include <arpa/inet.h>
 #include <dirent.h>
