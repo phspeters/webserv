@@ -751,7 +751,7 @@ void WebServer::signal_handler(int signal) {
         // Reap zombie processes
         int saved_errno = errno;  // Preserve errno
         pid_t pid;
-        while (pid = waitpid(-1, NULL, WNOHANG) > 0) {
+        while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
             // Child reaped
             log(LOG_DEBUG, "SIGCHLD handler: Reaped child process '%d'.", pid);
         }

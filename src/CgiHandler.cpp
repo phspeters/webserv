@@ -22,6 +22,7 @@ void CgiHandler::handle(Connection* conn) {
             handle_cgi_write(conn);
             break;
         case codes::CGI_HANDLER_READING_FROM_PIPE:
+        case codes::CGI_HANDLER_HEADERS_PARSED:
             // Read from CGI's stdout
             handle_cgi_read(conn);
             break;
@@ -294,8 +295,9 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
     cgi_env_strings.push_back("GATEWAY_INTERFACE=CGI/1.1");
     cgi_env_strings.push_back("SERVER_NAME=" +
                               conn->virtual_server_->host_name_);
-    cgi_env_strings.push_back("SERVER_PORT=" +
-                              std::to_string(conn->virtual_server_->port_));
+    std::ostringstream oss;
+    oss << conn->virtual_server_->port_;
+    cgi_env_strings.push_back("SERVER_PORT=" + oss.str());
 
     // Add CONTENT_TYPE, CONTENT_LENGTH for POST
     bool content_type_set = false;
