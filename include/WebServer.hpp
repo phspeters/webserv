@@ -37,7 +37,6 @@ class WebServer {
     // Getter for the ConnectionManager
     ConnectionManager* get_conn_manager() const { return conn_manager_; }
 
-    // TODO - Move to Utill.hpp/.cpp
     bool set_non_blocking(int fd);
     bool register_epoll_events(int fd, uint32_t events = EPOLLIN);
     bool update_epoll_events(int fd, uint32_t mode);

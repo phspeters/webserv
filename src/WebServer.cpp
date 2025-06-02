@@ -653,7 +653,6 @@ void WebServer::remove_listener_socket(int fd) {
     log(LOG_DEBUG, "Removed faulty listener socket '%i'", fd);
 }
 
-// TODO - Move to Utils.hpp/.cpp
 bool WebServer::set_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
@@ -673,7 +672,6 @@ bool WebServer::set_non_blocking(int fd) {
     return true;
 }
 
-// TODO - Move to Utils.hpp/.cpp
 bool WebServer::register_epoll_events(int fd, uint32_t events) {
     struct epoll_event event;
     memset(&event, 0, sizeof(event));
@@ -689,7 +687,6 @@ bool WebServer::register_epoll_events(int fd, uint32_t events) {
     return true;
 }
 
-// TODO - Move to Utils.hpp/.cpp
 bool WebServer::update_epoll_events(int fd, uint32_t events) {
     struct epoll_event event;
     memset(&event, 0, sizeof(event));

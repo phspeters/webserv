@@ -53,7 +53,6 @@ Connection::~Connection() {
         client_fd_);
 }
 
-// TODO implement cleanup for file_upload_handler
 void Connection::reset_for_keep_alive() {
     // Reset virtual server
     virtual_server_ = default_virtual_server_;
