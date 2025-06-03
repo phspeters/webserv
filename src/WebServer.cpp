@@ -760,7 +760,6 @@ void WebServer::signal_handler(int signal) {
     }
 }
 
-// TODO - Ensure we match even if the location is invalid (e.g. /foo/bar)
 const Location* WebServer::find_matching_location(
     const VirtualServer* virtual_server, const std::string& uri) const {
     // Use a reference instead of making a copy
@@ -787,7 +786,7 @@ const Location* WebServer::find_matching_location(
     }
 
     if (!best_match) {
-        log(LOG_ERROR, "No matching location found for URI: %s", uri.c_str());
+        log(LOG_FATAL, "No matching location found for URI: %s", uri.c_str());
     } else {
         log(LOG_DEBUG, "Found matching location: %s",
             best_match->path_.c_str());
