@@ -463,10 +463,11 @@ void WebServer::handle_write(Connection* conn) {
         codes::WriteStatus status = response_writer_->write_response(conn);
 
         // TODO - Remove switch state, call logs and handle_error before
-        // returning the status. Leave condition if(status !=
-        // codes::WRITING_SUCCESS) { return; } because if it is incomplete, we
-        // should wait for next call, and if it is an writing error, the
-        // connection should be closed inse write_response.
+        // returning the status. Leave condition if(status ==
+        // codes::WRITING_INCOMPLETE) { return; } because if it is incomplete,
+        // we should return and wait for the next call, and if it is an writing
+        // error, the connection should be closed inse write_response, never
+        // reaching this point. Only WRITING_SUCCESS will continue the flow.
         switch (status) {
             case codes::WRITING_INCOMPLETE:
                 log(LOG_DEBUG,
