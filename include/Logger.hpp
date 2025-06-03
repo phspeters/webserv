@@ -7,7 +7,7 @@ void print_request(const Connection* conn);
 void print_response(const Connection* conn);
 int print_buffer(std::vector<char>& buffer);
 
-void print_virtual_server(const VirtualServer& config);
+void print_virtual_server(const VirtualServer& virtual_server);
 void log_client_error(int status_code, const Connection* conn,
                       const VirtualServer& config);
 

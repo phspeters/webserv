@@ -52,10 +52,10 @@ struct Connection {
     //--------------------------------------
     codes::ConnectionState conn_state_;  // Current state of the connection
     codes::ParserState parser_state_;    // Current state of the parser
-    codes::WriterState writer_state_;    // Current state of the writer
     codes::CgiHandlerState
         cgi_handler_state_;            // State of the CGI handler (if active)
     codes::ParseStatus parse_status_;  // Status of the last parsing attempt
+    codes::WriteStatus write_status_;  // Current state of the writer
 
     //--------------------------------------
     // Connection Management
@@ -64,9 +64,8 @@ struct Connection {
 
     // Connection state checks
     bool is_readable() const;
-    bool is_processing() const;
+    bool is_cgi() const;
     bool is_writable() const;
-    bool is_error() const;
     bool is_keep_alive() const;
 
     //--------------------------------------

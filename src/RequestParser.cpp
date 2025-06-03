@@ -22,7 +22,6 @@ bool RequestParser::read_from_socket(Connection* conn) {
     }
 
     if (bytes_read < 0) {
-        // Handle error
         log(LOG_ERROR, "Error reading from socket (fd: %i): %s",
             conn->client_fd_, strerror(errno));
         return false;

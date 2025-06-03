@@ -147,8 +147,8 @@ void print_virtual_server(const VirtualServer& virtual_server) {
 void log_client_error(int status_code, const Connection* conn,
                       const VirtualServer& virtual_server) {
     std::cerr << "Client error " << status_code << " ("
-              << get_status_message(status_code)
-              << ") for connection " << conn->client_fd_ << " on ";
+              << get_status_message(status_code) << ") for connection "
+              << conn->client_fd_ << " on ";
 
     if (!virtual_server.server_names_.empty()) {
         std::cerr << virtual_server.server_names_[0];
@@ -199,27 +199,33 @@ std::string get_current_gmt_time() {
 
 int log(log_level level, const char* msg, ...) {
     if (level < ACTIVE_LOG_LEVEL) {
-		return 0;
-	}
+        return 0;
+    }
 
-	char output[8192];
+    char output[8192];
     va_list args;
     int n;
 
     va_start(args, msg);
     n = vsnprintf(output, 8192, msg, args);
 
-    if (level == LOG_DEBUG)
+    if (level == LOG_TRACE)
+        std::cout << WHITE << "[TRACE]\t";
+    else if (level == LOG_DEBUG)
         std::cout << WHITE << "[DEBUG]\t";
     else if (level == LOG_INFO)
         std::cout << CYAN << "[INFO]\t";
-	else if (level == LOG_WARNING)
-		std::cout << MAGENTA << "[WARNING]\t";
+    else if (level == LOG_WARNING)
+        std::cout << MAGENTA << "[WARNING]\t";
     else if (level == LOG_ERROR)
-        std::cout << RED << "[ERROR]\t";
+        std::cout << LIGHT_RED << "[ERROR]\t";
+    else if (level == LOG_FATAL)
+        std::cout << RED << "[FATAL]\t";
+    else if (level == LOG_OFF)
+        return 0;  // No output for LOG_OFF
 
     std::cout << get_current_gmt_time() << output << RESET << std::endl;
     va_end(args);
 
-	return n;
+    return n;
 }

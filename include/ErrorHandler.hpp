@@ -12,7 +12,8 @@ struct VirtualServer;
 namespace ErrorHandler {
 
 // ==================== MAIN ERROR RESPONSE GENERATORS ====================
-void generate_error_response(Connection* conn, codes::ResponseStatus status = codes::UNDEFINED);
+void generate_error_response(Connection* conn,
+                             codes::ResponseStatus status = codes::UNDEFINED);
 
 // ==================== ERROR INFO MAPPING ====================
 int get_parse_message_status(codes::ParseStatus parse_status);

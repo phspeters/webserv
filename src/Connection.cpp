@@ -7,14 +7,14 @@ Connection::Connection(int fd, const VirtualServer* default_virtual_server)
       last_activity_(time(NULL)),
       chunk_remaining_bytes_(0),
       write_buffer_offset_(0),
-	  cgi_read_buffer_offset_(0),
+      cgi_read_buffer_offset_(0),
       request_data_(new HttpRequest()),
       response_data_(new HttpResponse()),
       conn_state_(codes::CONN_READING),
       parser_state_(codes::PARSING_REQUEST_LINE),
-      writer_state_(codes::WRITING_INCOMPLETE),
       cgi_handler_state_(codes::CGI_HANDLER_IDLE),
       parse_status_(codes::PARSE_INCOMPLETE),
+      write_status_(codes::WRITING_INCOMPLETE),
       cgi_pid_(-1),
       cgi_pipe_stdin_fd_(-1),
       cgi_pipe_stdout_fd_(-1),
@@ -61,8 +61,8 @@ void Connection::reset_for_keep_alive() {
     chunk_remaining_bytes_ = 0;
     write_buffer_.clear();
     write_buffer_offset_ = 0;
-	cgi_read_buffer_.clear();
-	cgi_read_buffer_offset_ = 0;
+    cgi_read_buffer_.clear();
+    cgi_read_buffer_offset_ = 0;
 
     // Reset request/response
     if (request_data_) {
@@ -75,9 +75,9 @@ void Connection::reset_for_keep_alive() {
     // Reset state variables
     conn_state_ = codes::CONN_READING;
     parser_state_ = codes::PARSING_REQUEST_LINE;
-    writer_state_ = codes::WRITING_INCOMPLETE;
     cgi_handler_state_ = codes::CGI_HANDLER_IDLE;
     parse_status_ = codes::PARSE_INCOMPLETE;
+    write_status_ = codes::WRITING_INCOMPLETE;
 
     // Reset location match
     location_match_ = NULL;
@@ -119,16 +119,12 @@ bool Connection::is_readable() const {
     return conn_state_ == codes::CONN_READING;
 }
 
-bool Connection::is_processing() const {
-    return conn_state_ == codes::CONN_PROCESSING ||
-           conn_state_ == codes::CONN_CGI_EXEC;
-}
+bool Connection::is_cgi() const { return conn_state_ == codes::CONN_CGI_EXEC; }
 
 bool Connection::is_writable() const {
-    return conn_state_ == codes::CONN_WRITING;
+    return conn_state_ == codes::CONN_PROCESSING ||
+           conn_state_ == codes::CONN_WRITING;
 }
-
-bool Connection::is_error() const { return conn_state_ == codes::CONN_ERROR; }
 
 bool Connection::is_keep_alive() const {
     if (!request_data_) {

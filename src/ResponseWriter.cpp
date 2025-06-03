@@ -4,7 +4,7 @@ ResponseWriter::ResponseWriter() {}
 
 ResponseWriter::~ResponseWriter() {}
 
-codes::WriterState ResponseWriter::write_response(Connection* conn) {
+codes::WriteStatus ResponseWriter::write_response(Connection* conn) {
     log(LOG_DEBUG, "handle_write: Writing response to client_fd %d",
         conn->client_fd_);
 
@@ -28,7 +28,7 @@ codes::WriterState ResponseWriter::write_response(Connection* conn) {
 
     // Nothing to send
     if (conn->write_buffer_.empty()) {
-        return codes::WRITING_COMPLETE;
+        return codes::WRITING_SUCCESS;
     }
 
     // Send the response
@@ -53,7 +53,7 @@ codes::WriterState ResponseWriter::write_response(Connection* conn) {
 
     // Check if we've written everything
     if (conn->write_buffer_offset_ == conn->write_buffer_.size()) {
-        return codes::WRITING_COMPLETE;
+        return codes::WRITING_SUCCESS;
     }
 
     // More data to send

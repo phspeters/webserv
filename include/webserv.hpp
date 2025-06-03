@@ -32,8 +32,8 @@ enum CgiHandlerState {
     CGI_HANDLER_ERROR               // Error occurred during CGI handling
 };
 
-enum WriterState {
-    WRITING_COMPLETE,    // Response fully sent
+enum WriteStatus {
+    WRITING_SUCCESS,   	 // Response fully sent
     WRITING_INCOMPLETE,  // Partial write, needs another EPOLLOUT event
     WRITING_ERROR        // Error occurred during writing
 };
@@ -137,6 +137,7 @@ const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <list>
 #include <map>
 #include <set>
 #include <sstream>
