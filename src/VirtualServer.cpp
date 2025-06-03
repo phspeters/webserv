@@ -493,6 +493,7 @@ bool VirtualServer::is_valid(std::string& error_msg) const {
     return true;
 }
 
+// TODO - Check if the commented-out code is needed
 bool Location::is_valid(std::string& error_msg) const {
     if (path_.empty()) {
         error_msg = "Location path is required";
