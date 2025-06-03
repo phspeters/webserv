@@ -52,12 +52,11 @@ class WebServer {
     //--------------------------------------
     // WebServer State & Configuration
     //--------------------------------------
-    std::vector<VirtualServer> virtual_servers_;  // Loaded server configuration
-    std::vector<int> listener_fds_;  // FDs for the listening sockets
+    std::list<VirtualServer> virtual_servers_;  // Loaded server configurations
+    std::vector<int> listener_fds_;             // FDs for the listening sockets
     std::map<int, VirtualServer*> listener_to_default_server_;
     std::map<int, std::map<std::string, std::vector<VirtualServer*> > >
         port_to_hosts_;
-    std::map<std::string, VirtualServer*> hostname_to_virtual_server_;
     volatile bool ready_;  // Flag for server readiness for event loop
 
     //--------------------------------------
@@ -82,9 +81,9 @@ class WebServer {
     void accept_new_connection(int listener_fd);
     void handle_connection_event(int client_fd, uint32_t event);
 
-    void handle_read(Connection* conn);   // Handles readable client socket
-    void handle_write(Connection* conn);  // Handles writable client socket
-    void handle_error(Connection* conn);  // Handles client socket error
+    void handle_read(Connection* conn);
+    void handle_write(Connection* conn);
+    void handle_error(Connection* conn);
 
     void match_host_header(Connection* conn);
     const Location* find_matching_location(const VirtualServer* virtual_server,
@@ -99,9 +98,7 @@ class WebServer {
         std::map<std::string, std::vector<VirtualServer*> >& hosts);
     void remove_listener_socket(int fd);
 
-    // Set up signal handlers for graceful shutdown (SIGINT, SIGTERM)
     static bool setup_signal_handlers();
-    // Signal handler callback (must be static)
     static void signal_handler(int signal);
 
     // Prevent copying

@@ -51,21 +51,11 @@ void ErrorHandler::generate_error_response(Connection* conn,
         return;
     }
 
-    // Check if this is a valid error state
-    if (conn->parse_status_ == codes::PARSE_SUCCESS ||
-        conn->parse_status_ == codes::PARSE_INCOMPLETE) {
-        log(LOG_WARNING,
-            "generate_error_response called with non-error parse status: %d",
-            static_cast<int>(conn->parse_status_));
-        return;
-    }
-
     // Get error info from parse status
     if (status_code == codes::UNDEFINED) {
         int parse_status_code = get_parse_message_status(conn->parse_status_);
         handle_error(conn->response_data_, parse_status_code,
                      *conn->virtual_server_);
-
     } else {  // Use provided status code
         handle_error(conn->response_data_, status_code, *conn->virtual_server_);
     }
@@ -75,7 +65,9 @@ void ErrorHandler::generate_error_response(Connection* conn,
     conn->response_data_->set_header("server", "webserv/1.0");
     conn->response_data_->set_header("date", get_current_gmt_time());
 
-    // Update connection state
+    // Update connection state to writing
+    WebServer* web_server = WebServer::get_instance();
+    web_server->update_epoll_events(conn->client_fd_, EPOLLOUT);
     conn->conn_state_ = codes::CONN_WRITING;
 
     log(LOG_INFO, "Generated error response %d for client_fd %d: %s",

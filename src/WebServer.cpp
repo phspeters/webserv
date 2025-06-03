@@ -49,7 +49,7 @@ bool WebServer::init() {
 
         // Initialize handlers
         static_file_handler_ = new StaticFileHandler();
-        // cgi_handler_ = new CgiHandler();
+        cgi_handler_ = new CgiHandler();
         file_upload_handler_ = new FileUploadHandler();
     } catch (const std::bad_alloc& e) {
         log(LOG_ERROR, "WebServer components memory allocation failed: %s",
@@ -66,14 +66,12 @@ bool WebServer::init() {
     // Create epoll instance
     epoll_fd_ = epoll_create1(0);
     if (epoll_fd_ < 0) {
-        // Handle error
         log(LOG_ERROR, "Failed to create epoll instance");
         return false;
     }
 
     // Set up the listener sockets
     if (!setup_listener_sockets()) {
-        // Handle error
         return false;
     }
 
@@ -137,17 +135,14 @@ bool WebServer::parse_config_file(const std::string& filename) {
                 // reallocate)
                 VirtualServer* server_ptr = &virtual_servers_.back();
 
-                // Map hostnames for Host header matching
-                for (std::vector<std::string>::const_iterator it =
-                         server_ptr->server_names_.begin();
-                     it != server_ptr->server_names_.end(); ++it) {
-                    hostname_to_virtual_server_[*it] = server_ptr;
-                }
-
                 // Group by port first, then by host
                 int port = server_ptr->port_;
                 std::string host = server_ptr->host_;
                 port_to_hosts_[port][host].push_back(server_ptr);
+                log(LOG_DEBUG,
+                    "Added virtual server for port %d, host '%s' to "
+                    "port_to_hosts_",
+                    port, host.c_str());
             }
 
             if (log(LOG_TRACE, "Parsed virtual server configuration:") > 0) {
@@ -194,7 +189,6 @@ void WebServer::event_loop() {
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
                                       http_limits::TIMEOUT);
         if (ready_events < 0) {
-            // Handle error
             if (errno == EINTR) {
                 // Interrupted by a signal, continue the loop
                 log(LOG_DEBUG, "event_loop: epoll_wait interrupted by signal");
@@ -235,8 +229,8 @@ void WebServer::event_loop() {
                 log(LOG_INFO, "New connection on socket '%i'", fd);
                 accept_new_connection(fd);
             } else {
-                // Handle client socket event
-                log(LOG_INFO, "Client event on socket '%i'", fd);
+                // Handle connection socket event
+                log(LOG_INFO, "Connection event on socket '%i'", fd);
                 handle_connection_event(fd, event_flags);
             }
         }
@@ -249,13 +243,14 @@ void WebServer::accept_new_connection(int listener_fd) {
     log(LOG_DEBUG,
         "accept_new_connection: Processing new connection on listener_fd %d",
         listener_fd);
+
     // Find the default virtual server for this listener
     VirtualServer* default_server = NULL;
     if (listener_to_default_server_.find(listener_fd) !=
         listener_to_default_server_.end()) {
         default_server = listener_to_default_server_[listener_fd];
     } else {
-        log(LOG_ERROR, "No default server found for listener socket '%i'",
+        log(LOG_FATAL, "No default server found for listener socket '%i'",
             listener_fd);
         return;
     }
@@ -289,25 +284,49 @@ void WebServer::accept_new_connection(int listener_fd) {
 void WebServer::handle_connection_event(int client_fd, uint32_t events) {
     Connection* conn = conn_manager_->get_connection(client_fd);
     if (!conn) {
-        // Handle error
-        log(LOG_FATAL, "Connection not found for client socket '%i'",
-            client_fd);
         return;
     }
 
-    // TODO - Use state machine to handle different events
-    if (events & EPOLLIN) {
+    if (events & (EPOLLERR | EPOLLHUP)) {
+        log(LOG_ERROR,
+            "handle_connection_event: Error or hangup on client_fd %d, events: "
+            "%u",
+            client_fd, events);
+        handle_error(conn);
+    } else if ((events & EPOLLIN) && conn->is_readable()) {
         handle_read(conn);
-    } else if (events & EPOLLOUT) {
+    } else if (((events & EPOLLOUT) && conn->is_writable()) || conn->is_cgi()) {
         handle_write(conn);
-    } else if (events & (EPOLLERR | EPOLLHUP)) {
+    } else {
+        log(LOG_FATAL,
+            "handle_connection_event: Unhandled event %u for client_fd %d",
+            events, client_fd);
         handle_error(conn);
     }
 }
 
+void WebServer::close_client_connection(Connection* conn) {
+    if (!conn) {
+        log(LOG_FATAL, "Connection is invalid, cannot close.");
+        return;
+    }
+
+    // First unregister from epoll (must happen before socket closure)
+    if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, conn->client_fd_, NULL) < 0) {
+        log(LOG_ERROR, "Failed to unregister socket %i from epoll",
+            conn->client_fd_);
+        return;
+    }
+
+    log(LOG_DEBUG, "close_client_connection: Closing client_fd %d",
+        conn->client_fd_);
+
+    // Then let connection manager handle the rest
+    conn_manager_->close_connection(conn);
+}
+
 void WebServer::handle_read(Connection* conn) {
-    log(LOG_DEBUG, "handle_read: Starting for client_fd %d",
-        conn ? conn->client_fd_ : -1);
+    log(LOG_DEBUG, "handle_read: Starting for client_fd %d", conn->client_fd_);
 
     // Read data from the socket
     if (!request_parser_->read_from_socket(conn)) {
@@ -354,9 +373,6 @@ void WebServer::handle_read(Connection* conn) {
 }
 
 void WebServer::handle_write(Connection* conn) {
-    log(LOG_DEBUG, "handle_write: Starting processing for client_fd %d",
-        conn ? conn->client_fd_ : -1);
-
     if (!conn) {
         log(LOG_FATAL, "handle_write: Connection pointer is NULL");
         return;
@@ -382,18 +398,19 @@ void WebServer::handle_write(Connection* conn) {
 
     if (conn->conn_state_ == codes::CONN_PROCESSING ||
         conn->conn_state_ == codes::CONN_CGI_EXEC) {
-        // TODO - debate if we should move validate_request_location to
-        // handle()
-        if (!validate_request_location(conn)) {
-            log(LOG_WARNING,
-                "handle_write: Invalid request location for client_fd %d",
-                conn->client_fd_);
-        } else {
-            // Route the request to the appropriate handler
-            if (!conn->active_handler_) {
+        bool can_execute_handler = true;
+        // Route the request to the appropriate handler
+        if (!conn->active_handler_) {
+            if (!validate_request_location(conn)) {
+                // ErrorHandler::generate_error_response was already called
+                can_execute_handler = false;
+            } else {
+                // Choose handler always return a handler
                 conn->active_handler_ = choose_handler(conn);
             }
-            // Call the handler to process the request and generate a response
+        }
+        // Call the handler to process the request and generate a response
+        if (conn->active_handler_ && can_execute_handler) {
             conn->active_handler_->handle(conn);
         }
     }
@@ -443,8 +460,13 @@ void WebServer::handle_write(Connection* conn) {
 
     if (conn->conn_state_ == codes::CONN_WRITING) {
         // Write the response to the client
-        codes::WriterState status = response_writer_->write_response(conn);
+        codes::WriteStatus status = response_writer_->write_response(conn);
 
+        // TODO - Remove switch state, call logs and handle_error before
+        // returning the status. Leave condition if(status !=
+        // codes::WRITING_SUCCESS) { return; } because if it is incomplete, we
+        // should wait for next call, and if it is an writing error, the
+        // connection should be closed inse write_response.
         switch (status) {
             case codes::WRITING_INCOMPLETE:
                 log(LOG_DEBUG,
@@ -459,18 +481,23 @@ void WebServer::handle_write(Connection* conn) {
                     conn->client_fd_);
                 handle_error(conn);
                 return;
-            case codes::WRITING_COMPLETE:
+            case codes::WRITING_SUCCESS:
                 log(LOG_DEBUG,
                     "handle_write: Response completely written to client_fd %d",
                     conn->client_fd_);
                 break;
         }
 
+        // TODO - Wrap the code below in a function e.g. handle_keep_alive
+
         // Check for error status codes that should close the connection
         int status_code = conn->response_data_->status_code_;
         log(LOG_DEBUG, "handle_write: Response status code %d for client_fd %d",
             status_code, conn->client_fd_);
 
+        // TODO - Change condition to function
+        // is_unrecoverable_error(status_code) { return status_code == 400 ||
+        // status_code == 413 || status_code >= 500; ... }
         if (status_code == 400 || status_code == 413 || status_code >= 500) {
             // Close connections for client and server errors
             log(LOG_INFO,
@@ -495,33 +522,14 @@ void WebServer::handle_write(Connection* conn) {
                 conn->client_fd_);
             close_client_connection(conn);
         }
+        // handle_keep_alive end
     }
 }
 
 void WebServer::handle_error(Connection* conn) {
-    // Handle error
-    close_client_connection(conn);
-}
-
-void WebServer::close_client_connection(Connection* conn) {
-    if (!conn) {
-        log(LOG_FATAL, "Connection is invalid, cannot close.");
-        return;
-    }
-
-    // First unregister from epoll (must happen before socket closure)
-    if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, conn->client_fd_, NULL) < 0) {
-        // Handle error
-        log(LOG_ERROR, "Failed to unregister socket %i from epoll",
-            conn->client_fd_);
-        return;
-    }
-
-    log(LOG_DEBUG, "close_client_connection: Closing client_fd %d",
+    log(LOG_ERROR, "handle_error: Handling error for client_fd %d",
         conn->client_fd_);
-
-    // Then let connection manager handle the rest
-    conn_manager_->close_connection(conn);
+    close_client_connection(conn);
 }
 
 bool WebServer::setup_listener_sockets() {
@@ -656,7 +664,6 @@ void WebServer::remove_listener_socket(int fd) {
 bool WebServer::set_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
-        // Handle error
         log(LOG_ERROR, "Failed to get flags for socket '%i'", fd);
         return false;
     }
@@ -664,7 +671,6 @@ bool WebServer::set_non_blocking(int fd) {
     flags |= O_NONBLOCK;
 
     if (fcntl(fd, F_SETFL, flags) == -1) {
-        // Handle error
         log(LOG_ERROR, "Failed to set non-blocking mode for socket '%i'", fd);
         return false;
     }
@@ -679,7 +685,6 @@ bool WebServer::register_epoll_events(int fd, uint32_t events) {
     event.data.fd = fd;
 
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &event) < 0) {
-        // Handle error
         log(LOG_ERROR, "Failed to register socket '%i' on epoll", fd);
         return false;
     }
@@ -694,7 +699,6 @@ bool WebServer::update_epoll_events(int fd, uint32_t events) {
     event.data.fd = fd;
 
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &event) < 0) {
-        // Handle error
         log(LOG_ERROR, "Failed to up epoll events for socket '%i'", fd);
         return false;
     }
@@ -756,6 +760,7 @@ void WebServer::signal_handler(int signal) {
     }
 }
 
+// TODO - Ensure we match even if the location is invalid (e.g. /foo/bar)
 const Location* WebServer::find_matching_location(
     const VirtualServer* virtual_server, const std::string& uri) const {
     // Use a reference instead of making a copy
@@ -845,9 +850,13 @@ bool WebServer::validate_request_location(Connection* conn) {
             // Apply 405 error directly to the response
             ErrorHandler::generate_error_response(conn,
                                                   codes::METHOD_NOT_ALLOWED);
+            log(LOG_WARNING,
+                "validate_request_location: Invalid request location for "
+                "client_fd %d",
+                conn->client_fd_);
 
             // Add the Allow header
-            conn->response_data_->headers_["Allow"] = allowed_methods_str;
+            conn->response_data_->set_header("Allow", allowed_methods_str);
 
             return false;
         }
@@ -870,6 +879,8 @@ AHandler* WebServer::choose_handler(Connection* conn) {
     const Location* matching_location = conn->location_match_;
     const std::string& request_method = conn->request_data_->method_;
 
+    // TODO - Change CGI condition to cgi_enabled + executable file + valid
+    // script extension?
     // Return appropriate handler based on location config
     if (matching_location->cgi_enabled_) {
         // CGI handler for CGI-enabled locations
@@ -896,31 +907,120 @@ AHandler* WebServer::choose_handler(Connection* conn) {
 }
 
 void WebServer::match_host_header(Connection* conn) {
-    // Get Host header value
-    std::string host = conn->request_data_->get_header("Host");
-    if (host != "") {
-        // Strip port number if present
-        size_t colon_pos = host.find(':');
-        if (colon_pos != std::string::npos) {
-            host = host.substr(0, colon_pos);
+    if (!conn || !conn->request_data_ || !conn->default_virtual_server_) {
+        log(LOG_FATAL, "match_host_header: Invalid connection or data.");
+        // conn->virtual_server_ should already be default_virtual_server_ or
+        // NULL if creation failed
+        return;
+    }
+
+    // Get Host header value from the request
+    std::string request_host_header_val =
+        conn->request_data_->get_header("Host");
+    std::string target_hostname = request_host_header_val;
+    if (target_hostname.empty()) {
+        conn->virtual_server_ = conn->default_virtual_server_;
+        log(LOG_DEBUG, "No Host header. Using default virtual server for %s:%d",
+            conn->virtual_server_->host_.c_str(), conn->virtual_server_->port_);
+        return;
+    }
+
+    // Strip port number from Host header if present
+    size_t colon_pos = target_hostname.find(':');
+    if (colon_pos != std::string::npos) {
+        target_hostname = target_hostname.substr(0, colon_pos);
+    }
+
+    // The connection's default_virtual_server_ tells us the port and listen IP
+    // this connection is associated with.
+    int listener_port = conn->default_virtual_server_->port_;
+    std::string listener_host_ip =
+        conn->default_virtual_server_->host_;  // IP from 'listen' directive
+
+    VirtualServer* matched_vs = NULL;
+
+    // 1. Check servers listening on the specific IP:Port of the connection
+    std::map<int, std::map<std::string, std::vector<VirtualServer*> > >::
+        const_iterator port_it = port_to_hosts_.find(listener_port);
+    if (port_it != port_to_hosts_.end()) {
+        const std::map<std::string, std::vector<VirtualServer*> >&
+            hosts_on_port = port_it->second;
+
+        // Check specific listener IP
+        std::map<std::string, std::vector<VirtualServer*> >::const_iterator
+            host_ip_it = hosts_on_port.find(listener_host_ip);
+        if (host_ip_it != hosts_on_port.end()) {
+            const std::vector<VirtualServer*>& candidate_servers =
+                host_ip_it->second;
+            for (std::vector<VirtualServer*>::const_iterator server_it =
+                     candidate_servers.begin();
+                 server_it != candidate_servers.end(); ++server_it) {
+                VirtualServer* vs = *server_it;
+                for (std::vector<std::string>::const_iterator name_it =
+                         vs->server_names_.begin();
+                     name_it != vs->server_names_.end(); ++name_it) {
+                    if (*name_it == target_hostname) {
+                        matched_vs = vs;
+                        break;  // Found specific server_name match on specific
+                                // IP
+                    }
+                }
+                if (matched_vs) {
+                    break;
+                }  // Break if we found a match
+            }
         }
 
-        // Look for matching virtual server
-        if (hostname_to_virtual_server_.find(host) !=
-            hostname_to_virtual_server_.end()) {
-            log(LOG_DEBUG, "Matched Host header '%s' to virtual server",
-                host.c_str());
-            conn->virtual_server_ = hostname_to_virtual_server_[host];
-            return;
+        // 2. If no match on specific IP, check servers listening on 0.0.0.0
+        // (wildcard) for the same port
+        if (!matched_vs && listener_host_ip != "0.0.0.0") {
+            std::map<std::string, std::vector<VirtualServer*> >::const_iterator
+                wildcard_host_ip_it = hosts_on_port.find("0.0.0.0");
+            if (wildcard_host_ip_it != hosts_on_port.end()) {
+                const std::vector<VirtualServer*>& candidate_wildcard_servers =
+                    wildcard_host_ip_it->second;
+                for (std::vector<VirtualServer*>::const_iterator server_it =
+                         candidate_wildcard_servers.begin();
+                     server_it != candidate_wildcard_servers.end();
+                     ++server_it) {
+                    VirtualServer* vs = *server_it;
+                    for (std::vector<std::string>::const_iterator name_it =
+                             vs->server_names_.begin();
+                         name_it != vs->server_names_.end(); ++name_it) {
+                        if (*name_it == target_hostname) {
+                            matched_vs = vs;
+                            break;  // Found specific server_name match on
+                                    // wildcard IP
+                        }
+                    }
+                    if (matched_vs) {
+                        break;
+                    }
+                }
+            }
         }
     }
 
-    log(LOG_DEBUG, "No matching virtual server found for Host header '%s'",
-        host.c_str());
-    if (!conn->virtual_server_) {
-        // If no match found, use the default server for this connection
-        conn->virtual_server_ = conn->default_virtual_server_;
-        log(LOG_DEBUG, "Using default virtual server for connection '%i'",
-            conn->client_fd_);
+    if (matched_vs) {
+        log(LOG_DEBUG,
+            "Matched Host header '%s' to virtual server with primary name '%s' "
+            "on %s:%d",
+            request_host_header_val.c_str(),
+            matched_vs->server_names_.empty()
+                ? matched_vs->host_name_.c_str()
+                : matched_vs->server_names_[0].c_str(),
+            matched_vs->host_.c_str(), matched_vs->port_);
+        conn->virtual_server_ = matched_vs;
+    } else {
+        // No specific server_name match found, conn->virtual_server_ remains as
+        // conn->default_virtual_server_.
+        log(LOG_DEBUG,
+            "No specific virtual server for Host header '%s'. Using default "
+            "for listener %s:%d (primary name '%s').",
+            request_host_header_val.c_str(),
+            conn->virtual_server_->host_.c_str(), conn->virtual_server_->port_,
+            conn->virtual_server_->server_names_.empty()
+                ? conn->virtual_server_->host_name_.c_str()
+                : conn->virtual_server_->server_names_[0].c_str());
     }
 }

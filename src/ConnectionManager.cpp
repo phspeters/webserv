@@ -23,7 +23,6 @@ Connection* ConnectionManager::create_connection(
             default_virtual_server->port_);
         return conn;
     } catch (const std::exception& e) {
-        // Handle error
         log(LOG_ERROR, "Failed to create connection for client (fd: %i): %s",
             client_fd, e.what());
         return NULL;
@@ -66,8 +65,17 @@ Connection* ConnectionManager::get_connection(int client_fd) {
     std::map<int, Connection*>::iterator it =
         active_connections_.find(client_fd);
     if (it != active_connections_.end()) {
-        log(LOG_TRACE, "Retrieved connection for client (fd: %i)", client_fd);
+        log(LOG_DEBUG, "Retrieved connection for client (fd: %i)", client_fd);
         return it->second;
+    }
+
+    // If not found, check active pipes
+    std::map<int, Connection*>::iterator pipe_it =
+        active_pipes_.find(client_fd);
+    if (pipe_it != active_pipes_.end()) {
+        log(LOG_DEBUG, "Retrieved pipe (fd: %i) for client (fd: %i)",
+            pipe_it->first, client_fd);
+        return pipe_it->second;
     }
 
     log(LOG_FATAL, "Connection not found for client (fd: %i)", client_fd);
