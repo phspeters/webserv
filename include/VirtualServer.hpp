@@ -64,6 +64,7 @@ struct VirtualServer {
     bool is_valid_host(std::string& error_msg) const;
     bool is_valid_port(std::string& error_msg) const;
     bool has_valid_locations(std::string& error_msg) const;
+    bool has_valid_error_pages(std::string& error_msg) const;  // Add this line
 };
 
 #endif  // VIRTUALSERVER_HPP

@@ -83,20 +83,26 @@ Connection* ConnectionManager::get_connection(int client_fd) {
 }
 
 int ConnectionManager::close_timed_out_connections() {
-    // Check for timeouts and close connections if necessary
     int closed = 0;
-    for (std::map<int, Connection*>::iterator it = active_connections_.begin();
-         it != active_connections_.end();) {
+    time_t current_time = time(NULL);
+    
+    std::map<int, Connection*>::iterator it = active_connections_.begin();
+    while (it != active_connections_.end()) {
         Connection* conn = it->second;
-        it++;
-        if (is_timed_out(conn)) {
-            log(LOG_WARNING,
-                "Connection (fd: %i) timed out after %ld seconds, closing",
+        
+        if (conn && (current_time - conn->last_activity_) > http_limits::TIMEOUT) {
+            log(LOG_WARNING, "Connection (fd: %d) timed out after %ld seconds, closing",
                 conn->client_fd_, http_limits::TIMEOUT);
-            close_connection(conn);
+            
+            int fd_to_close = conn->client_fd_;
+            ++it; 
+            close_connection(fd_to_close);
             closed++;
+        } else {
+            ++it;
         }
     }
+    
     return closed;
 }
 

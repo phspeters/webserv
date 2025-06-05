@@ -472,6 +472,36 @@ bool VirtualServer::has_valid_locations(std::string& error_msg) const {
     return true;
 }
 
+// Add this new validation method
+bool VirtualServer::has_valid_error_pages(std::string& error_msg) const {
+    for (std::map<int, std::string>::const_iterator it = error_pages_.begin();
+         it != error_pages_.end(); ++it) {
+        
+        const std::string& error_page_path = it->second;
+        
+        // Check if the error page file exists and is readable
+        struct stat file_stat;
+        if (stat(error_page_path.c_str(), &file_stat) != 0) {
+            // File doesn't exist - this is okay, we'll use default error pages
+            log(LOG_WARNING, "Error page file does not exist: %s (will use default)", 
+                error_page_path.c_str());
+            continue;
+        }
+        
+        if (!S_ISREG(file_stat.st_mode)) {
+            error_msg = "Error page path is not a regular file: " + error_page_path;
+            return false;
+        }
+        
+        if (access(error_page_path.c_str(), R_OK) != 0) {
+            error_msg = "No read permission for error page: " + error_page_path;
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 bool VirtualServer::is_valid(std::string& error_msg) const {
     if (!listen_specified_) {
         error_msg = "Listen directive is mandatory";
@@ -487,6 +517,11 @@ bool VirtualServer::is_valid(std::string& error_msg) const {
     }
 
     if (!has_valid_locations(error_msg)) {
+        return false;
+    }
+
+    // Add error page validation
+    if (!has_valid_error_pages(error_msg)) {
         return false;
     }
 
@@ -529,22 +564,21 @@ bool Location::is_valid(std::string& error_msg) const {
     }
 
     // Validate root path exists and is a directory
-    // struct stat path_stat;
-    // if (stat(root.c_str(), &path_stat) != 0) {
-    //     error_msg = "Root directory does not exist: " + root;
-    //     return false;
-    // }
+    struct stat path_stat;
+    if (stat(root_.c_str(), &path_stat) != 0) {
+        error_msg = "Root directory does not exist: " + root_;
+        return false;
+    }
 
-    // if (!S_ISDIR(path_stat.st_mode)) {
-    //     error_msg = "Root path is not a directory: " + root;
-    //     return false;
-    // }
+    if (!S_ISDIR(path_stat.st_mode)) {
+        error_msg = "Root path is not a directory: " + root_;
+        return false;
+    }
 
-    // Check read permissions
-    // if (access(root.c_str(), R_OK) != 0) {
-    //     error_msg = "No read permission for root directory: " + root;
-    //     return false;
-    // }
+    if (access(root_.c_str(), R_OK) != 0) {
+        error_msg = "No read permission for root directory: " + root_;
+        return false;
+    }
 
     if (!allowed_methods_.empty()) {
         for (size_t i = 0; i < allowed_methods_.size(); i++) {

@@ -86,10 +86,22 @@ void StaticFileHandler::handle(Connection* conn) {
 
     // TEMP - Carol
     // if absolute_path ends with a slash, add index at end
+    // if (!absolute_path.empty() && absolute_path[absolute_path.size() - 1] == '/') {
+    //     std::cout << "Location match index: " << conn->location_match_->index_ << std::endl;
+    //     absolute_path += conn->location_match_->index_;
+    //     std::cout << "New absolute path: " << absolute_path << std::endl;
+    // }
     if (!absolute_path.empty() && absolute_path[absolute_path.size() - 1] == '/') {
-        std::cout << "Location match index: " << conn->location_match_->index_ << std::endl;
-        absolute_path += conn->location_match_->index_;
-        std::cout << "New absolute path: " << absolute_path << std::endl;
+        if (conn->location_match_) {  // Add this null check
+            std::cout << "Location match index: " << conn->location_match_->index_ << std::endl;
+            absolute_path += conn->location_match_->index_;
+            std::cout << "New absolute path: " << absolute_path << std::endl;
+        } else {
+            log(LOG_ERROR, "StaticFileHandler::handle: location_match_ is NULL for client_fd %d",
+                conn->client_fd_);
+            ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
+            return;
+        }
     }
 
     // Fluxogram 301 - check if the request should be a directory
@@ -111,6 +123,9 @@ void StaticFileHandler::handle(Connection* conn) {
 
     // Try to open the file
     int fd = open(absolute_path.c_str(), O_RDONLY);
+    log(LOG_DEBUG, "StaticFileHandler: Trying to open file: %s", absolute_path.c_str());
+    log(LOG_DEBUG, "StaticFileHandler: open() returned fd=%d, errno=%d (%s)", 
+        fd, errno, (fd == -1) ? strerror(errno) : "success");
     if (fd == -1) {
         // Fluxogram 404 - request resource not found - call error handler
         if (errno == ENOENT) {

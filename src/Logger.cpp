@@ -209,6 +209,8 @@ int log(log_level level, const char* msg, ...) {
     va_start(args, msg);
     n = vsnprintf(output, 8192, msg, args);
 
+    std::string timestamp = get_current_gmt_time();
+
     if (level == LOG_TRACE)
         std::cout << WHITE << "[TRACE]\t";
     else if (level == LOG_DEBUG)
@@ -224,7 +226,7 @@ int log(log_level level, const char* msg, ...) {
     else if (level == LOG_OFF)
         return 0;  // No output for LOG_OFF
 
-    std::cout << get_current_gmt_time() << output << RESET << std::endl;
+    std::cout << timestamp << output << RESET << std::endl;
     va_end(args);
 
     return n;
