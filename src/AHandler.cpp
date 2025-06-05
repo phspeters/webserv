@@ -94,7 +94,7 @@ bool AHandler::process_directory_redirect(Connection* conn,
 
 // Handle directory path resolution (index file or autoindex)
 bool AHandler::process_directory_index(Connection* conn,
-                                                std::string& absolute_path,
+                                                std::string absolute_path,
                                                 bool& need_autoindex) {
     // Ensure absolute_path ends with /
     if (absolute_path[absolute_path.length() - 1] != '/') {

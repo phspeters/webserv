@@ -74,15 +74,23 @@ void StaticFileHandler::handle(Connection* conn) {
     // Fluxogram 405 - call error handler
     // Check if the request method is allowed (only supporting GET) // Fluxogram
     // --CHECK I don't think it is necessary because of route
-    if (conn->request_data_->method_ != "GET") {
-        ErrorHandler::generate_error_response(conn, codes::METHOD_NOT_ALLOWED);
-        conn->response_data_->headers_["Allow"] = "GET";
-        log(LOG_DEBUG, "StaticFileHandler::handle: Method not allowed for client_fd %d",
-            conn->client_fd_);
-        return;
-    }
+    // if (conn->request_data_->method_ != "GET") {
+    //     ErrorHandler::generate_error_response(conn, codes::METHOD_NOT_ALLOWED);
+    //     conn->response_data_->headers_["Allow"] = "GET";
+    //     log(LOG_DEBUG, "StaticFileHandler::handle: Method not allowed for client_fd %d",
+    //         conn->client_fd_);
+    //     return;
+    // }
 
     std::string absolute_path = parse_absolute_path(conn);
+
+    // TEMP - Carol
+    // if absolute_path ends with a slash, add index at end
+    if (!absolute_path.empty() && absolute_path[absolute_path.size() - 1] == '/') {
+        std::cout << "Location match index: " << conn->location_match_->index_ << std::endl;
+        absolute_path += conn->location_match_->index_;
+        std::cout << "New absolute path: " << absolute_path << std::endl;
+    }
 
     // Fluxogram 301 - check if the request should be a directory
     if (process_directory_redirect(conn, absolute_path)) {
@@ -119,6 +127,7 @@ void StaticFileHandler::handle(Connection* conn) {
             // Not in the Fluxogram, but possible 500 - call error handler
         } else {
             // Other error
+            std::cout << "1" << std::endl;
             ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
             log(LOG_DEBUG, "StaticFileHandler::handle: Internal server error for client_fd %d",
                 conn->client_fd_);
@@ -131,6 +140,7 @@ void StaticFileHandler::handle(Connection* conn) {
     struct stat file_info;
     if (fstat(fd, &file_info) == -1) {
         close(fd);
+        std::cout << "2" << std::endl;
         ErrorHandler::generate_error_response(conn,codes::INTERNAL_SERVER_ERROR);
         log(LOG_DEBUG, "StaticFileHandler::handle: fstat failed for client_fd %d",
             conn->client_fd_);
@@ -177,6 +187,7 @@ void StaticFileHandler::handle(Connection* conn) {
 
     // Not in the Fluxogram, but possible 500 - call error handler
     if (bytes_read != file_info.st_size) {
+        std::cout << "3" << std::endl;
         ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
         log(LOG_DEBUG, "StaticFileHandler::handle: Read error for client_fd %d",
             conn->client_fd_);

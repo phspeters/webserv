@@ -58,7 +58,7 @@ Cache-Control: no-cache
 If-Modified-Since: Wed, 21 Oct 2015 07:28:00 GMT
 
 ### Test 4: GET CSS file - Should return 200 OK with correct Content-Type
-GET {{baseUrl8090}}/cat-css/style.css
+GET {{baseUrl8090}}/cat-css/cat.html
 Host: example.com
 User-Agent: {{userAgent}}
 Accept: text/css,*/*;q=0.1
