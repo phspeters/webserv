@@ -73,29 +73,29 @@ bool ResponseWriter::write_headers(Connection* conn) {
     headers << resp->version_ << " " << resp->status_code_ << " "
             << get_status_message(resp->status_code_) << "\r\n";
 
-    // Add Date header if not present
-    if (resp->headers_.find("Date") == resp->headers_.end()) {
-        headers << "Date: " << get_current_gmt_time() << "\r\n";
-    }
-
-    // Add Server header if not present
-    if (resp->headers_.find("Server") == resp->headers_.end()) {
-        headers << "Server: Webserv/1.0\r\n";
-    }
-
-    // Add Content-Type if set
-    if (!resp->content_type_.empty()) {
-        headers << "Content-Type: " << resp->content_type_ << "\r\n";
-    }
-
-    // Add Content-Length if body exists
-    headers << "Content-Length: " << resp->content_length_ << "\r\n";
-
-    // Add custom headers
+    // Add custom headers first
     for (std::map<std::string, std::string>::const_iterator it =
              resp->headers_.begin();
          it != resp->headers_.end(); ++it) {
         headers << it->first << ": " << it->second << "\r\n";
+    }
+
+    // Add default headers if not already set
+    if (resp->headers_.find("date") == resp->headers_.end()) {
+        headers << "Date: " << get_current_gmt_time() << "\r\n";
+    }
+
+    if (resp->headers_.find("server") == resp->headers_.end()) {
+        headers << "Server: Webserv/1.0\r\n";
+    }
+
+    if (resp->headers_.find("content-type") == resp->headers_.end() &&
+        !resp->content_type_.empty()) {
+        headers << "Content-Type: " << resp->content_type_ << "\r\n";
+    }
+
+    if (resp->headers_.find("content-length") == resp->headers_.end()) {
+        headers << "Content-Length: " << resp->content_length_ << "\r\n";
     }
 
     // End headers section

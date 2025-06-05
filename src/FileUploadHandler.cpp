@@ -45,7 +45,8 @@ bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
         
         ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
         
-        conn->response_data_->headers_["Location"] = uri + "/";
+        conn->response_data_->set_header("Location", uri + "/");
+
 
         return true;
     }

@@ -15,7 +15,7 @@ bool AHandler::process_location_redirect(Connection* conn) {
 
     // Set up redirect response
     ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
-    conn->response_data_->headers_["Location"] = location->redirect_;
+    conn->response_data_->set_header("Location", location->redirect_);
     return true;  // Redirect was processed
 }
 
@@ -86,7 +86,7 @@ bool AHandler::process_directory_redirect(Connection* conn,
         }
 
         ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
-        conn->response_data_->headers_["Location"] = redirect_url;
+        conn->response_data_->set_header("Location", redirect_url);
         return true;
     }
 
@@ -285,7 +285,7 @@ void AHandler::generate_directory_listing(
     // Fluxogram 200
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
-    conn->response_data_->headers_["Content-Type"] = "text/html";
+    conn->response_data_->set_header("Content-Type", "text/html");
     conn->response_data_->body_.assign(html.begin(), html.end());
     conn->conn_state_ = codes::CONN_WRITING;
 

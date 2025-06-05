@@ -1,0 +1,17 @@
+### Variables
+@host = localhost
+@port = 8090
+
+### Test 1: Basic GET request
+GET http://localhost:8090/
+Host: example.com
+
+### Test 2: Simple GET without variables
+GET http://localhost:8090/
+
+### Test 3: GET with minimal headers
+GET http://localhost:8090/
+Host: example.com
+Accept: text/html
+
+###

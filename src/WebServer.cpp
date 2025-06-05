@@ -391,7 +391,6 @@ void WebServer::handle_write(Connection* conn) {
     const char* path_cstr = NULL;
 
     try {
-        // Verifica method_
         if (conn->request_data_->method_.empty()) {
             log(LOG_DEBUG, "handle_write: conn->request_data_->method_ is empty for client_fd %d.", conn->client_fd_);
         }
@@ -399,7 +398,6 @@ void WebServer::handle_write(Connection* conn) {
         method_cstr = conn->request_data_->method_.c_str();
         log(LOG_DEBUG, "handle_write: Successfully obtained method_.c_str() for client_fd %d. Pointer: %p", conn->client_fd_, static_cast<const void*>(method_cstr));
 
-        // Verifica path_
         if (conn->request_data_->path_.empty()) {
             log(LOG_DEBUG, "handle_write: conn->request_data_->path_ is empty for client_fd %d.", conn->client_fd_);
         }
@@ -410,15 +408,12 @@ void WebServer::handle_write(Connection* conn) {
     } catch (const std::exception& e) {
         log(LOG_ERROR, "handle_write: Exception while accessing method/path string members for client_fd %d: %s. request_data_ pointer: %p",
             conn->client_fd_, e.what(), static_cast<void*>(conn->request_data_));
-        // Se houver uma exceção aqui, é um sinal de corrupção de memória severa.
-        // Gerar um erro interno e fechar a conexão é o mais seguro.
         ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
-        // Certifique-se de que o estado da conexão e os eventos epoll sejam atualizados para escrita/fechamento.
-        if (conn->conn_state_ != codes::CONN_CGI_EXEC) { // CGI tem seu próprio fluxo de escrita
+        if (conn->conn_state_ != codes::CONN_CGI_EXEC) { 
              conn->conn_state_ = codes::CONN_WRITING;
         }
-        update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP); // Tenta enviar o erro e detecta fechamento
-        return; // Não prosseguir se os dados da requisição estiverem corrompidos
+        update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
+        return; 
     }
 
     if (method_cstr == NULL || path_cstr == NULL) {
@@ -431,12 +426,11 @@ void WebServer::handle_write(Connection* conn) {
         update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
         return;
     }
-    // --- Fim das verificações de depuração adicionadas ---
 
     log(LOG_DEBUG,
         "handle_write: Processing request method=%s, path=%s for client_fd %d",
-        method_cstr, // Usa os ponteiros obtidos com segurança
-        path_cstr,   // Usa os ponteiros obtidos com segurança
+        method_cstr, 
+        path_cstr,  
         conn->client_fd_);
 
     log(LOG_DEBUG, "handle_write: Initial conn->parse_status_ = %d for client_fd %d", conn->parse_status_, conn->client_fd_);

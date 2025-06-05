@@ -210,19 +210,19 @@ void StaticFileHandler::handle(Connection* conn) {
     }
 
     // Prepare response headers
-    std::map<std::string, std::string> headers;
-    headers["Content-Type"] = content_type;
+    conn->response_data_->set_header("Content-Type", content_type);
+
 
     // Convert file size to string using ostringstream (C++98 compatible)
     std::ostringstream size_stream;
     size_stream << file_info.st_size;
-    headers["Content-Length"] = size_stream.str();
+    conn->response_data_->set_header("Content-Length", size_stream.str());
+
 
     // Prepare the response
     // Fluxogram 200
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
-    conn->response_data_->headers_ = headers;
     conn->response_data_->body_.assign(file_content.begin(),
                                        file_content.end());
     conn->conn_state_ = codes::CONN_WRITING;

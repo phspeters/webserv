@@ -557,7 +557,7 @@ codes::ParseStatus RequestParser::process_single_header(
     }
 
     // Store the header
-    request->headers_[key] = value;
+    request->set_header(key, value);
     return codes::PARSE_SUCCESS;
 }
 

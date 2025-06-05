@@ -174,18 +174,18 @@ void build_mock_response(Connection* conn) {
 
     mock_response->status_code_ = 200;
     mock_response->status_message_ = "OK";
-    mock_response->headers_["Content-Type"] = "text/plain";
-    mock_response->headers_["Content-Length"] = "13";
+    mock_response->set_header("Content-Type", "text/plain");
+    mock_response->set_header("Content-Length", "13");
+    mock_response->set_header("Connection", "close");
+    mock_response->set_header("Date", "Wed, 21 Oct 2015 07:28:00 GMT");
+    mock_response->set_header("Server", "webserv/1.0");
+    mock_response->set_header("Last-Modified", "Wed, 21 Oct 2015 07:28:00 GMT");
+    mock_response->set_header("Content-Language", "en-US");
+    mock_response->set_header("Authorization", "Basic dXNlcm5hbWU6cGFzc3dvcmQ=");
+    mock_response->set_header("Cookie", "sessionId=abc123");
+    mock_response->set_header("Host", "localhost:8080");
     std::string hello_str = "Hello, World!";
     mock_response->body_.assign(hello_str.begin(), hello_str.end());
-    mock_response->headers_["Connection"] = "close";
-    mock_response->headers_["Date"] = "Wed, 21 Oct 2015 07:28:00 GMT";
-    mock_response->headers_["Server"] = "webserv/1.0";
-    mock_response->headers_["Last-Modified"] = "Wed, 21 Oct 2015 07:28:00 GMT";
-    mock_response->headers_["Content-Language"] = "en-US";
-    mock_response->headers_["Authorization"] = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
-    mock_response->headers_["Cookie"] = "sessionId=abc123";
-    mock_response->headers_["Host"] = "localhost:8080";
 }
 
 std::string get_current_gmt_time() {

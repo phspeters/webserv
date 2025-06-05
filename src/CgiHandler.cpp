@@ -55,7 +55,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
         log(LOG_ERROR, "Invalid request method '%s' for CGI script",
             request_method.c_str());
         ErrorHandler::generate_error_response(conn, codes::METHOD_NOT_ALLOWED);
-        conn->response_data_->headers_["Allow"] = "GET, POST";
+        conn->response_data_->set_header("Allow", "GET, POST");
         return false;
     }
 
@@ -629,7 +629,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
         }
 
         // Store the header in response_data
-        conn->response_data_->headers_[header_name] = header_value;
+        conn->response_data_->set_header(header_name, header_value);
         buffer.erase(buffer.begin(),
                      line_end_it + 2);  // Remove the line from the buffer
     }

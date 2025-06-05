@@ -68,13 +68,14 @@ std::string HttpResponse::get_headers_string() const {
         oss << it->first << ": " << it->second << "\r\n";
     }
 
-    // Add Content-Type and Content-Length if not already set in headers
-    if (headers_.find("Content-Type") == headers_.end() &&
+     // Add Content-Type if not already set in headers
+    if (headers_.find("content-type") == headers_.end() &&
         !content_type_.empty()) {
         oss << "Content-Type: " << content_type_ << "\r\n";
     }
 
-    if (headers_.find("Content-Length") == headers_.end()) {
+    // Add Content-Length if not already set in headers
+    if (headers_.find("content-length") == headers_.end()) {
         oss << "Content-Length: " << content_length_ << "\r\n";
     }
 
