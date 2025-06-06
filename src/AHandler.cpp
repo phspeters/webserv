@@ -27,9 +27,9 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
 
     // --CHECK If the root starts with /, removed it
     // BIA: TALVEZ ISSO VOLTE!
-    // if (request_root[0] == '/') {
-    //     request_root = request_root.substr(1);
-    // }
+    if (request_root[0] == '/') {
+        request_root = request_root.substr(1);
+    }
 
     // Calculate the path relative to the location
     std::string relative_path = "";

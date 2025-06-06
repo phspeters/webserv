@@ -312,7 +312,13 @@ bool VirtualServer::add_directive_value(Location& location,
                                         const std::string& key,
                                         const std::string& value) {
     if (key == "root") {
-        location.root_ = value;
+        // Modification - Carol
+        if (value[0] == '/') {
+            location.root_  = value.substr(1);  // "/var/www/example.com" becomes "var/www/example.com"
+        } 
+        else {
+            location.root_ = value;
+        }
     } else if (key == "autoindex") {
         location.autoindex_ = (value == "on");
     } else if (key == "allow_methods") {
@@ -565,6 +571,7 @@ bool Location::is_valid(std::string& error_msg) const {
 
     // Validate root path exists and is a directory
     struct stat path_stat;
+    log(LOG_DEBUG, "Checking root directory: %s", root_.c_str());
     if (stat(root_.c_str(), &path_stat) != 0) {
         error_msg = "Root directory does not exist: " + root_;
         return false;

@@ -55,8 +55,10 @@ codes::ParseStatus RequestParser::parse(Connection* conn) {
         switch (conn->parser_state_) {
             case codes::PARSING_REQUEST_LINE:
                 parse_status = parse_request_line(conn);
+                // Modification - Carol    
+                if(parse_status >= codes::PARSE_METHOD_NOT_ALLOWED && parse_status <= codes::PARSE_VERSION_NOT_SUPPORTED)
+                    return parse_status;
                 break;
-
             case codes::PARSING_HEADERS:
                 // If headers are complete, return a special status for host
                 // resolution
