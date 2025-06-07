@@ -55,9 +55,6 @@ codes::ParseStatus RequestParser::parse(Connection* conn) {
         switch (conn->parser_state_) {
             case codes::PARSING_REQUEST_LINE:
                 parse_status = parse_request_line(conn);
-                // Modification - Carol    
-                if(parse_status >= codes::PARSE_METHOD_NOT_ALLOWED && parse_status <= codes::PARSE_VERSION_NOT_SUPPORTED)
-                    return parse_status;
                 break;
             case codes::PARSING_HEADERS:
                 // If headers are complete, return a special status for host
@@ -76,6 +73,8 @@ codes::ParseStatus RequestParser::parse(Connection* conn) {
             case codes::PARSING_COMPLETE:
                 parse_status = codes::PARSE_SUCCESS;
                 break;
+            case codes::PARSING_ERROR:
+                return parse_status;
         }
     }
 
@@ -101,22 +100,29 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
         if (buffer.size() > http_limits::MAX_REQUEST_LINE_LENGTH) {
             log(LOG_ERROR, "Request line too long for connection: %i",
                 conn->client_fd_);
+            // Update parsing state to indicate error
+            conn->parser_state_ = codes::PARSING_ERROR;
             return codes::PARSE_REQUEST_TOO_LONG;
         }
         log(LOG_DEBUG, "Request line incomplete for connection: %i",
             conn->client_fd_);
+        // CHECK if in this case the parsing state should be updated to PARSING_ERROR - Carol 
         return codes::PARSE_INCOMPLETE;
     }
 
     // Get the complete request line
     std::string request_line(buffer.begin(), line_end);
     if (!split_request_line(request, request_line)) {
+        // Update parsing state to indicate error
+        conn->parser_state_ = codes::PARSING_ERROR;
         return codes::PARSE_INVALID_REQUEST_LINE;
     }
 
     // Validate components
     codes::ParseStatus validation_status = validate_request_line(request);
     if (validation_status != codes::PARSE_SUCCESS) {
+        // Update parsing state to indicate error
+        conn->parser_state_ = codes::PARSING_ERROR; 
         // Return the specific validation error
         return validation_status;
     }

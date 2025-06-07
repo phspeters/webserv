@@ -20,7 +20,8 @@ enum ParserState {
     PARSING_HEADERS,       // All header parsing
     PARSING_BODY,          // Normal body
     PARSING_CHUNKED_BODY,  // Chunked transfer encoding
-    PARSING_COMPLETE       // Request fully parsed
+    PARSING_COMPLETE,       // Request fully parsed
+    PARSING_ERROR          // Error occurred during parsing
 };
 
 enum CgiHandlerState {
