@@ -933,11 +933,13 @@ AHandler* WebServer::choose_handler(Connection* conn) {
 
     const Location* matching_location = conn->location_match_;
     const std::string& request_method = conn->request_data_->method_;
+    const std::string& request_uri = conn->request_data_->uri_;
 
     // TODO - Change CGI condition to cgi_enabled + executable file + valid
     // script extension?
     // Return appropriate handler based on location config
-    if (matching_location->cgi_enabled_) {
+    // CHECK AND TEST - Carol
+    if (matching_location->cgi_enabled_ && is_cgi_extension(request_uri) && request_method != "DELETE") {
         // CGI handler for CGI-enabled locations
         log(LOG_DEBUG,
             "choose_handler: Using CgiHandler for client_fd %d, path %s",
@@ -1078,4 +1080,30 @@ void WebServer::match_host_header(Connection* conn) {
                 ? conn->virtual_server_->host_name_.c_str()
                 : conn->virtual_server_->server_names_[0].c_str());
     }
+}
+
+ bool WebServer::is_cgi_extension(const std::string &request_uri) const {
+
+    // CHECK the extension allowed for CGI - Carol
+    std::string extension = get_file_extension(request_uri);
+    if (!extension.empty() && (extension == ".php" || 
+             extension == ".py" || extension == ".sh")) {
+        log(LOG_DEBUG, "Request uri: '%s' is a CGI script", request_uri.c_str());
+        return true;
+    } 
+    return false;
+}
+
+std::string get_file_extension(const std::string& uri_path) {
+    
+    size_t dot_pos = uri_path.find_last_of('.');
+    if (dot_pos == std::string::npos) {
+        return ""; // No extension found
+    }  
+    std::string extension = uri_path.substr(dot_pos);   
+    // Convert to lowercase for case-insensitive comparison
+    for (std::string::iterator it = extension.begin(); it != extension.end(); ++it) {
+        *it = std::tolower(*it);
+    }
+    return extension;
 }

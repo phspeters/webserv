@@ -88,6 +88,7 @@ class WebServer {
     void match_host_header(Connection* conn);
     const Location* find_matching_location(const VirtualServer* virtual_server,
                                            const std::string& path) const;
+    bool is_cgi_extension(const std::string &request_uri) const;
     bool validate_request_location(Connection* conn);
     AHandler* choose_handler(Connection* conn);
     void close_client_connection(Connection* conn);
@@ -106,5 +107,7 @@ class WebServer {
     WebServer& operator=(const WebServer&);
 
 };  // class WebServer
+
+std::string get_file_extension(const std::string& uri_path);
 
 #endif  // WEBSERVER_HPP
