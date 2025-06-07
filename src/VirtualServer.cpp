@@ -334,9 +334,55 @@ bool VirtualServer::add_directive_value(Location& location,
     } else if (key == "cgi") {
         location.cgi_enabled_ = (value == "on");
     } else if (key == "index") {
-        location.index_ = value;
+        std::istringstream iss(value);
+        std::string first_index;
+        if (iss >> first_index) {
+            location.index_ = first_index;
+            // Check if there are additional index files (for logging)
+            std::string remaining;
+            if (std::getline(iss, remaining) && !remaining.empty()) {
+                log(LOG_INFO, "Multiple index files specified, using first: %s (ignoring: %s)", 
+                    first_index.c_str(), remaining.c_str());
+            }
+        } else {
+            location.index_ = DEFAULT_INDEX;
+        }
     } else if (key == "redirect") {
         location.redirect_ = value;
+        // DEVELOPING - Redirect handling
+        // std::istringstream iss(value);
+        // std::string status_str, url_or_text;
+        
+        // if (iss >> status_str >> url_or_text) {
+        //     // Format: "301 http://example.com/page"
+        //     int status_code = atoi(status_str.c_str());
+        //     if (status_code < 300 || status_code > 599) {
+        //         log(LOG_ERROR, "Invalid redirect status code: %s", status_str.c_str());
+        //         return false;
+        //     }
+            
+        //     // Validate URL format for 3xx codes
+        //     if (status_code >= 300 && status_code <= 399) {
+        //         if (url_or_text[0] != '/' && 
+        //             url_or_text.find("http://") != 0 && 
+        //             url_or_text.find("https://") != 0) {
+        //             log(LOG_ERROR, "Redirect URL must be absolute: %s", url_or_text.c_str());
+        //             return false;
+        //         }
+        //     }
+            
+        //     location.redirect_ = status_str + " " + url_or_text;
+            
+        //     // Check for additional URLs (warn but ignore)
+        //     std::string extra;
+        //     if (iss >> extra) {
+        //         log(LOG_INFO, "Multiple redirect URLs specified, using first: %s (ignoring others)", 
+        //             url_or_text.c_str());
+        //     }
+        //     } else {
+        //         log(LOG_ERROR, "Invalid redirect format (missing status code): %s", value.c_str());
+        //         return false;
+        //     }
     } else {
         std::cerr << "Unknown directive in location block: " << key
                   << std::endl;
