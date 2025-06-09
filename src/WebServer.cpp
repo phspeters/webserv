@@ -116,10 +116,8 @@ bool WebServer::parse_config_file(const std::string& filename) {
             // Parse the server block
             if (VirtualServer::parse_server_block(file, virtual_server)) {
                 std::string error_msg;
-                if (!virtual_server.is_valid(error_msg)) {
-                    log(LOG_ERROR,
-                        "Error: Invalid virtual server configuration: %s",
-                        error_msg.c_str());
+                if (!virtual_server.is_valid()) {
+                    log(LOG_ERROR, "Error: Invalid virtual server configuration");
                     return false;  // Validation error
                 }
 

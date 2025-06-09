@@ -17,7 +17,7 @@ struct Location {
     Location();
 
     // Validation method
-    bool is_valid(std::string& error_msg) const;
+    bool is_valid() const;
 };
 
 // Server configuration
@@ -60,11 +60,11 @@ struct VirtualServer {
     bool apply_defaults();
 
     // Validation methods
-    bool is_valid(std::string& error_msg) const;
-    bool is_valid_host(std::string& error_msg) const;
-    bool is_valid_port(std::string& error_msg) const;
-    bool has_valid_locations(std::string& error_msg) const;
-    bool has_valid_error_pages(std::string& error_msg) const;  // Add this line
+    bool is_valid() const;
+    bool is_valid_host() const;
+    bool is_valid_port() const;
+    bool has_valid_locations() const;
+    bool has_valid_error_pages() const; 
 };
 
 #endif  // VIRTUALSERVER_HPP

@@ -74,8 +74,7 @@ bool VirtualServer::parse_server_block(std::ifstream& file,
                 return false;
             }
         } else {
-            std::cerr << "Error: Invalid directive in server block: " << line
-                      << std::endl;
+            log(LOG_ERROR, "Invalid directive in server block: %s", line.c_str());
             return false;
         }
     }
@@ -149,7 +148,7 @@ bool VirtualServer::handle_server_directive(const std::string& key,
     } else if (key == "client_max_body_size") {
         return parse_client_max_body_size(value, virtual_server);
     } else {
-        std::cerr << "Error: Unknown directive '" << key << "'" << std::endl;
+        log(LOG_ERROR, "Unknown directive in server block: %s", key.c_str());
         return false;
     }
 }
@@ -165,16 +164,14 @@ bool VirtualServer::parse_listen(const std::string& value,
         host_str = value.substr(0, colonPos);
         std::istringstream iss(value.substr(colonPos + 1));
         if (!(iss >> virtual_server.port_)) {
-            std::cerr << "Error parsing port in listen directive: " << value
-                      << std::endl;
+            log(LOG_ERROR, "Invalid listen directive format: %s", value.c_str());
             return false;
         }
     } else {
         // Just a port number
         std::istringstream iss(value);
         if (!(iss >> virtual_server.port_)) {
-            std::cerr << "Error parsing port in listen directive: " << value
-                      << std::endl;
+            log(LOG_ERROR, "Invalid listen directive format: %s", value.c_str());
             return false;
         }
         host_str = DEFAULT_HOST;  // Default to all interfaces
@@ -201,8 +198,8 @@ bool VirtualServer::parse_listen(const std::string& value,
 
             int status = getaddrinfo(host_str.c_str(), NULL, &hints, &res);
             if (status != 0) {
-                std::cerr << "Error resolving hostname '" << host_str
-                          << "': " << gai_strerror(status) << std::endl;
+                log(LOG_ERROR, "Error resolving hostname '%s': %s",
+                    host_str.c_str(), gai_strerror(status));
                 return false;
             }
 
@@ -223,7 +220,7 @@ bool VirtualServer::parse_listen(const std::string& value,
 bool VirtualServer::parse_client_max_body_size(const std::string& value,
                                                VirtualServer& virtual_server) {
     if (value.empty()) {
-        std::cerr << "Error: client_max_body_size cannot be empty" << std::endl;
+        log(LOG_ERROR, "client_max_body_size cannot be empty");
         return false;
     }
 
@@ -242,8 +239,7 @@ bool VirtualServer::parse_client_max_body_size(const std::string& value,
     // Check that numPart contains only digits
     for (size_t i = 0; i < numPart.length(); i++) {
         if (!isdigit(numPart[i])) {
-            std::cerr << "Error: client_max_body_size must contain only digits"
-                      << std::endl;
+            log(LOG_ERROR, "Invalid client_max_body_size value: %s", value.c_str());
             return false;
         }
     }
@@ -251,8 +247,8 @@ bool VirtualServer::parse_client_max_body_size(const std::string& value,
     // Parse the numeric part
     std::istringstream iss(numPart);
     if (!(iss >> size)) {
-        std::cerr << "Error: invalid number format in client_max_body_size"
-                  << std::endl;
+        log(LOG_ERROR, "Invalid number format in client_max_body_size: %s",
+            value.c_str());
         return false;
     }
 
@@ -269,15 +265,14 @@ bool VirtualServer::parse_client_max_body_size(const std::string& value,
                 size *= 1024 * 1024 * 1024;
                 break;
             default:
-                std::cerr << "Error: unknown size unit '" << unit << "'"
-                          << std::endl;
+                log(LOG_ERROR, "Unknown size unit '%c' in client_max_body_size", unit);
                 return false;
         }
     }
 
     // Check for zero
     if (size == 0) {
-        std::cerr << "Error: client_max_body_size cannot be zero" << std::endl;
+        log(LOG_ERROR, "client_max_body_size cannot be zero");
         return false;
     }
 
@@ -304,7 +299,7 @@ bool VirtualServer::parse_error_page(const std::string& value,
         virtual_server.error_pages_[code] = path;
         return true;
     }
-    std::cerr << "Error parsing error_page directive: " << value << std::endl;
+    log(LOG_ERROR, "Error parsing error_page directive: %s", value.c_str());
     return false;
 }
 
@@ -349,43 +344,8 @@ bool VirtualServer::add_directive_value(Location& location,
         }
     } else if (key == "redirect") {
         location.redirect_ = value;
-        // DEVELOPING - Redirect handling
-        // std::istringstream iss(value);
-        // std::string status_str, url_or_text;
-        
-        // if (iss >> status_str >> url_or_text) {
-        //     // Format: "301 http://example.com/page"
-        //     int status_code = atoi(status_str.c_str());
-        //     if (status_code < 300 || status_code > 599) {
-        //         log(LOG_ERROR, "Invalid redirect status code: %s", status_str.c_str());
-        //         return false;
-        //     }
-            
-        //     // Validate URL format for 3xx codes
-        //     if (status_code >= 300 && status_code <= 399) {
-        //         if (url_or_text[0] != '/' && 
-        //             url_or_text.find("http://") != 0 && 
-        //             url_or_text.find("https://") != 0) {
-        //             log(LOG_ERROR, "Redirect URL must be absolute: %s", url_or_text.c_str());
-        //             return false;
-        //         }
-        //     }
-            
-        //     location.redirect_ = status_str + " " + url_or_text;
-            
-        //     // Check for additional URLs (warn but ignore)
-        //     std::string extra;
-        //     if (iss >> extra) {
-        //         log(LOG_INFO, "Multiple redirect URLs specified, using first: %s (ignoring others)", 
-        //             url_or_text.c_str());
-        //     }
-        //     } else {
-        //         log(LOG_ERROR, "Invalid redirect format (missing status code): %s", value.c_str());
-        //         return false;
-        //     }
     } else {
-        std::cerr << "Unknown directive in location block: " << key
-                  << std::endl;
+        log(LOG_ERROR, "Unknown directive in location block: %s", key.c_str());
         return false;
     }
     return true;
@@ -424,9 +384,6 @@ bool VirtualServer::parse_directive(const std::string& line, std::string& key,
     value = effectiveLine.substr(valueStart, valueEnd - valueStart);
     value = trim(value);
 
-    // std::cout << "DEBUG: Parsed directive: '" << key << "' with value: '"
-    //           << value << "'" << std::endl;
-
     return !value.empty();
 }
 
@@ -448,7 +405,7 @@ bool VirtualServer::apply_defaults() {
 }
 
 // Implementation of validation methods
-bool VirtualServer::is_valid_host(std::string& error_msg) const {
+bool VirtualServer::is_valid_host() const {
     // Check if the host is valid IP address format
     std::string::size_type start = 0;
     int octets = 0;
@@ -456,7 +413,7 @@ bool VirtualServer::is_valid_host(std::string& error_msg) const {
     while (start < host_.length() && octets < 4) {
         std::string::size_type end = host_.find('.', start);
         if (octets < 3 && end == std::string::npos) {
-            error_msg = "Invalid IP address format: " + host_;
+            log(LOG_ERROR, "Invalid IP address format: %s", host_.c_str());
             return false;
         }
         if (octets == 3) {
@@ -467,7 +424,7 @@ bool VirtualServer::is_valid_host(std::string& error_msg) const {
         // Check if octet is a valid number
         for (size_t i = 0; i < octet.length(); i++) {
             if (!isdigit(octet[i])) {
-                error_msg = "Invalid IP address format (non-digit): " + host_;
+                log(LOG_ERROR, "Invalid IP address format (non-digit): %s", host_.c_str());
                 return false;
             }
         }
@@ -475,7 +432,7 @@ bool VirtualServer::is_valid_host(std::string& error_msg) const {
         // Check octet range (0-255)
         int value = atoi(octet.c_str());
         if (value < 0 || value > 255) {
-            error_msg = "Invalid IP address (octet out of range): " + host_;
+            log(LOG_ERROR, "Invalid IP address (octet out of range): %s", host_.c_str());
             return false;
         }
 
@@ -484,48 +441,39 @@ bool VirtualServer::is_valid_host(std::string& error_msg) const {
     }
 
     if (octets != 4 || start != host_.length() + 1) {
-        error_msg = "Invalid IP address (incorrect format): " + host_;
+        log(LOG_ERROR, "Invalid IP address (incorrect format): %s", host_.c_str());
         return false;
     }
 
     return true;
 }
 
-bool VirtualServer::is_valid_port(std::string& error_msg) const {
+bool VirtualServer::is_valid_port() const {
     if (port_ <= 0 || port_ > 65535) {
-        std::ostringstream ss;
-        ss << "Invalid port number: " << port_;
-        error_msg = ss.str();
+        log(LOG_ERROR, "Invalid port number: %d", port_);
         return false;
     }
     return true;
 }
 
-bool VirtualServer::has_valid_locations(std::string& error_msg) const {
+bool VirtualServer::has_valid_locations() const {
     if (locations_.empty()) {
-        error_msg = "Server must have at least one location block";
+        log(LOG_ERROR, "Server must have at least one location block");
         return false;
     }
 
     // Validate each location
     for (size_t i = 0; i < locations_.size(); i++) {
-        std::string location_error;
-        if (!locations_[i].is_valid(location_error)) {
-            error_msg = "Invalid location [" + locations_[i].path_ +
-                        "]: " + location_error;
-            // std::cout << "DEBUG: Location validation failed: " << error_msg
-            //           << std::endl;
+        if (!locations_[i].is_valid()) {
+            log(LOG_ERROR, "Invalid location block: %s", locations_[i].path_.c_str());
             return false;
         }
     }
 
-    // std::cout << "DEBUG: All locations validated successfully" << std::endl;
-
     return true;
 }
 
-// Add this new validation method
-bool VirtualServer::has_valid_error_pages(std::string& error_msg) const {
+bool VirtualServer::has_valid_error_pages() const {
     for (std::map<int, std::string>::const_iterator it = error_pages_.begin();
          it != error_pages_.end(); ++it) {
         
@@ -541,12 +489,12 @@ bool VirtualServer::has_valid_error_pages(std::string& error_msg) const {
         }
         
         if (!S_ISREG(file_stat.st_mode)) {
-            error_msg = "Error page path is not a regular file: " + error_page_path;
+            log(LOG_ERROR, "Error page path is not a regular file: %s", error_page_path.c_str());
             return false;
         }
         
         if (access(error_page_path.c_str(), R_OK) != 0) {
-            error_msg = "No read permission for error page: " + error_page_path;
+            log(LOG_ERROR, "No read permission for error page: %s", error_page_path.c_str());
             return false;
         }
     }
@@ -554,42 +502,40 @@ bool VirtualServer::has_valid_error_pages(std::string& error_msg) const {
     return true;
 }
 
-bool VirtualServer::is_valid(std::string& error_msg) const {
+bool VirtualServer::is_valid() const {
     if (!listen_specified_) {
-        error_msg = "Listen directive is mandatory";
+        log(LOG_ERROR, "Listen directive is mandatory");
         return false;
     }
 
-    if (!is_valid_host(error_msg)) {
+    if (!is_valid_host()) {
         return false;
     }
 
-    if (!is_valid_port(error_msg)) {
+    if (!is_valid_port()) {
         return false;
     }
 
-    if (!has_valid_locations(error_msg)) {
+    if (!has_valid_locations()) {
         return false;
     }
 
-    // Add error page validation
-    if (!has_valid_error_pages(error_msg)) {
+    if (!has_valid_error_pages()) {
         return false;
     }
 
     return true;
 }
 
-// TODO - Check if the commented-out code is needed
-bool Location::is_valid(std::string& error_msg) const {
+bool Location::is_valid() const {
     if (path_.empty()) {
-        error_msg = "Location path is required";
+        log(LOG_ERROR, "Location path is required");
         return false;
     }
 
     // Check if path starts with /
     if (path_[0] != '/') {
-        error_msg = "Location path must start with /: " + path_;
+        log(LOG_ERROR, "Location path must start with /: %s", path_.c_str());
         return false;
     }
 
@@ -597,21 +543,51 @@ bool Location::is_valid(std::string& error_msg) const {
     const std::string invalidChars = "<>\"'|*?";
     for (size_t i = 0; i < invalidChars.length(); i++) {
         if (path_.find(invalidChars[i]) != std::string::npos) {
-            error_msg = "Location path contains invalid character '" +
-                        std::string(1, invalidChars[i]) + "': " + path_;
+            log(LOG_ERROR, "Location path contains invalid character '%c': %s", 
+                invalidChars[i], path_.c_str());
             return false;
         }
     }
 
     // Check if redirect is valid when specified
-    if (!redirect_.empty() && redirect_[0] != '/' &&
-        redirect_.find("http://") != 0 && redirect_.find("https://") != 0) {
-        error_msg = "Redirect must be an absolute path or URL: " + redirect_;
-        return false;
+    if (!redirect_.empty()) {
+        std::istringstream iss(redirect_);
+        std::string status_str, url;
+        
+        if (iss >> status_str >> url) {
+            // Parse and validate status code
+            int status_code = atoi(status_str.c_str());
+            if (status_code < 300 || status_code > 399) {
+                log(LOG_ERROR, "Invalid redirect status code: %s (must be 300-399)", status_str.c_str());
+                return false;
+            }
+            
+            // Validate URL format - must be absolute URL or relative path
+            if (url.empty()) {
+                log(LOG_ERROR, "Redirect URL cannot be empty");
+                return false;
+            }
+            
+            if (url[0] != '/' && 
+                url.find("http://") != 0 && 
+                url.find("https://") != 0) {
+                log(LOG_ERROR, "Redirect URL must be absolute URL or path starting with /: %s", url.c_str());
+                return false;
+            }
+            
+            // Check for additional parameters and warn
+            std::string extra;
+            if (iss >> extra) {
+                log(LOG_INFO, "Multiple redirect parameters specified, using first URL: %s", url.c_str());
+            }
+        } else {
+            log(LOG_ERROR, "Invalid redirect format: expected 'status_code URL' but got: %s", redirect_.c_str());
+            return false;
+        }
     }
 
     if (root_.empty()) {
-        error_msg = "Root directive is mandatory";
+        log(LOG_ERROR, "Root directive is mandatory for location: %s", path_.c_str());
         return false;
     }
 
@@ -619,17 +595,17 @@ bool Location::is_valid(std::string& error_msg) const {
     struct stat path_stat;
     log(LOG_DEBUG, "Checking root directory: %s", root_.c_str());
     if (stat(root_.c_str(), &path_stat) != 0) {
-        error_msg = "Root directory does not exist: " + root_;
+        log(LOG_ERROR, "Root directory does not exist: %s", root_.c_str());
         return false;
     }
 
     if (!S_ISDIR(path_stat.st_mode)) {
-        error_msg = "Root path is not a directory: " + root_;
+        log(LOG_ERROR, "Root path is not a directory: %s", root_.c_str());
         return false;
     }
 
     if (access(root_.c_str(), R_OK) != 0) {
-        error_msg = "No read permission for root directory: " + root_;
+        log(LOG_ERROR, "No read permission for root directory: %s", root_.c_str());
         return false;
     }
 
@@ -637,12 +613,12 @@ bool Location::is_valid(std::string& error_msg) const {
         for (size_t i = 0; i < allowed_methods_.size(); i++) {
             const std::string& method = allowed_methods_[i];
             if (method != "GET" && method != "POST" && method != "DELETE") {
-                error_msg = "Invalid HTTP method: " + method;
+                log(LOG_ERROR, "Invalid HTTP method: %s", method.c_str());
                 return false;
             }
         }
     } else {
-        error_msg = "At least one HTTP method must be allowed";
+        log(LOG_ERROR, "At least one HTTP method must be allowed for location: %s", path_.c_str());
         return false;
     }
 
