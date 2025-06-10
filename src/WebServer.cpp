@@ -549,34 +549,32 @@ void WebServer::handle_write(Connection* conn) {
         log(LOG_DEBUG, "handle_write: Response status code %d for client_fd %d",
             status_code, conn->client_fd_);
 
-        // TODO - Change condition to function
-        // is_unrecoverable_error(status_code) { return status_code == 400 ||
-        // status_code == 413 || status_code >= 500; ... }
-        if (status_code == 400 || status_code == 413 || status_code >= 500) {
-            // Close connections for client and server errors
-            log(LOG_INFO,
-                "handle_write: Closing connection for error status %d on "
-                "client_fd "
-                "%d",
+        // ADDED: Check if response explicitly sets connection: close
+        std::string response_connection = conn->response_data_->get_header("connection");
+        bool should_close = false;
+
+        if (response_connection == "close") {
+            should_close = true;
+            log(LOG_DEBUG, "handle_write: Response sets connection: close for client_fd %d", conn->client_fd_);
+        } else if (status_code == 400 || status_code == 413 || status_code >= 500) {
+             // ADDED: Close connections for client and server errors
+            should_close = true;
+            log(LOG_INFO, "handle_write: Closing connection for error status %d on client_fd %d", 
                 status_code, conn->client_fd_);
-            conn->request_data_->set_header("Connection", "close");
         }
 
-        if (conn->is_keep_alive()) {
-            log(LOG_DEBUG,
-                "handle_write: Keep-alive enabled, resetting connection for "
-                "client_fd %d",
-                conn->client_fd_);
+        // ADDED: Proper connection handling logic
+        if (should_close) {
+            log(LOG_DEBUG, "handle_write: Closing connection for client_fd %d", conn->client_fd_);
+            close_client_connection(conn);
+        } else if (conn->is_keep_alive()) {
+            log(LOG_DEBUG, "handle_write: Keep-alive enabled, resetting connection for client_fd %d", conn->client_fd_);
             conn->reset_for_keep_alive();
             update_epoll_events(conn->client_fd_, EPOLLIN);
         } else {
-            log(LOG_DEBUG,
-                "handle_write: Keep-alive not enabled, closing connection for "
-                "client_fd %d",
-                conn->client_fd_);
+            log(LOG_DEBUG, "handle_write: No keep-alive, closing connection for client_fd %d", conn->client_fd_);
             close_client_connection(conn);
         }
-        // handle_keep_alive end
     }
 }
 

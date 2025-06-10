@@ -70,8 +70,9 @@ void ErrorHandler::generate_error_response(Connection* conn,
     web_server->update_epoll_events(conn->client_fd_, EPOLLOUT);
     conn->conn_state_ = codes::CONN_WRITING;
 
+    std::string status_msg = get_status_message(status_code);
     log(LOG_INFO, "Generated error response %d for client_fd %d: %s",
-        status_code, conn->client_fd_);
+        status_code, conn->client_fd_, status_msg.c_str());
 }
 
 void ErrorHandler::handle_error(HttpResponse* resp, int status_code,

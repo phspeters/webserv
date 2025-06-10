@@ -114,13 +114,19 @@ bool ResponseWriter::write_body(Connection* conn) {
         return false;
     }
 
-    HttpResponse* resp = conn->response_data_;
-
-    // Add body to write buffer if it's not empty
-    if (resp->content_length_ > 0) {
-        conn->write_buffer_.insert(conn->write_buffer_.end(),
-                                   resp->body_.begin(), resp->body_.end());
+    // Add body content to write buffer if it exists
+    if (!conn->response_data_->body_.empty()) {
+        // Insert body content into write buffer (vector<char>)
+        conn->write_buffer_.insert(conn->write_buffer_.end(), 
+                                  conn->response_data_->body_.begin(),
+                                  conn->response_data_->body_.end());
+        
+        log(LOG_DEBUG, "Added %zu bytes of body content to write buffer for client_fd %d", 
+            conn->response_data_->body_.size(), conn->client_fd_);
+    } else {
+        log(LOG_WARNING, "Response body is empty for client_fd %d", conn->client_fd_);
     }
+    
     return true;
 }
 
