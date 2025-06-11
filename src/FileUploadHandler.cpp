@@ -20,16 +20,24 @@ void FileUploadHandler::handle(Connection* conn) {
         return;
     }
 
-    std::string boundary;
-    if (!validate_request(conn, boundary)) {
-        return;
-    }
+    if(conn->request_data_->method_ == "POST") {
+        std::string boundary;
+        if (!validate_request(conn, boundary)) {
+            return;
+        }
 
-    if (parse_multipart_form_data(conn, boundary)) {
-        send_success_response(conn);
-    } else {
-        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
+        if (parse_multipart_form_data(conn, boundary)) {
+            send_success_response(conn);
+        } else {
+            ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
+        }
     }
+    else if(conn->request_data_->method_ == "DELETE") {
+        if (!conn->request_data_ || !conn->response_data_) {
+            ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
+        }
+    }
+    
 
     conn->conn_state_ = codes::CONN_WRITING;
 }
@@ -61,12 +69,12 @@ bool FileUploadHandler::validate_request(Connection* conn,
     }
 
     std::string content_length =
-        conn->request_data_->get_header("content-length");
+        conn->request_data_->get_header("content-length");    
     if (content_length.empty()) {
         ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
         return false;
     }
-
+    
     if (conn->request_data_->body_.size() > conn->virtual_server_->client_max_body_size_) {
         ErrorHandler::generate_error_response(conn, codes::PAYLOAD_TOO_LARGE);
         return false;
