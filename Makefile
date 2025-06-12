@@ -18,8 +18,9 @@ FILES = main.cpp \
 		RequestParser.cpp \
 		ResponseWriter.cpp \
 		StaticFileHandler.cpp \
+		FileDeleteHandler.cpp \
 		VirtualServer.cpp \
-		WebServer.cpp
+		WebServer.cpp \
 
 		
 OBJS = $(FILES:%.cpp=$(OBJ_DIR)/%.o)

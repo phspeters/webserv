@@ -478,6 +478,11 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
                     conn->client_fd_);
                 return codes::PARSE_HEADER_TOO_LONG;
             }
+            // CHECK - CAROL
+            std::cout << "Buffer size " << buffer.size() << std::endl;
+            std::cout << "http_limits " << http_limits::MAX_HEADER_VALUE_LENGTH
+                      << std::endl;
+            std::cout << "HERE" << std::endl;
             log(LOG_DEBUG, "Headers parsing incomplete for connection: %i",
                 conn->client_fd_);
             return codes::PARSE_INCOMPLETE;
@@ -595,6 +600,14 @@ codes::ParseStatus RequestParser::determine_request_body_handling(
                 conn->parser_state_ = codes::PARSING_BODY;
                 return codes::PARSE_HEADERS_COMPLETE;
             }
+        }
+        // Modification - Carol
+        size_t content_size = std::atoi(content_length.c_str());
+        if (content_size > conn->virtual_server_->client_max_body_size_) {
+            std::cout << content_size << " > "
+                      << conn->virtual_server_->client_max_body_size_ << std::endl;
+            ErrorHandler::generate_error_response(conn, codes::PAYLOAD_TOO_LARGE);
+            return codes::PARSE_INVALID_CONTENT_LENGTH;
         }
     }
 

@@ -223,7 +223,7 @@ Accept-Language: {{acceptLanguage}}
 Accept-Encoding: {{acceptEncoding}}
 Connection: keep-alive
 Content-Type: text/plain
-Content-Length: 600
+Content-Length: 582
 
 This is a large request body designed to exceed the client_max_body_size limit of 500 bytes configured in your server.conf file. This content should trigger a 413 Payload Too Large response from your webserver implementation. The purpose is to test the server's ability to properly validate and reject requests that exceed the configured maximum body size limit. Additional padding text to ensure we exceed the 500 byte limit and properly test the validation functionality of the webserver implementation.
 

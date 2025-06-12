@@ -10,7 +10,8 @@ WebServer::WebServer()
       response_writer_(NULL),
       static_file_handler_(NULL),
       cgi_handler_(NULL),
-      file_upload_handler_(NULL) {
+      file_upload_handler_(NULL),
+      file_delete_handler_(NULL) {
     instance_ = this;
 }
 
@@ -22,6 +23,7 @@ WebServer::~WebServer() {
     delete static_file_handler_;
     delete cgi_handler_;
     delete file_upload_handler_;
+    delete file_delete_handler_;
 
     // Close listener sockets if they are open
     for (std::vector<int>::iterator it = listener_fds_.begin();
@@ -51,6 +53,7 @@ bool WebServer::init() {
         static_file_handler_ = new StaticFileHandler();
         cgi_handler_ = new CgiHandler();
         file_upload_handler_ = new FileUploadHandler();
+        file_delete_handler_ = new FileDeleteHandler();
     } catch (const std::bad_alloc& e) {
         log(LOG_ERROR, "WebServer components memory allocation failed: %s",
             e.what());
@@ -942,13 +945,20 @@ AHandler* WebServer::choose_handler(Connection* conn) {
             conn->client_fd_, matching_location->path_.c_str());
         conn->conn_state_ = codes::CONN_CGI_EXEC;
         return cgi_handler_;
-    } else if (request_method == "POST" || request_method == "DELETE") {
+    } else if (request_method == "POST") {
         // FileUploadHandler for file uploads
         log(LOG_DEBUG,
             "choose_handler: Using FileUploadHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
         conn->conn_state_ = codes::CONN_PROCESSING;
         return file_upload_handler_;
+    } else if (request_method == "DELETE") {
+        // DeleteHandler for dlete requests
+        log(LOG_DEBUG,
+            "choose_handler: Using DeleteHandler for client_fd %d, path %s",
+            conn->client_fd_, matching_location->path_.c_str());
+        conn->conn_state_ = codes::CONN_PROCESSING;
+        return file_delete_handler_;
     } else {
         // Default to StaticFileHandler for regular files
         log(LOG_DEBUG,

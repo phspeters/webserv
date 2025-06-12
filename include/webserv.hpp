@@ -160,6 +160,7 @@ const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 #include "Logger.hpp"
 #include "ResponseWriter.hpp"
 #include "StaticFileHandler.hpp"
+#include "FileDeleteHandler.hpp"
 #include "WebServer.hpp"
 
 // utils

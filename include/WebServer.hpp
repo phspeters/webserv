@@ -12,6 +12,7 @@ class ResponseWriter;
 struct VirtualServer;
 class StaticFileHandler;
 class FileUploadHandler;
+class FileDeleteHandler;
 
 // Main server class - orchestrates setup and event loop
 class WebServer {
@@ -69,6 +70,7 @@ class WebServer {
     StaticFileHandler* static_file_handler_;
     CgiHandler* cgi_handler_;
     FileUploadHandler* file_upload_handler_;
+    FileDeleteHandler* file_delete_handler_;
 
     // Make singleton instance for signal handling
     static WebServer* instance_;
