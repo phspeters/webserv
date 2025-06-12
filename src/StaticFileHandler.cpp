@@ -117,6 +117,7 @@ void StaticFileHandler::handle(Connection* conn) {
             generate_directory_listing(conn, absolute_path);
             log(LOG_DEBUG, "StaticFileHandler::handle: Autoindex generated for client_fd %d",
                 conn->client_fd_);
+            conn->conn_state_ = codes::CONN_WRITING;
             return;
         }
     }
