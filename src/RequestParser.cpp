@@ -73,8 +73,10 @@ codes::ParseStatus RequestParser::parse(Connection* conn) {
             case codes::PARSING_COMPLETE:
                 parse_status = codes::PARSE_SUCCESS;
                 break;
+
             case codes::PARSING_ERROR:
                 return parse_status;
+                break;
         }
     }
 
@@ -106,7 +108,8 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
         }
         log(LOG_DEBUG, "Request line incomplete for connection: %i",
             conn->client_fd_);
-        // CHECK if in this case the parsing state should be updated to PARSING_ERROR - Carol 
+        // CHECK if in this case the parsing state should be updated to
+        // PARSING_ERROR - Carol
         return codes::PARSE_INCOMPLETE;
     }
 
@@ -122,7 +125,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
     codes::ParseStatus validation_status = validate_request_line(request);
     if (validation_status != codes::PARSE_SUCCESS) {
         // Update parsing state to indicate error
-        conn->parser_state_ = codes::PARSING_ERROR; 
+        conn->parser_state_ = codes::PARSING_ERROR;
         // Return the specific validation error
         return validation_status;
     }
@@ -476,6 +479,7 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
             if (buffer.size() > http_limits::MAX_HEADER_VALUE_LENGTH) {
                 log(LOG_ERROR, "Header value too long for connection: %i",
                     conn->client_fd_);
+                conn->parser_state_ = codes::PARSING_ERROR;
                 return codes::PARSE_HEADER_TOO_LONG;
             }
             // CHECK - CAROL
@@ -504,6 +508,7 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
         if (parse_status != codes::PARSE_SUCCESS) {
             log(LOG_ERROR, "Failed to parse header '%s' for connection: %i",
                 header_line.c_str(), conn->client_fd_);
+            conn->parser_state_ = codes::PARSING_ERROR;
             return parse_status;
         }
 
@@ -605,8 +610,11 @@ codes::ParseStatus RequestParser::determine_request_body_handling(
         size_t content_size = std::atoi(content_length.c_str());
         if (content_size > conn->virtual_server_->client_max_body_size_) {
             std::cout << content_size << " > "
-                      << conn->virtual_server_->client_max_body_size_ << std::endl;
-            ErrorHandler::generate_error_response(conn, codes::PAYLOAD_TOO_LARGE);
+                      << conn->virtual_server_->client_max_body_size_
+                      << std::endl;
+            ErrorHandler::generate_error_response(conn,
+                                                  codes::PAYLOAD_TOO_LARGE);
+            conn->parser_state_ = codes::PARSING_ERROR;
             return codes::PARSE_INVALID_CONTENT_LENGTH;
         }
     }
@@ -625,6 +633,7 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
         log(LOG_ERROR,
             "Missing Host header in HTTP/1.1 request for connection: %i",
             conn->client_fd_);
+        conn->parser_state_ = codes::PARSING_ERROR;
         return codes::PARSE_MISSING_HOST_HEADER;
     }
 
@@ -638,6 +647,7 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
             // Translates to response status 411
             log(LOG_ERROR,
                 "POST/PUT without Content-Length or Transfer-Encoding");
+            conn->parser_state_ = codes::PARSING_ERROR;
             return codes::PARSE_MISSING_CONTENT_LENGTH;
         }
 
@@ -645,6 +655,7 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
             // Translates to response status 400
             log(LOG_ERROR,
                 "POST/PUT with both Content-Length and Transfer-Encoding");
+            conn->parser_state_ = codes::PARSING_ERROR;
             return codes::PARSE_INVALID_CONTENT_LENGTH;
         }
 
@@ -660,6 +671,7 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
                 log(LOG_ERROR, "Invalid Content-Length header: '%s'",
                     content_length.c_str());
                 // Translates to response status 400
+                conn->parser_state_ = codes::PARSING_ERROR;
                 return codes::PARSE_INVALID_CONTENT_LENGTH;
             }
 
@@ -667,6 +679,7 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
                 log(LOG_ERROR, "Content-Length exceeds maximum size: %zu",
                     body_size);
                 // Translates to response status 413
+                conn->parser_state_ = codes::PARSING_ERROR;
                 return codes::PARSE_CONTENT_TOO_LARGE;
             }
         }
@@ -679,6 +692,7 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
                 log(LOG_ERROR, "Unknown Transfer-Encoding: '%s'",
                     transfer_encoding.c_str());
                 // Translates to response status 501
+                conn->parser_state_ = codes::PARSING_ERROR;
                 return codes::PARSE_UNKNOWN_ENCODING;
             }
         }
@@ -741,6 +755,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     "Failed to parse chunk header for "
                     "connection: %i with status: %i",
                     conn->client_fd_, parse_status);
+                conn->parser_state_ = codes::PARSING_ERROR;
                 return parse_status;  // Either incomplete or error
             }
 
@@ -768,6 +783,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
             log(LOG_ERROR,
                 "Failed to read chunk data for connection: %i with status: %i",
                 conn->client_fd_, parse_status);
+            conn->parser_state_ = codes::PARSING_ERROR;
             return parse_status;
         }
 
@@ -780,6 +796,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     "Failed to process chunk terminator for "
                     "connection: %i with status: %i",
                     conn->client_fd_, parse_status);
+                conn->parser_state_ = codes::PARSING_ERROR;
                 return parse_status;
             }
         }

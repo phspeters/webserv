@@ -120,7 +120,8 @@ bool WebServer::parse_config_file(const std::string& filename) {
             if (VirtualServer::parse_server_block(file, virtual_server)) {
                 std::string error_msg;
                 if (!virtual_server.is_valid()) {
-                    log(LOG_ERROR, "Error: Invalid virtual server configuration");
+                    log(LOG_ERROR,
+                        "Error: Invalid virtual server configuration");
                     return false;  // Validation error
                 }
 
@@ -386,43 +387,69 @@ void WebServer::handle_write(Connection* conn) {
         return;
     }
 
-     log(LOG_DEBUG, "handle_write: Pre-access check. client_fd %d. request_data_ pointer: %p", conn->client_fd_, static_cast<void*>(conn->request_data_));
+    log(LOG_DEBUG,
+        "handle_write: Pre-access check. client_fd %d. request_data_ pointer: "
+        "%p",
+        conn->client_fd_, static_cast<void*>(conn->request_data_));
 
     const char* method_cstr = NULL;
     const char* path_cstr = NULL;
 
     try {
         if (conn->request_data_->method_.empty()) {
-            log(LOG_DEBUG, "handle_write: conn->request_data_->method_ is empty for client_fd %d.", conn->client_fd_);
+            log(LOG_DEBUG,
+                "handle_write: conn->request_data_->method_ is empty for "
+                "client_fd %d.",
+                conn->client_fd_);
         }
-        log(LOG_DEBUG, "handle_write: method_.length() = %zu for client_fd %d", conn->request_data_->method_.length(), conn->client_fd_);
+        log(LOG_DEBUG, "handle_write: method_.length() = %zu for client_fd %d",
+            conn->request_data_->method_.length(), conn->client_fd_);
         method_cstr = conn->request_data_->method_.c_str();
-        log(LOG_DEBUG, "handle_write: Successfully obtained method_.c_str() for client_fd %d. Pointer: %p", conn->client_fd_, static_cast<const void*>(method_cstr));
+        log(LOG_DEBUG,
+            "handle_write: Successfully obtained method_.c_str() for client_fd "
+            "%d. Pointer: %p",
+            conn->client_fd_, static_cast<const void*>(method_cstr));
 
         if (conn->request_data_->path_.empty()) {
-            log(LOG_DEBUG, "handle_write: conn->request_data_->path_ is empty for client_fd %d.", conn->client_fd_);
+            log(LOG_DEBUG,
+                "handle_write: conn->request_data_->path_ is empty for "
+                "client_fd %d.",
+                conn->client_fd_);
         }
-        log(LOG_DEBUG, "handle_write: path_.length() = %zu for client_fd %d", conn->request_data_->path_.length(), conn->client_fd_);
+        log(LOG_DEBUG, "handle_write: path_.length() = %zu for client_fd %d",
+            conn->request_data_->path_.length(), conn->client_fd_);
         path_cstr = conn->request_data_->path_.c_str();
-        log(LOG_DEBUG, "handle_write: Successfully obtained path_.c_str() for client_fd %d. Pointer: %p", conn->client_fd_, static_cast<const void*>(path_cstr));
+        log(LOG_DEBUG,
+            "handle_write: Successfully obtained path_.c_str() for client_fd "
+            "%d. Pointer: %p",
+            conn->client_fd_, static_cast<const void*>(path_cstr));
 
     } catch (const std::exception& e) {
-        log(LOG_ERROR, "handle_write: Exception while accessing method/path string members for client_fd %d: %s. request_data_ pointer: %p",
-            conn->client_fd_, e.what(), static_cast<void*>(conn->request_data_));
-        ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
-        if (conn->conn_state_ != codes::CONN_CGI_EXEC) { 
-             conn->conn_state_ = codes::CONN_WRITING;
+        log(LOG_ERROR,
+            "handle_write: Exception while accessing method/path string "
+            "members for client_fd %d: %s. request_data_ pointer: %p",
+            conn->client_fd_, e.what(),
+            static_cast<void*>(conn->request_data_));
+        ErrorHandler::generate_error_response(conn,
+                                              codes::INTERNAL_SERVER_ERROR);
+        if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
+            conn->conn_state_ = codes::CONN_WRITING;
         }
         update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
-        return; 
+        return;
     }
 
     if (method_cstr == NULL || path_cstr == NULL) {
-        log(LOG_ERROR, "handle_write: method_cstr or path_cstr is NULL after try-catch for client_fd %d. This indicates a problem. Method ptr: %p, Path ptr: %p",
-            conn->client_fd_, static_cast<const void*>(method_cstr), static_cast<const void*>(path_cstr));
-        ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
+        log(LOG_ERROR,
+            "handle_write: method_cstr or path_cstr is NULL after try-catch "
+            "for client_fd %d. This indicates a problem. Method ptr: %p, Path "
+            "ptr: %p",
+            conn->client_fd_, static_cast<const void*>(method_cstr),
+            static_cast<const void*>(path_cstr));
+        ErrorHandler::generate_error_response(conn,
+                                              codes::INTERNAL_SERVER_ERROR);
         if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
-             conn->conn_state_ = codes::CONN_WRITING;
+            conn->conn_state_ = codes::CONN_WRITING;
         }
         update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
         return;
@@ -430,15 +457,15 @@ void WebServer::handle_write(Connection* conn) {
 
     log(LOG_DEBUG,
         "handle_write: Processing request method=%s, path=%s for client_fd %d",
-        method_cstr, 
-        path_cstr,  
-        conn->client_fd_);
+        method_cstr, path_cstr, conn->client_fd_);
 
-    log(LOG_DEBUG, "handle_write: Initial conn->parse_status_ = %d for client_fd %d", conn->parse_status_, conn->client_fd_);
+    log(LOG_DEBUG,
+        "handle_write: Initial conn->parse_status_ = %d for client_fd %d",
+        conn->parse_status_, conn->client_fd_);
 
     // log(LOG_DEBUG,
-    //     "handle_write: Processing request method=%s, path=%s for client_fd %d",
-    //     conn->request_data_->method_.c_str(),
+    //     "handle_write: Processing request method=%s, path=%s for client_fd
+    //     %d", conn->request_data_->method_.c_str(),
     //     conn->request_data_->path_.c_str(), conn->client_fd_);
 
     if (conn->parse_status_ != codes::PARSE_SUCCESS) {
@@ -446,17 +473,26 @@ void WebServer::handle_write(Connection* conn) {
             conn->client_fd_);
         ErrorHandler::generate_error_response(conn);
     }
-    
-    log(LOG_DEBUG, "handle_write: conn->conn_state_ = %d before handler logic for client_fd %d", conn->conn_state_, conn->client_fd_);
+
+    log(LOG_DEBUG,
+        "handle_write: conn->conn_state_ = %d before handler logic for "
+        "client_fd %d",
+        conn->conn_state_, conn->client_fd_);
 
     if (conn->conn_state_ == codes::CONN_PROCESSING ||
         conn->conn_state_ == codes::CONN_CGI_EXEC) {
         bool can_execute_handler = true;
-        log(LOG_DEBUG, "handle_write: [Checkpoint 1] Inside handler logic block for client_fd %d.", conn->client_fd_); // NOVO LOG
+        log(LOG_DEBUG,
+            "handle_write: [Checkpoint 1] Inside handler logic block for "
+            "client_fd %d.",
+            conn->client_fd_);  // NOVO LOG
 
         // Route the request to the appropriate handler
         if (!conn->active_handler_) {
-            log(LOG_DEBUG, "handle_write: conn->active_handler_ IS NULL. Validating request location for client_fd %d.", conn->client_fd_);
+            log(LOG_DEBUG,
+                "handle_write: conn->active_handler_ IS NULL. Validating "
+                "request location for client_fd %d.",
+                conn->client_fd_);
             if (!validate_request_location(conn)) {
                 // ErrorHandler::generate_error_response was already called
                 can_execute_handler = false;
@@ -553,29 +589,43 @@ void WebServer::handle_write(Connection* conn) {
             status_code, conn->client_fd_);
 
         // ADDED: Check if response explicitly sets connection: close
-        std::string response_connection = conn->response_data_->get_header("connection");
+        std::string response_connection =
+            conn->response_data_->get_header("connection");
         bool should_close = false;
 
         if (response_connection == "close") {
             should_close = true;
-            log(LOG_DEBUG, "handle_write: Response sets connection: close for client_fd %d", conn->client_fd_);
-        } else if (status_code == 400 || status_code == 413 || status_code >= 500) {
-             // ADDED: Close connections for client and server errors
+            log(LOG_DEBUG,
+                "handle_write: Response sets connection: close for client_fd "
+                "%d",
+                conn->client_fd_);
+        } else if (status_code == 400 || status_code == 413 ||
+                   status_code >= 500) {
+            // ADDED: Close connections for client and server errors
             should_close = true;
-            log(LOG_INFO, "handle_write: Closing connection for error status %d on client_fd %d", 
+            log(LOG_INFO,
+                "handle_write: Closing connection for error status %d on "
+                "client_fd %d",
                 status_code, conn->client_fd_);
         }
 
         // ADDED: Proper connection handling logic
         if (should_close) {
-            log(LOG_DEBUG, "handle_write: Closing connection for client_fd %d", conn->client_fd_);
+            log(LOG_DEBUG, "handle_write: Closing connection for client_fd %d",
+                conn->client_fd_);
             close_client_connection(conn);
         } else if (conn->is_keep_alive()) {
-            log(LOG_DEBUG, "handle_write: Keep-alive enabled, resetting connection for client_fd %d", conn->client_fd_);
+            log(LOG_DEBUG,
+                "handle_write: Keep-alive enabled, resetting connection for "
+                "client_fd %d",
+                conn->client_fd_);
             conn->reset_for_keep_alive();
             update_epoll_events(conn->client_fd_, EPOLLIN);
         } else {
-            log(LOG_DEBUG, "handle_write: No keep-alive, closing connection for client_fd %d", conn->client_fd_);
+            log(LOG_DEBUG,
+                "handle_write: No keep-alive, closing connection for client_fd "
+                "%d",
+                conn->client_fd_);
             close_client_connection(conn);
         }
     }
@@ -656,7 +706,8 @@ bool WebServer::create_listener_socket(
     }
 
     if (bind(listener_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        log(LOG_ERROR, "Failed to bind to %s:%i", host.c_str(), port);
+        log(LOG_ERROR, "Failed to bind to %s:%i: %s", host.c_str(), port,
+            strerror(errno));
         close(listener_fd);
         return false;
     }
@@ -938,7 +989,8 @@ AHandler* WebServer::choose_handler(Connection* conn) {
     // script extension?
     // Return appropriate handler based on location config
     // CHECK AND TEST - Carol
-    if (matching_location->cgi_enabled_ && is_cgi_extension(request_uri) && request_method != "DELETE") {
+    if (matching_location->cgi_enabled_ && is_cgi_extension(request_uri) &&
+        request_method != "DELETE") {
         // CGI handler for CGI-enabled locations
         log(LOG_DEBUG,
             "choose_handler: Using CgiHandler for client_fd %d, path %s",
@@ -1088,27 +1140,27 @@ void WebServer::match_host_header(Connection* conn) {
     }
 }
 
- bool WebServer::is_cgi_extension(const std::string &request_uri) const {
-
+bool WebServer::is_cgi_extension(const std::string& request_uri) const {
     // CHECK the extension allowed for CGI - Carol
     std::string extension = get_file_extension(request_uri);
-    if (!extension.empty() && (extension == ".php" || 
-             extension == ".py" || extension == ".sh")) {
-        log(LOG_DEBUG, "Request uri: '%s' is a CGI script", request_uri.c_str());
+    if (!extension.empty() &&
+        (extension == ".php" || extension == ".py" || extension == ".sh")) {
+        log(LOG_DEBUG, "Request uri: '%s' is a CGI script",
+            request_uri.c_str());
         return true;
-    } 
+    }
     return false;
 }
 
 std::string get_file_extension(const std::string& uri_path) {
-    
     size_t dot_pos = uri_path.find_last_of('.');
     if (dot_pos == std::string::npos) {
-        return ""; // No extension found
-    }  
-    std::string extension = uri_path.substr(dot_pos);   
+        return "";  // No extension found
+    }
+    std::string extension = uri_path.substr(dot_pos);
     // Convert to lowercase for case-insensitive comparison
-    for (std::string::iterator it = extension.begin(); it != extension.end(); ++it) {
+    for (std::string::iterator it = extension.begin(); it != extension.end();
+         ++it) {
         *it = std::tolower(*it);
     }
     return extension;
