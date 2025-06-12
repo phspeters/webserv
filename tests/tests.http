@@ -67,6 +67,7 @@ Accept-Encoding: {{acceptEncoding}}
 Connection: keep-alive
 Referer: {{baseUrl8090}}/
 
+
 ### Test 5: GET PNG image - Should return 200 OK with correct Content-Type
 GET {{baseUrl8090}}/cutecat.png
 Host: example.com
@@ -329,7 +330,7 @@ Accept-Encoding: {{acceptEncoding}}
 Connection: keep-alive
 
 ### Test 26: CSS file Content-Type - Expected: text/css
-GET {{baseUrl8090}}/cat-css/style.css
+GET {{baseUrl8090}}/cat-css/styles.css
 Host: example.com
 User-Agent: {{userAgent}}
 Accept: text/css,*/*;q=0.1

@@ -525,6 +525,7 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
             log(LOG_ERROR,
                 "Header validation failed for connection: %i with status: %i",
                 conn->client_fd_, parse_status);
+            conn->parser_state_ = codes::PARSING_ERROR;
             return parse_status;
         }
         return determine_request_body_handling(conn);
@@ -633,7 +634,6 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
         log(LOG_ERROR,
             "Missing Host header in HTTP/1.1 request for connection: %i",
             conn->client_fd_);
-        conn->parser_state_ = codes::PARSING_ERROR;
         return codes::PARSE_MISSING_HOST_HEADER;
     }
 
@@ -647,7 +647,6 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
             // Translates to response status 411
             log(LOG_ERROR,
                 "POST/PUT without Content-Length or Transfer-Encoding");
-            conn->parser_state_ = codes::PARSING_ERROR;
             return codes::PARSE_MISSING_CONTENT_LENGTH;
         }
 
@@ -655,7 +654,6 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
             // Translates to response status 400
             log(LOG_ERROR,
                 "POST/PUT with both Content-Length and Transfer-Encoding");
-            conn->parser_state_ = codes::PARSING_ERROR;
             return codes::PARSE_INVALID_CONTENT_LENGTH;
         }
 
@@ -671,7 +669,6 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
                 log(LOG_ERROR, "Invalid Content-Length header: '%s'",
                     content_length.c_str());
                 // Translates to response status 400
-                conn->parser_state_ = codes::PARSING_ERROR;
                 return codes::PARSE_INVALID_CONTENT_LENGTH;
             }
 
@@ -679,7 +676,6 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
                 log(LOG_ERROR, "Content-Length exceeds maximum size: %zu",
                     body_size);
                 // Translates to response status 413
-                conn->parser_state_ = codes::PARSING_ERROR;
                 return codes::PARSE_CONTENT_TOO_LARGE;
             }
         }
@@ -692,7 +688,6 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
                 log(LOG_ERROR, "Unknown Transfer-Encoding: '%s'",
                     transfer_encoding.c_str());
                 // Translates to response status 501
-                conn->parser_state_ = codes::PARSING_ERROR;
                 return codes::PARSE_UNKNOWN_ENCODING;
             }
         }
