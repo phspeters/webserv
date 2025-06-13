@@ -834,16 +834,6 @@ bool WebServer::setup_signal_handlers() {
         return false;
     }
 
-    struct sigaction sa_chld;
-    sa_chld.sa_handler = signal_handler;
-    sigemptyset(&sa_chld.sa_mask);
-    sa_chld.sa_flags =
-        SA_RESTART | SA_NOCLDSTOP;  // Avoids stopping on child exit
-    if (sigaction(SIGCHLD, &sa_chld, NULL) < 0) {
-        log(LOG_ERROR, "Failed to set up SIGCHLD handler");
-        return false;
-    }
-
     return true;
 }
 
@@ -854,15 +844,6 @@ void WebServer::signal_handler(int signal) {
     } else if (signal == SIGPIPE) {
         // Ignore SIGPIPE to prevent crashes on broken pipes
         log(LOG_DEBUG, "Received SIGPIPE, ignoring");
-    } else if (signal == SIGCHLD) {
-        // Reap zombie processes
-        int saved_errno = errno;  // Preserve errno
-        pid_t pid;
-        while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
-            // Child reaped
-            log(LOG_DEBUG, "SIGCHLD handler: Reaped child process '%d'.", pid);
-        }
-        errno = saved_errno;  // Restore errno
     }
 }
 
