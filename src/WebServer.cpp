@@ -983,13 +983,13 @@ AHandler* WebServer::choose_handler(Connection* conn) {
 
     const Location* matching_location = conn->location_match_;
     const std::string& request_method = conn->request_data_->method_;
-    const std::string& request_uri = conn->request_data_->uri_;
+    const std::string& request_path = conn->request_data_->path_;
 
     // TODO - Change CGI condition to cgi_enabled + executable file + valid
     // script extension?
     // Return appropriate handler based on location config
     // CHECK AND TEST - Carol
-    if (matching_location->cgi_enabled_ && is_cgi_extension(request_uri) &&
+    if (matching_location->cgi_enabled_ && is_cgi_extension(request_path) &&
         request_method != "DELETE") {
         // CGI handler for CGI-enabled locations
         log(LOG_DEBUG,

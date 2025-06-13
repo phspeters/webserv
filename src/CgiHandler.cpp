@@ -68,8 +68,8 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     }
 
     // 4. Script Path Resolution
-    conn->script_path_ = parse_absolute_path(conn);
-    if (conn->script_path_.empty()) {
+    conn->cgi_script_path_ = parse_absolute_path(conn);
+    if (conn->cgi_script_path_.empty()) {
         log(LOG_ERROR, "Failed to determine CGI script path for URI: %s",
             request_uri.c_str());
         ErrorHandler::generate_error_response(conn,
@@ -80,9 +80,9 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     // 5. Script Extension Check
     bool is_valid_extension = false;
     std::string extension;
-    size_t dot_pos = conn->script_path_.find_last_of('.');
+    size_t dot_pos = conn->cgi_script_path_.find_last_of('.');
     if (dot_pos != std::string::npos) {
-        extension = conn->script_path_.substr(dot_pos + 1);
+        extension = conn->cgi_script_path_.substr(dot_pos + 1);
         // --CHECK - Check against allowed extensions
         if (extension == "php" || extension == "py" || extension == "sh") {
             is_valid_extension = true;
@@ -91,21 +91,21 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
 
     if (!is_valid_extension) {
         log(LOG_ERROR, "Invalid CGI script extension '%s' for script '%s'",
-            extension.c_str(), conn->script_path_.c_str());
+            extension.c_str(), conn->cgi_script_path_.c_str());
         ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
         return false;
     }
 
     // 6. Script Existence Check
     struct stat file_info;
-    if (stat(conn->script_path_.c_str(), &file_info) == -1) {
+    if (stat(conn->cgi_script_path_.c_str(), &file_info) == -1) {
         if (errno == ENOENT) {
             log(LOG_ERROR, "CGI script '%s' not found",
-                conn->script_path_.c_str());
+                conn->cgi_script_path_.c_str());
             ErrorHandler::generate_error_response(conn, codes::NOT_FOUND);
         } else {
             log(LOG_ERROR, "Failed to access CGI script '%s': %s",
-                conn->script_path_.c_str(), strerror(errno));
+                conn->cgi_script_path_.c_str(), strerror(errno));
             ErrorHandler::generate_error_response(conn,
                                                   codes::INTERNAL_SERVER_ERROR);
         }
@@ -115,7 +115,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     // 7. Script Type Validation
     if (!S_ISREG(file_info.st_mode)) {
         log(LOG_ERROR, "CGI script '%s' is not a regular file",
-            conn->script_path_.c_str());
+            conn->cgi_script_path_.c_str());
         ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
         return false;
     }
@@ -123,13 +123,13 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     // 8. Script Permission Check
     if (!(file_info.st_mode & S_IXUSR)) {  // Check for user execute permission
         log(LOG_ERROR, "CGI script '%s' is not executable",
-            conn->script_path_.c_str());
+            conn->cgi_script_path_.c_str());
         ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
         return false;
     }
 
     log(LOG_DEBUG, "CGI request validated for script: %s",
-        conn->script_path_.c_str());
+        conn->cgi_script_path_.c_str());
     return true;  // All checks passed
 }
 
@@ -282,11 +282,11 @@ void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
 }
 
 std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
-    std::vector<std::string> cgi_env_strings;  // To store "NAME=VALUE"
+    std::vector<std::string>& cgi_env_strings = conn->cgi_envp_;  // To store "NAME=VALUE"
     std::vector<char*> envp_char_array;        // To store char* for execve
 
     cgi_env_strings.push_back("REQUEST_METHOD=" + conn->request_data_->method_);
-    cgi_env_strings.push_back("SCRIPT_NAME=" + conn->script_path_);
+    cgi_env_strings.push_back("SCRIPT_NAME=" + conn->cgi_script_path_);
     cgi_env_strings.push_back("SERVER_PROTOCOL=" +
                               conn->request_data_->version_);
     cgi_env_strings.push_back("SERVER_SOFTWARE=webserv/1.0");  // Example
@@ -295,7 +295,7 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
         cgi_env_strings.push_back("QUERY_STRING=" +
                                   conn->request_data_->query_string_);
     }
-    cgi_env_strings.push_back("SCRIPT_FILENAME=" + conn->script_path_);
+    cgi_env_strings.push_back("SCRIPT_FILENAME=" + conn->cgi_script_path_);
     cgi_env_strings.push_back("GATEWAY_INTERFACE=CGI/1.1");
     cgi_env_strings.push_back("SERVER_NAME=" +
                               conn->virtual_server_->host_name_);
@@ -354,28 +354,35 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
     // Log the environment variables for debugging
     for (std::vector<std::string>::const_iterator it = cgi_env_strings.begin();
          it != cgi_env_strings.end(); ++it) {
-        log(LOG_FATAL, "CGI env: %s", it->c_str());
+        log(LOG_TRACE, "CGI env: %s", it->c_str());
     }
 
     return envp_char_array;
 }
 
 void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
-    char* script_path_cstr = const_cast<char*>(conn->script_path_.c_str());
+    char* cgi_script_path_cstr = const_cast<char*>(conn->cgi_script_path_.c_str());
 
     // For shebang execution, argv[0] is the script path.
     // The OS uses the shebang to find the actual interpreter.
-    char* const argv[] = {script_path_cstr, NULL};
+    char* const argv[] = {cgi_script_path_cstr, NULL};
 
-    log(LOG_DEBUG,
+    log(LOG_INFO,
         "execute_cgi_script: connection '%d' attempting to execute '%s'",
-        conn->client_fd_, script_path_cstr);
+        conn->client_fd_, cgi_script_path_cstr);
+    
+    char** print_env = envp;
+    while (*print_env) {
+        log(LOG_FATAL, "CGI env: %s", *print_env);
+        print_env++;
+    }
+
     // Execute the CGI script
-    if (execve(script_path_cstr, argv, &envp[0]) == -1) {
+    if (execve(cgi_script_path_cstr, argv, envp) == -1) {
         log(LOG_ERROR,
             "execute_cgi_script: connection '%d' failed to execute CGI script "
             "'%s': %s",
-            conn->client_fd_, script_path_cstr, strerror(errno));
+            conn->client_fd_, cgi_script_path_cstr, strerror(errno));
         _exit(EXIT_FAILURE);
     }
 }

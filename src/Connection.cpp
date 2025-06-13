@@ -20,6 +20,8 @@ Connection::Connection(int fd, const VirtualServer* default_virtual_server)
       cgi_pid_(-1),                
       cgi_pipe_stdin_fd_(-1),
       cgi_pipe_stdout_fd_(-1),
+      cgi_script_path_(""),
+      cgi_envp_(),
       static_file_fd_(-1),
       static_file_offset_(0),
       static_file_bytes_to_send_(0) {}
@@ -108,7 +110,8 @@ void Connection::reset_for_keep_alive() {
     static_file_offset_ = 0;
     static_file_bytes_to_send_ = 0;
     cgi_pid_ = -1;
-    script_path_.clear();
+    cgi_script_path_.clear();
+    cgi_envp_.clear();
 
     // Reset activity timer
     last_activity_ = time(NULL);

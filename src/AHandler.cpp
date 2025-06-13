@@ -23,7 +23,7 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     
     const Location* request_location = conn->location_match_;
     std::string request_root = request_location->root_;
-    const std::string& request_path = conn->request_data_->uri_;
+    const std::string& request_path = conn->request_data_->path_;
 
     // --CHECK If the root starts with /, removed it
     // BIA: TALVEZ ISSO VOLTE!
@@ -60,10 +60,10 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
 
 bool AHandler::process_directory_redirect(Connection* conn,
                                                    std::string& absolute_path) {
-    std::string uri = conn->request_data_->uri_;
+    std::string path = conn->request_data_->path_;
 
     // Check if the request URI ends with a slash (indicating directory)
-    bool uri_ends_with_slash = !uri.empty() && uri[uri.length() - 1] == '/';
+    bool path_ends_with_slash = !path.empty() && path[path.length() - 1] == '/';
 
     // Check if the absolute path is a directory
     struct stat path_stat;
@@ -74,11 +74,11 @@ bool AHandler::process_directory_redirect(Connection* conn,
     }
 
     // If URI doesn't end with slash, redirect to add the slash (nginx behavior)
-    if (!uri_ends_with_slash) {
+    if (!path_ends_with_slash) {
         std::string query = conn->request_data_->query_string_;
 
         // Create redirect URL (same path + /)
-        std::string redirect_url = uri + "/";
+        std::string redirect_url = path + "/";
 
         // If there's a query string, append it
         if (!query.empty()) {
@@ -152,7 +152,7 @@ void AHandler::generate_directory_listing(
         "<html>\n"
         "<head>\n"
         "    <title>Index of " +
-        conn->request_data_->uri_ +
+        conn->request_data_->path_ +
         "</title>\n"
         "    <style>\n"
         "        body { font-family: Arial, sans-serif; margin: 0; padding: "
@@ -172,10 +172,10 @@ void AHandler::generate_directory_listing(
         "</head>\n"
         "<body>\n"
         "    <h1>Index of " +
-        conn->request_data_->uri_ + "</h1>\n";
+        conn->request_data_->path_ + "</h1>\n";
 
     // Add parent directory link unless at root
-    if (conn->request_data_->uri_ != "/") {
+    if (conn->request_data_->path_ != "/") {
         html += "    <a class=\"parent\" href=\"../\">Parent Directory</a>\n";
     }
 

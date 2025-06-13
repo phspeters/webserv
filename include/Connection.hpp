@@ -78,7 +78,9 @@ struct Connection {
     pid_t cgi_pid_;           // Process ID of the CGI script (-1 if none)
     int cgi_pipe_stdin_fd_;   // FD for writing request body TO CGI (-1 if none)
     int cgi_pipe_stdout_fd_;  // FD for reading response FROM CGI (-1 if none)
-    std::string script_path_;  // Path to the CGI script
+    std::string cgi_script_path_;  // Path to the CGI script
+    std::vector<std::string>
+        cgi_envp_;  // Environment variables for the CGI script execution
 
     // Static File State (Only relevant if active_handler is StaticFileHandler)
     int static_file_fd_;        // FD of the file being sent (-1 if none)
