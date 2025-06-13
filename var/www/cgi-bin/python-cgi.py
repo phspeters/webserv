@@ -9,8 +9,8 @@ import sys
 from datetime import datetime
 
 # CGI scripts must output headers first
-print("Content-Type: text/html")
-print("")  # Empty line required to separate headers from body
+print("Content-Type: text/html", end="\r\n")
+print("", end="\r\n")  # Empty line required to separate headers from body
 
 # HTML response body
 print("""<!DOCTYPE html>
@@ -24,7 +24,7 @@ print("""<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <h1>🐍 Python CGI Test Script</h1>
+    <h1>Python CGI Test Script</h1>
     
     <div class="section">
         <h2>Basic Info</h2>
@@ -39,7 +39,7 @@ print("""<!DOCTYPE html>
     </div>
 
     <div class="section">
-        <h2>Key Environment Variables</h2>""")
+        <h2>Key Environment Variables</h2>""", end="\r\n")
 
 # Display important CGI environment variables
 important_vars = [
@@ -50,43 +50,43 @@ important_vars = [
 
 for var in important_vars:
     value = os.environ.get(var, 'Not Set')
-    print(f'        <p><strong>{var}:</strong> <span class="env-var">{value}</span></p>')
+    print(f'        <p><strong>{var}:</strong> <span class="env-var">{value}</span></p>', end="\r\n")
 
 print("""    </div>
     
     <div class="section">
-        <h2>Query String Parameters</h2>""")
+        <h2>Query String Parameters</h2>""", end="\r\n")
 
 query_string = os.environ.get('QUERY_STRING', '')
 if query_string:
-    print(f'        <p><strong>Raw Query String:</strong> <span class="env-var">{query_string}</span></p>')
+    print(f'        <p><strong>Raw Query String:</strong> <span class="env-var">{query_string}</span></p>', end="\r\n")
     # Simple query string parsing (for basic testing)
     params = query_string.split('&')
-    print('        <ul>')
+    print('        <ul>', end="\r\n")
     for param in params:
         if '=' in param:
             key, value = param.split('=', 1)
-            print(f'            <li><strong>{key}:</strong> {value}</li>')
+            print(f'            <li><strong>{key}:</strong> {value}</li>', end="\r\n")
         else:
-            print(f'            <li>{param} (no value)</li>')
+            print(f'            <li>{param} (no value)</li>', end="\r\n")
     print('        </ul>')
 else:
-    print('        <p><em>No query string parameters</em></p>')
+    print('        <p><em>No query string parameters</em></p>', end="\r\n")
 
 print("""    </div>
 
     <div class="section">
-        <h2>POST Data</h2>""")
+        <h2>POST Data</h2>""", end="\r\n")
 
 if os.environ.get('REQUEST_METHOD') == 'POST':
     content_length = os.environ.get('CONTENT_LENGTH')
     if content_length and content_length.isdigit():
         post_data = sys.stdin.read(int(content_length))
-        print(f'        <p><strong>POST Data:</strong> <span class="env-var">{post_data}</span></p>')
+        print(f'        <p><strong>POST Data:</strong> <span class="env-var">{post_data}</span></p>', end="\r\n")
     else:
-        print('        <p><em>POST request but no content length or data</em></p>')
+        print('        <p><em>POST request but no content length or data</em></p>', end="\r\n")
 else:
-    print('        <p><em>Not a POST request</em></p>')
+    print('        <p><em>Not a POST request</em></p>', end="\r\n")
 
 print("""    </div>
 
@@ -99,6 +99,6 @@ print("""    </div>
         </ul>
     </div>
 
-    <p><small>✅ CGI script executed successfully!</small></p>
+    <p><small>CGI script executed successfully!</small></p>
 </body>
-</html>""")
+</html>""", end="\r\n")
