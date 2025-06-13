@@ -42,7 +42,9 @@ void print_response(const Connection* conn) {
     std::cout << std::endl;
     std::cout << "Body size: " << conn->response_data_->body_.size() << " bytes"
               << std::endl;
-    std::cout << "=====================\n" << std::endl;
+    std::cout << "=====================" << std::endl;
+    std::cout.write(conn->response_data_->body_.data(),
+                    conn->response_data_->body_.size());
 }
 
 int print_buffer(std::vector<char>& buffer) {
@@ -212,21 +214,21 @@ int log(log_level level, const char* msg, ...) {
     std::string timestamp = get_current_gmt_time();
 
     if (level == LOG_TRACE)
-        std::cout << WHITE << "[TRACE]\t";
+        std::cerr << WHITE << "[TRACE]\t";
     else if (level == LOG_DEBUG)
-        std::cout << WHITE << "[DEBUG]\t";
+        std::cerr << WHITE << "[DEBUG]\t";
     else if (level == LOG_INFO)
-        std::cout << CYAN << "[INFO]\t";
+        std::cerr << CYAN << "[INFO]\t";
     else if (level == LOG_WARNING)
-        std::cout << MAGENTA << "[WARNING]\t";
+        std::cerr << MAGENTA << "[WARNING]\t";
     else if (level == LOG_ERROR)
-        std::cout << LIGHT_RED << "[ERROR]\t";
+        std::cerr << LIGHT_RED << "[ERROR]\t";
     else if (level == LOG_FATAL)
-        std::cout << RED << "[FATAL]\t";
+        std::cerr << RED << "[FATAL]\t";
     else if (level == LOG_OFF)
         return 0;  // No output for LOG_OFF
 
-    std::cout << timestamp << output << RESET << std::endl;
+    std::cerr << timestamp << output << RESET << std::endl;
     va_end(args);
 
     return n;

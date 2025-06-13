@@ -5,8 +5,8 @@
 #http://localhost:8090/cgi-bin/shell-cgi.sh?name=test&value=123
 
 # Output HTTP headers
-echo "Content-Type: text/html"
-echo "" # Empty line separates headers from body
+echo -e "Content-Type: text/html\r"
+echo -e "\r" # Empty line separates headers from body
 
 # Get current time
 CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
@@ -27,7 +27,7 @@ cat << HTML_START
     </style>
 </head>
 <body>
-    <h1>🐚 Shell CGI Test Script</h1>
+    <h1> Shell CGI Test Script</h1>
     
     <div class="section">
         <h2>Basic Info</h2>
@@ -49,28 +49,29 @@ cat << HTML_START
                 <th>Value</th>
             </tr>
 HTML_START
+echo -e "\r"
 
 # List important CGI environment variables
 important_vars="SERVER_NAME SERVER_PORT REQUEST_METHOD REQUEST_URI QUERY_STRING CONTENT_TYPE CONTENT_LENGTH HTTP_HOST HTTP_USER_AGENT SCRIPT_NAME PATH_INFO"
 
 for var in $important_vars; do
     value="${!var}"
-    echo "            <tr>"
-    echo "                <td><strong>$var</strong></td>"
-    echo "                <td><span class=\"env-var\">${value:-Not Set}</span></td>"
-    echo "            </tr>"
+    echo -e "            <tr>\r"
+    echo -e "                <td><strong>$var</strong></td>\r"
+    echo -e "                <td><span class=\"env-var\">${value:-Not Set}</span></td>\r"
+    echo -e "            </tr>\r"
 done
 
-echo "        </table>"
-echo "    </div>"
+echo -e "        </table>\r"
+echo -e "    </div>\r"
 
-echo "    <div class=\"section\">"
-echo "        <h2>Query String Parameters</h2>"
+echo -e "    <div class=\"section\">\r"
+echo -e "        <h2>Query String Parameters</h2>\r"
 
 # Parse and display query string
 if [ -n "$QUERY_STRING" ]; then
-    echo "        <p><strong>Raw Query String:</strong> <span class=\"env-var\">$QUERY_STRING</span></p>"
-    echo "        <ul>"
+    echo -e "        <p><strong>Raw Query String:</strong> <span class=\"env-var\">$QUERY_STRING</span></p>\r"
+    echo -e "        <ul>\r"
     
     # Split query string by '&'
     IFS="&" read -ra PARAMS <<< "$QUERY_STRING"
@@ -79,33 +80,33 @@ if [ -n "$QUERY_STRING" ]; then
         if [[ "$param" == *"="* ]]; then
             key="${param%%=*}"
             value="${param#*=}"
-            echo "            <li><strong>$key:</strong> $value</li>"
+            echo -e "            <li><strong>$key:</strong> $value</li>\r"
         else
-            echo "            <li>$param (no value)</li>"
+            echo -e "            <li>$param (no value)</li>\r"
         fi
     done
     
-    echo "        </ul>"
+    echo -e "        </ul>\r"
 else
-    echo "        <p><em>No query string parameters</em></p>"
+    echo -e "        <p><em>No query string parameters</em></p>\r"
 fi
 
-echo "    </div>"
-echo ""
-echo "    <div class=\"section\">"
-echo "        <h2>POST Data</h2>"
+echo -e "    </div>\r"
+echo -e ""
+echo -e "    <div class=\"section\">\r"
+echo -e "        <h2>POST Data</h2>\r"
 
 # Handle POST data
 if [ "$REQUEST_METHOD" = "POST" ]; then
     if [ -n "$CONTENT_LENGTH" ]; then
         # Read POST data
         post_data=$(dd bs="$CONTENT_LENGTH" count=1 2>/dev/null)
-        echo "        <p><strong>POST Data:</strong> <span class=\"env-var\">$post_data</span></p>"
+        echo -e "        <p><strong>POST Data:</strong> <span class=\"env-var\">$post_data</span></p>\r"
     else
-        echo "        <p><em>POST request but no content length or data</em></p>"
+        echo -e "        <p><em>POST request but no content length or data</em></p>\r"
     fi
 else
-    echo "        <p><em>Not a POST request</em></p>"
+    echo -e "        <p><em>Not a POST request</em></p>\r"
 fi
 
 # Finish HTML
@@ -121,7 +122,7 @@ cat << HTML_END
         </ul>
     </div>
 
-    <p><small>✅ CGI script executed successfully!</small></p>
+    <p><small>CGI script executed successfully!</small></p>
 </body>
 </html>
 HTML_END

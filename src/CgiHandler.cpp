@@ -249,32 +249,36 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
 void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
                                     int cgi_to_server_pipe[2]) {
     // Close the read-end of the pipe to CGI's stdin
-    close(server_to_cgi_pipe[0]);
+    close(server_to_cgi_pipe[1]);
     // Close the write-end of the pipe from CGI's stdout
-    close(cgi_to_server_pipe[1]);
+    close(cgi_to_server_pipe[0]);
 
     // Redirect stdin to the read-end of the server_to_cgi_pipe
-    if (dup2(server_to_cgi_pipe[1], STDIN_FILENO) == -1) {
+    if (dup2(server_to_cgi_pipe[0], STDIN_FILENO) == -1) {
         log(LOG_ERROR, "Failed to redirect stdin to CGI pipe: %s",
             strerror(errno));
         _exit(EXIT_FAILURE);
     }
     // Redirect stdout to the write-end of the cgi_to_server_pipe
-    if (dup2(cgi_to_server_pipe[0], STDOUT_FILENO) == -1) {
+    if (dup2(cgi_to_server_pipe[1], STDOUT_FILENO) == -1) {
         log(LOG_ERROR, "Failed to redirect stdout to CGI pipe: %s",
             strerror(errno));
         _exit(EXIT_FAILURE);
     }
-    // Redirect stderr to stdout (optional, but useful for debugging)
-    if (dup2(STDOUT_FILENO, STDERR_FILENO) == -1) {
-        log(LOG_ERROR, "Failed to redirect stderr to stdout: %s",
-            strerror(errno));
-        _exit(EXIT_FAILURE);
+
+    int stderr_fd =
+        open("./cgi_errors.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (stderr_fd != -1) {
+        if (dup2(stderr_fd, STDERR_FILENO) == -1) {
+            close(stderr_fd);
+            _exit(EXIT_FAILURE);
+        }
+        close(stderr_fd);
     }
 
     // Close the original pipe file descriptors in the child process
-    close(server_to_cgi_pipe[1]);
-    close(cgi_to_server_pipe[0]);
+    close(server_to_cgi_pipe[0]);
+    close(cgi_to_server_pipe[1]);
 }
 
 std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
@@ -346,6 +350,13 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
 
     log(LOG_DEBUG, "CGI environment variables created for client %d",
         conn->client_fd_);
+
+    // Log the environment variables for debugging
+    for (std::vector<std::string>::const_iterator it = cgi_env_strings.begin();
+         it != cgi_env_strings.end(); ++it) {
+        log(LOG_FATAL, "CGI env: %s", it->c_str());
+    }
+
     return envp_char_array;
 }
 
@@ -360,11 +371,11 @@ void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
         "execute_cgi_script: connection '%d' attempting to execute '%s'",
         conn->client_fd_, script_path_cstr);
     // Execute the CGI script
-    if (execve(script_path_cstr, argv, envp) == -1) {
+    if (execve(script_path_cstr, argv, &envp[0]) == -1) {
         log(LOG_ERROR,
             "execute_cgi_script: connection '%d' failed to execute CGI script "
             "'%s': %s",
-            script_path_cstr, strerror(errno));
+            conn->client_fd_, script_path_cstr, strerror(errno));
         _exit(EXIT_FAILURE);
     }
 }
@@ -475,11 +486,33 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
         read(conn->cgi_pipe_stdout_fd_, &conn->cgi_read_buffer_[original_size],
              CHUNK_SIZE);
 
+    // if (bytes_read < 0) {
+    //     log(LOG_ERROR, "CGI: Failed to read from stdout pipe for client %d:
+    //     %s",
+    //         conn->client_fd_, strerror(errno));
+    //     finalize_cgi_error(conn, codes::BAD_GATEWAY);
+    //     return;
+    // }
+    // TODO: find another solution for EAGAIN/EWOULDBLOCK as it is forbidden to
+    // check errno
     if (bytes_read < 0) {
-        log(LOG_ERROR, "CGI: Failed to read from stdout pipe for client %d: %s",
-            conn->client_fd_, strerror(errno));
-        finalize_cgi_error(conn, codes::BAD_GATEWAY);
-        return;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // No data available right now, this is normal for non-blocking I/O
+            log(LOG_FATAL,
+                "CGI: No data available to read for client %d "
+                "(EAGAIN/EWOULDBLOCK)",
+                conn->client_fd_);
+            // Resize buffer back to original size since we didn't read anything
+            conn->cgi_read_buffer_.resize(original_size);
+            return;  // Just return, epoll will notify us when data is available
+        } else {
+            // Actual read error
+            log(LOG_ERROR,
+                "CGI: Failed to read from stdout pipe for client %d: %s",
+                conn->client_fd_, strerror(errno));
+            finalize_cgi_error(conn, codes::BAD_GATEWAY);
+            return;
+        }
     }
 
     // Resize the buffer to the actual size read
@@ -589,7 +622,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
         }
 
         std::string header_line(buffer.begin(), line_end_it);
-        log(LOG_TRACE, "CGI header line: %s", header_line.c_str());
+        log(LOG_FATAL, "CGI header line: %s", header_line.c_str());
 
         // Process the header line
         size_t colon_pos = header_line.find(':');
@@ -614,7 +647,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
             //         "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
             if (!(isalnum(c) || strchr("!#$%&'*+-.^_`|~", c))) {
                 log(LOG_ERROR, "Invalid character '%c' in CGI header name: %s",
-                    c, header_name.c_str());
+                    static_cast<char>(c), header_name.c_str());
                 finalize_cgi_error(conn, codes::BAD_GATEWAY);
                 return;
             }
@@ -691,11 +724,20 @@ void CgiHandler::finalize_cgi_response(Connection* conn) {
         return;
     }
 
+    // Set the response headers
+    std::ostringstream oss;
+    oss << conn->response_data_->body_.size();
+    conn->response_data_->set_header("Content-Length", oss.str());
+
+    // Change states
     conn->cgi_handler_state_ = codes::CGI_HANDLER_COMPLETE;
     conn->conn_state_ = codes::CONN_WRITING;
 
     bool kill_child = false;
     cleanup_cgi_resources(conn, kill_child);
+
+    log(LOG_DEBUG, "CGI response finalized for client %d, status: %d",
+        conn->client_fd_, conn->response_data_->status_code_);
 }
 
 void CgiHandler::finalize_cgi_error(Connection* conn,
