@@ -34,7 +34,7 @@ class AHandler {
 
     bool process_directory_redirect(Connection* conn,
                                     std::string& absolute_path);
-    bool process_directory_index(Connection* conn, std::string absolute_path,
+    bool process_directory_index(Connection* conn, std::string& absolute_path,
                                  bool& need_autoindex);
     void generate_directory_listing(Connection* conn,
                                     const std::string& dir_path);

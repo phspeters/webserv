@@ -14,7 +14,7 @@ std::string HttpRequest::get_header(const std::string& name) const {
     std::map<std::string, std::string>::const_iterator it =
         headers_.find(lower_name);
     if (it != headers_.end()) {
-        log(LOG_DEBUG, "Request header retrieved: '%s: %s'", lower_name.c_str(),
+        log(LOG_TRACE, "Request header retrieved: '%s: %s'", lower_name.c_str(),
             it->second.c_str());
         return it->second;
     }
@@ -31,7 +31,7 @@ void HttpRequest::set_header(const std::string& name,
     }
 
     headers_[lower_name] = value;
-    log(LOG_DEBUG, "Request header set: '%s: %s'", lower_name.c_str(),
+    log(LOG_TRACE, "Request header set: '%s: %s'", lower_name.c_str(),
         value.c_str());
 }
 

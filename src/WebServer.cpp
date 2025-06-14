@@ -387,28 +387,31 @@ void WebServer::handle_write(Connection* conn) {
         return;
     }
 
-    //log(LOG_DEBUG,
-    //    "handle_write: Pre-access check. client_fd %d. request_data_ pointer: "
-    //    "%p",
-    //    conn->client_fd_, static_cast<void*>(conn->request_data_));
+    // log(LOG_DEBUG,
+    //     "handle_write: Pre-access check. client_fd %d. request_data_ pointer:
+    //     "
+    //     "%p",
+    //     conn->client_fd_, static_cast<void*>(conn->request_data_));
 
-    //const char* method_cstr = NULL;
-    //const char* path_cstr = NULL;
+    // const char* method_cstr = NULL;
+    // const char* path_cstr = NULL;
 
-    //try {
-    //    if (conn->request_data_->method_.empty()) {
-    //        log(LOG_DEBUG,
-    //            "handle_write: conn->request_data_->method_ is empty for "
-    //            "client_fd %d.",
-    //            conn->client_fd_);
-    //    }
-    //    log(LOG_DEBUG, "handle_write: method_.length() = %zu for client_fd %d",
-    //        conn->request_data_->method_.length(), conn->client_fd_);
-    //    method_cstr = conn->request_data_->method_.c_str();
-    //    log(LOG_DEBUG,
-    //        "handle_write: Successfully obtained method_.c_str() for client_fd "
-    //        "%d. Pointer: %p",
-    //        conn->client_fd_, static_cast<const void*>(method_cstr));
+    // try {
+    //     if (conn->request_data_->method_.empty()) {
+    //         log(LOG_DEBUG,
+    //             "handle_write: conn->request_data_->method_ is empty for "
+    //             "client_fd %d.",
+    //             conn->client_fd_);
+    //     }
+    //     log(LOG_DEBUG, "handle_write: method_.length() = %zu for client_fd
+    //     %d",
+    //         conn->request_data_->method_.length(), conn->client_fd_);
+    //     method_cstr = conn->request_data_->method_.c_str();
+    //     log(LOG_DEBUG,
+    //         "handle_write: Successfully obtained method_.c_str() for
+    //         client_fd "
+    //         "%d. Pointer: %p",
+    //         conn->client_fd_, static_cast<const void*>(method_cstr));
 
     //    if (conn->request_data_->path_.empty()) {
     //        log(LOG_DEBUG,
@@ -439,29 +442,28 @@ void WebServer::handle_write(Connection* conn) {
     //    return;
     //}
 
-    //if (method_cstr == NULL || path_cstr == NULL) {
-    //    log(LOG_ERROR,
-    //        "handle_write: method_cstr or path_cstr is NULL after try-catch "
-    //        "for client_fd %d. This indicates a problem. Method ptr: %p, Path "
-    //        "ptr: %p",
-    //        conn->client_fd_, static_cast<const void*>(method_cstr),
-    //        static_cast<const void*>(path_cstr));
-    //    ErrorHandler::generate_error_response(conn,
-    //                                          codes::INTERNAL_SERVER_ERROR);
-    //    if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
-    //        conn->conn_state_ = codes::CONN_WRITING;
-    //    }
-    //    update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
-    //    return;
-    //}
+    // if (method_cstr == NULL || path_cstr == NULL) {
+    //     log(LOG_ERROR,
+    //         "handle_write: method_cstr or path_cstr is NULL after try-catch "
+    //         "for client_fd %d. This indicates a problem. Method ptr: %p, Path
+    //         " "ptr: %p", conn->client_fd_, static_cast<const
+    //         void*>(method_cstr), static_cast<const void*>(path_cstr));
+    //     ErrorHandler::generate_error_response(conn,
+    //                                           codes::INTERNAL_SERVER_ERROR);
+    //     if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
+    //         conn->conn_state_ = codes::CONN_WRITING;
+    //     }
+    //     update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
+    //     return;
+    // }
 
-    //log(LOG_DEBUG,
-    //    "handle_write: Processing request method=%s, path=%s for client_fd %d",
-    //    method_cstr, path_cstr, conn->client_fd_);
+    // log(LOG_DEBUG,
+    //     "handle_write: Processing request method=%s, path=%s for client_fd
+    //     %d", method_cstr, path_cstr, conn->client_fd_);
 
-    //log(LOG_DEBUG,
-    //    "handle_write: Initial conn->parse_status_ = %d for client_fd %d",
-    //    conn->parse_status_, conn->client_fd_);
+    // log(LOG_DEBUG,
+    //     "handle_write: Initial conn->parse_status_ = %d for client_fd %d",
+    //     conn->parse_status_, conn->client_fd_);
 
     // log(LOG_DEBUG,
     //     "handle_write: Processing request method=%s, path=%s for client_fd
@@ -474,18 +476,18 @@ void WebServer::handle_write(Connection* conn) {
         ErrorHandler::generate_error_response(conn);
     }
 
-    //log(LOG_DEBUG,
-    //    "handle_write: conn->conn_state_ = %d before handler logic for "
-    //    "client_fd %d",
-    //    conn->conn_state_, conn->client_fd_);
+    // log(LOG_DEBUG,
+    //     "handle_write: conn->conn_state_ = %d before handler logic for "
+    //     "client_fd %d",
+    //     conn->conn_state_, conn->client_fd_);
 
     if (conn->conn_state_ == codes::CONN_PROCESSING ||
         conn->conn_state_ == codes::CONN_CGI_EXEC) {
         bool can_execute_handler = true;
-        //log(LOG_DEBUG,
-        //    "handle_write: [Checkpoint 1] Inside handler logic block for "
-        //    "client_fd %d.",
-        //    conn->client_fd_);  // NOVO LOG
+        // log(LOG_DEBUG,
+        //     "handle_write: [Checkpoint 1] Inside handler logic block for "
+        //     "client_fd %d.",
+        //     conn->client_fd_);  // NOVO LOG
 
         // Route the request to the appropriate handler
         if (!conn->active_handler_) {
@@ -932,6 +934,7 @@ const Location* WebServer::find_matching_location(
     } else {
         log(LOG_DEBUG, "Found matching location: %s",
             best_match->path_.c_str());
+
         std::string allowed_methods_str = "";
         for (size_t i = 0; i < best_match->allowed_methods_.size(); i++) {
             if (i > 0) {
@@ -939,6 +942,7 @@ const Location* WebServer::find_matching_location(
             }
             allowed_methods_str += best_match->allowed_methods_[i];
         }
+
         log(LOG_TRACE,
             "Location details: path=%s, root=%s, autoindex=%d, cgi_enabled=%d, "
             "allowed_methods=%s, index=%s, redirect=%s",

@@ -15,7 +15,7 @@ static const std::string DEFAULT_500_ERROR_PAGE = "/error/500.html";
 // Location defaults
 static const bool DEFAULT_AUTOINDEX = false;
 static const bool DEFAULT_CGI_ENABLED = false;
-static const std::string DEFAULT_INDEX = "index.html";
+static const std::string DEFAULT_INDEX = "";
 
 static std::vector<std::string> create_default_allowed_methods() {
     std::vector<std::string> methods;
@@ -74,7 +74,8 @@ bool VirtualServer::parse_server_block(std::ifstream& file,
                 return false;
             }
         } else {
-            log(LOG_ERROR, "Invalid directive in server block: %s", line.c_str());
+            log(LOG_ERROR, "Invalid directive in server block: %s",
+                line.c_str());
             return false;
         }
     }
@@ -164,14 +165,16 @@ bool VirtualServer::parse_listen(const std::string& value,
         host_str = value.substr(0, colonPos);
         std::istringstream iss(value.substr(colonPos + 1));
         if (!(iss >> virtual_server.port_)) {
-            log(LOG_ERROR, "Invalid listen directive format: %s", value.c_str());
+            log(LOG_ERROR, "Invalid listen directive format: %s",
+                value.c_str());
             return false;
         }
     } else {
         // Just a port number
         std::istringstream iss(value);
         if (!(iss >> virtual_server.port_)) {
-            log(LOG_ERROR, "Invalid listen directive format: %s", value.c_str());
+            log(LOG_ERROR, "Invalid listen directive format: %s",
+                value.c_str());
             return false;
         }
         host_str = DEFAULT_HOST;  // Default to all interfaces
@@ -239,7 +242,8 @@ bool VirtualServer::parse_client_max_body_size(const std::string& value,
     // Check that numPart contains only digits
     for (size_t i = 0; i < numPart.length(); i++) {
         if (!isdigit(numPart[i])) {
-            log(LOG_ERROR, "Invalid client_max_body_size value: %s", value.c_str());
+            log(LOG_ERROR, "Invalid client_max_body_size value: %s",
+                value.c_str());
             return false;
         }
     }
@@ -265,7 +269,8 @@ bool VirtualServer::parse_client_max_body_size(const std::string& value,
                 size *= 1024 * 1024 * 1024;
                 break;
             default:
-                log(LOG_ERROR, "Unknown size unit '%c' in client_max_body_size", unit);
+                log(LOG_ERROR, "Unknown size unit '%c' in client_max_body_size",
+                    unit);
                 return false;
         }
     }
@@ -309,9 +314,9 @@ bool VirtualServer::add_directive_value(Location& location,
     if (key == "root") {
         // Modification - Carol
         if (value[0] == '/') {
-            location.root_  = value.substr(1);  // "/var/www/example.com" becomes "var/www/example.com"
-        } 
-        else {
+            location.root_ = value.substr(
+                1);  // "/var/www/example.com" becomes "var/www/example.com"
+        } else {
             location.root_ = value;
         }
     } else if (key == "autoindex") {
@@ -336,7 +341,9 @@ bool VirtualServer::add_directive_value(Location& location,
             // Check if there are additional index files (for logging)
             std::string remaining;
             if (std::getline(iss, remaining) && !remaining.empty()) {
-                log(LOG_INFO, "Multiple index files specified, using first: %s (ignoring: %s)", 
+                log(LOG_INFO,
+                    "Multiple index files specified, using first: %s "
+                    "(ignoring: %s)",
                     first_index.c_str(), remaining.c_str());
             }
         } else {
@@ -424,7 +431,8 @@ bool VirtualServer::is_valid_host() const {
         // Check if octet is a valid number
         for (size_t i = 0; i < octet.length(); i++) {
             if (!isdigit(octet[i])) {
-                log(LOG_ERROR, "Invalid IP address format (non-digit): %s", host_.c_str());
+                log(LOG_ERROR, "Invalid IP address format (non-digit): %s",
+                    host_.c_str());
                 return false;
             }
         }
@@ -432,7 +440,8 @@ bool VirtualServer::is_valid_host() const {
         // Check octet range (0-255)
         int value = atoi(octet.c_str());
         if (value < 0 || value > 255) {
-            log(LOG_ERROR, "Invalid IP address (octet out of range): %s", host_.c_str());
+            log(LOG_ERROR, "Invalid IP address (octet out of range): %s",
+                host_.c_str());
             return false;
         }
 
@@ -441,7 +450,8 @@ bool VirtualServer::is_valid_host() const {
     }
 
     if (octets != 4 || start != host_.length() + 1) {
-        log(LOG_ERROR, "Invalid IP address (incorrect format): %s", host_.c_str());
+        log(LOG_ERROR, "Invalid IP address (incorrect format): %s",
+            host_.c_str());
         return false;
     }
 
@@ -465,7 +475,8 @@ bool VirtualServer::has_valid_locations() const {
     // Validate each location
     for (size_t i = 0; i < locations_.size(); i++) {
         if (!locations_[i].is_valid()) {
-            log(LOG_ERROR, "Invalid location block: %s", locations_[i].path_.c_str());
+            log(LOG_ERROR, "Invalid location block: %s",
+                locations_[i].path_.c_str());
             return false;
         }
     }
@@ -476,29 +487,31 @@ bool VirtualServer::has_valid_locations() const {
 bool VirtualServer::has_valid_error_pages() const {
     for (std::map<int, std::string>::const_iterator it = error_pages_.begin();
          it != error_pages_.end(); ++it) {
-        
         const std::string& error_page_path = it->second;
-        
+
         // Check if the error page file exists and is readable
         struct stat file_stat;
         if (stat(error_page_path.c_str(), &file_stat) != 0) {
             // File doesn't exist - this is okay, we'll use default error pages
-            log(LOG_WARNING, "Error page file does not exist: %s (will use default)", 
+            log(LOG_WARNING,
+                "Error page file does not exist: %s (will use default)",
                 error_page_path.c_str());
             continue;
         }
-        
+
         if (!S_ISREG(file_stat.st_mode)) {
-            log(LOG_ERROR, "Error page path is not a regular file: %s", error_page_path.c_str());
+            log(LOG_ERROR, "Error page path is not a regular file: %s",
+                error_page_path.c_str());
             return false;
         }
-        
+
         if (access(error_page_path.c_str(), R_OK) != 0) {
-            log(LOG_ERROR, "No read permission for error page: %s", error_page_path.c_str());
+            log(LOG_ERROR, "No read permission for error page: %s",
+                error_page_path.c_str());
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -543,7 +556,7 @@ bool Location::is_valid() const {
     const std::string invalidChars = "<>\"'|*?";
     for (size_t i = 0; i < invalidChars.length(); i++) {
         if (path_.find(invalidChars[i]) != std::string::npos) {
-            log(LOG_ERROR, "Location path contains invalid character '%c': %s", 
+            log(LOG_ERROR, "Location path contains invalid character '%c': %s",
                 invalidChars[i], path_.c_str());
             return false;
         }
@@ -553,41 +566,52 @@ bool Location::is_valid() const {
     if (!redirect_.empty()) {
         std::istringstream iss(redirect_);
         std::string status_str, url;
-        
+
         if (iss >> status_str >> url) {
             // Parse and validate status code
             int status_code = atoi(status_str.c_str());
             if (status_code < 300 || status_code > 399) {
-                log(LOG_ERROR, "Invalid redirect status code: %s (must be 300-399)", status_str.c_str());
+                log(LOG_ERROR,
+                    "Invalid redirect status code: %s (must be 300-399)",
+                    status_str.c_str());
                 return false;
             }
-            
+
             // Validate URL format - must be absolute URL or relative path
             if (url.empty()) {
                 log(LOG_ERROR, "Redirect URL cannot be empty");
                 return false;
             }
-            
-            if (url[0] != '/' && 
-                url.find("http://") != 0 && 
+
+            if (url[0] != '/' && url.find("http://") != 0 &&
                 url.find("https://") != 0) {
-                log(LOG_ERROR, "Redirect URL must be absolute URL or path starting with /: %s", url.c_str());
+                log(LOG_ERROR,
+                    "Redirect URL must be absolute URL or path starting with "
+                    "/: %s",
+                    url.c_str());
                 return false;
             }
-            
+
             // Check for additional parameters and warn
             std::string extra;
             if (iss >> extra) {
-                log(LOG_INFO, "Multiple redirect parameters specified, using first URL: %s", url.c_str());
+                log(LOG_INFO,
+                    "Multiple redirect parameters specified, using first URL: "
+                    "%s",
+                    url.c_str());
             }
         } else {
-            log(LOG_ERROR, "Invalid redirect format: expected 'status_code URL' but got: %s", redirect_.c_str());
+            log(LOG_ERROR,
+                "Invalid redirect format: expected 'status_code URL' but got: "
+                "%s",
+                redirect_.c_str());
             return false;
         }
     }
 
     if (root_.empty()) {
-        log(LOG_ERROR, "Root directive is mandatory for location: %s", path_.c_str());
+        log(LOG_ERROR, "Root directive is mandatory for location: %s",
+            path_.c_str());
         return false;
     }
 
@@ -605,7 +629,8 @@ bool Location::is_valid() const {
     }
 
     if (access(root_.c_str(), R_OK) != 0) {
-        log(LOG_ERROR, "No read permission for root directory: %s", root_.c_str());
+        log(LOG_ERROR, "No read permission for root directory: %s",
+            root_.c_str());
         return false;
     }
 
@@ -618,7 +643,9 @@ bool Location::is_valid() const {
             }
         }
     } else {
-        log(LOG_ERROR, "At least one HTTP method must be allowed for location: %s", path_.c_str());
+        log(LOG_ERROR,
+            "At least one HTTP method must be allowed for location: %s",
+            path_.c_str());
         return false;
     }
 

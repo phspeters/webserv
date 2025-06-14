@@ -16,7 +16,7 @@ void HttpResponse::set_header(const std::string& name,
 
     headers_[lower_name] = value;
 
-    log(LOG_DEBUG, "Response header set: '%s: %s'", lower_name.c_str(),
+    log(LOG_TRACE, "Response header set: '%s: %s'", lower_name.c_str(),
         value.c_str());
 }
 
@@ -24,7 +24,7 @@ void HttpResponse::set_status(int code) {
     status_code_ = code;
     status_message_ = get_status_message(code);
 
-    log(LOG_DEBUG, "Response status set: %d %s", status_code_,
+    log(LOG_TRACE, "Response status set: %d %s", status_code_,
         status_message_.c_str());
 }
 
@@ -68,7 +68,7 @@ std::string HttpResponse::get_headers_string() const {
         oss << it->first << ": " << it->second << "\r\n";
     }
 
-     // Add Content-Type if not already set in headers
+    // Add Content-Type if not already set in headers
     if (headers_.find("content-type") == headers_.end() &&
         !content_type_.empty()) {
         oss << "Content-Type: " << content_type_ << "\r\n";

@@ -61,7 +61,6 @@ StaticFileHandler::StaticFileHandler() {}
 StaticFileHandler::~StaticFileHandler() {}
 
 void StaticFileHandler::handle(Connection* conn) {
-    
     log(LOG_DEBUG, "StaticFileHandler::handle called for client_fd %d",
         conn->client_fd_);
     //--CHECK Check if the request has errors to return an error response
@@ -75,9 +74,10 @@ void StaticFileHandler::handle(Connection* conn) {
     // Check if the request method is allowed (only supporting GET) // Fluxogram
     // --CHECK I don't think it is necessary because of route
     // if (conn->request_data_->method_ != "GET") {
-    //     ErrorHandler::generate_error_response(conn, codes::METHOD_NOT_ALLOWED);
-    //     conn->response_data_->headers_["Allow"] = "GET";
-    //     log(LOG_DEBUG, "StaticFileHandler::handle: Method not allowed for client_fd %d",
+    //     ErrorHandler::generate_error_response(conn,
+    //     codes::METHOD_NOT_ALLOWED); conn->response_data_->headers_["Allow"] =
+    //     "GET"; log(LOG_DEBUG, "StaticFileHandler::handle: Method not allowed
+    //     for client_fd %d",
     //         conn->client_fd_);
     //     return;
     // }
@@ -86,27 +86,35 @@ void StaticFileHandler::handle(Connection* conn) {
 
     // TEMP - Carol
     // if absolute_path ends with a slash, add index at end
-    // if (!absolute_path.empty() && absolute_path[absolute_path.size() - 1] == '/') {
-    //     std::cout << "Location match index: " << conn->location_match_->index_ << std::endl;
-    //     absolute_path += conn->location_match_->index_;
-    //     std::cout << "New absolute path: " << absolute_path << std::endl;
+    // if (!absolute_path.empty() && absolute_path[absolute_path.size() - 1] ==
+    // '/') {
+    //     std::cout << "Location match index: " <<
+    //     conn->location_match_->index_ << std::endl; absolute_path +=
+    //     conn->location_match_->index_; std::cout << "New absolute path: " <<
+    //     absolute_path << std::endl;
     // }
-    if (!absolute_path.empty() && absolute_path[absolute_path.size() - 1] == '/') {
+    if (!absolute_path.empty() &&
+        absolute_path[absolute_path.size() - 1] == '/') {
         if (conn->location_match_) {  // Add this null check
-            std::cout << "Location match index: " << conn->location_match_->index_ << std::endl;
+            std::cout << "Location match index: "
+                      << conn->location_match_->index_ << std::endl;
             absolute_path += conn->location_match_->index_;
             std::cout << "New absolute path: " << absolute_path << std::endl;
         } else {
-            log(LOG_ERROR, "StaticFileHandler::handle: location_match_ is NULL for client_fd %d",
+            log(LOG_ERROR,
+                "StaticFileHandler::handle: location_match_ is NULL for "
+                "client_fd %d",
                 conn->client_fd_);
-            ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
+            ErrorHandler::generate_error_response(conn,
+                                                  codes::INTERNAL_SERVER_ERROR);
             return;
         }
     }
 
     // Fluxogram 301 - check if the request should be a directory
     if (process_directory_redirect(conn, absolute_path)) {
-        log(LOG_DEBUG, "StaticFileHandler::handle: Directory redirect for client_fd %d",
+        log(LOG_DEBUG,
+            "StaticFileHandler::handle: Directory redirect for client_fd %d",
             conn->client_fd_);
         return;  // Redirect was set up, we're done
     }
@@ -115,7 +123,9 @@ void StaticFileHandler::handle(Connection* conn) {
     if (process_directory_index(conn, absolute_path, need_autoindex)) {
         if (need_autoindex) {
             generate_directory_listing(conn, absolute_path);
-            log(LOG_DEBUG, "StaticFileHandler::handle: Autoindex generated for client_fd %d",
+            log(LOG_DEBUG,
+                "StaticFileHandler::handle: Autoindex generated for client_fd "
+                "%d",
                 conn->client_fd_);
             conn->conn_state_ = codes::CONN_WRITING;
             return;
@@ -124,28 +134,34 @@ void StaticFileHandler::handle(Connection* conn) {
 
     // Try to open the file
     int fd = open(absolute_path.c_str(), O_RDONLY);
-    log(LOG_DEBUG, "StaticFileHandler: Trying to open file: %s", absolute_path.c_str());
-    log(LOG_DEBUG, "StaticFileHandler: open() returned fd=%d, errno=%d (%s)", 
+    log(LOG_DEBUG, "StaticFileHandler: Trying to open file: %s",
+        absolute_path.c_str());
+    log(LOG_DEBUG, "StaticFileHandler: open() returned fd=%d, errno=%d (%s)",
         fd, errno, (fd == -1) ? strerror(errno) : "success");
     if (fd == -1) {
         // Fluxogram 404 - request resource not found - call error handler
         if (errno == ENOENT) {
             // File not found
             ErrorHandler::generate_error_response(conn, codes::NOT_FOUND);
-            log(LOG_DEBUG, "StaticFileHandler::handle: File not found for client_fd %d",
+            log(LOG_DEBUG,
+                "StaticFileHandler::handle: File not found for client_fd %d",
                 conn->client_fd_);
             // Not in the Fluxogram, but possible 403 - call error handler
         } else if (errno == EACCES) {
             // Permission denied
             ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
-            log(LOG_DEBUG, "StaticFileHandler::handle: Permission denied for client_fd %d",
+            log(LOG_DEBUG,
+                "StaticFileHandler::handle: Permission denied for client_fd %d",
                 conn->client_fd_);
             // Not in the Fluxogram, but possible 500 - call error handler
         } else {
             // Other error
             std::cout << "1" << std::endl;
-            ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
-            log(LOG_DEBUG, "StaticFileHandler::handle: Internal server error for client_fd %d",
+            ErrorHandler::generate_error_response(conn,
+                                                  codes::INTERNAL_SERVER_ERROR);
+            log(LOG_DEBUG,
+                "StaticFileHandler::handle: Internal server error for "
+                "client_fd %d",
                 conn->client_fd_);
         }
         return;
@@ -157,8 +173,10 @@ void StaticFileHandler::handle(Connection* conn) {
     if (fstat(fd, &file_info) == -1) {
         close(fd);
         std::cout << "2" << std::endl;
-        ErrorHandler::generate_error_response(conn,codes::INTERNAL_SERVER_ERROR);
-        log(LOG_DEBUG, "StaticFileHandler::handle: fstat failed for client_fd %d",
+        ErrorHandler::generate_error_response(conn,
+                                              codes::INTERNAL_SERVER_ERROR);
+        log(LOG_DEBUG,
+            "StaticFileHandler::handle: fstat failed for client_fd %d",
             conn->client_fd_);
         return;
     }
@@ -168,7 +186,9 @@ void StaticFileHandler::handle(Connection* conn) {
     if (!S_ISREG(file_info.st_mode)) {
         close(fd);
         ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
-        log(LOG_DEBUG, "StaticFileHandler::handle: File is not a regular file for client_fd %d",
+        log(LOG_DEBUG,
+            "StaticFileHandler::handle: File is not a regular file for "
+            "client_fd %d",
             conn->client_fd_);
         return;
     }
@@ -204,7 +224,8 @@ void StaticFileHandler::handle(Connection* conn) {
     // Not in the Fluxogram, but possible 500 - call error handler
     if (bytes_read != file_info.st_size) {
         std::cout << "3" << std::endl;
-        ErrorHandler::generate_error_response(conn, codes::INTERNAL_SERVER_ERROR);
+        ErrorHandler::generate_error_response(conn,
+                                              codes::INTERNAL_SERVER_ERROR);
         log(LOG_DEBUG, "StaticFileHandler::handle: Read error for client_fd %d",
             conn->client_fd_);
         return;
@@ -213,12 +234,10 @@ void StaticFileHandler::handle(Connection* conn) {
     // Prepare response headers
     conn->response_data_->set_header("Content-Type", content_type);
 
-
     // Convert file size to string using ostringstream (C++98 compatible)
     std::ostringstream size_stream;
     size_stream << file_info.st_size;
     conn->response_data_->set_header("Content-Length", size_stream.str());
-
 
     // Prepare the response
     // Fluxogram 200
@@ -227,6 +246,7 @@ void StaticFileHandler::handle(Connection* conn) {
     conn->response_data_->body_.assign(file_content.begin(),
                                        file_content.end());
     conn->conn_state_ = codes::CONN_WRITING;
-    log(LOG_DEBUG, "StaticFileHandler::handle: File served successfully for client_fd %d",
+    log(LOG_DEBUG,
+        "StaticFileHandler::handle: File served successfully for client_fd %d",
         conn->client_fd_);
 }

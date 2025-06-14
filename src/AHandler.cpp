@@ -5,12 +5,13 @@ bool AHandler::process_location_redirect(Connection* conn) {
 
     // Check if this location has a redirect
     if (location->redirect_.empty()) {
-        log(LOG_DEBUG, "process_location_redirect: No redirect configured for location %s", 
+        log(LOG_DEBUG,
+            "process_location_redirect: No redirect configured for location %s",
             location->path_.c_str());
         return false;  // No redirect
     }
 
-    log(LOG_INFO, "REDIRECT: Location %s redirecting to %s", 
+    log(LOG_INFO, "REDIRECT: Location %s redirecting to %s",
         location->path_.c_str(), location->redirect_.c_str());
 
     // Set up redirect response
@@ -20,7 +21,6 @@ bool AHandler::process_location_redirect(Connection* conn) {
 }
 
 std::string AHandler::parse_absolute_path(Connection* conn) {
-    
     const Location* request_location = conn->location_match_;
     std::string request_root = request_location->root_;
     const std::string& request_path = conn->request_data_->path_;
@@ -52,14 +52,16 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     }
 
     std::string absolute_path = request_root + relative_path;
-    log(LOG_DEBUG, "parse_absolute_path: Request root: %s, Relative path: %s, Absolute path: %s",
+    log(LOG_DEBUG,
+        "parse_absolute_path: Request root: %s, Relative path: %s, Absolute "
+        "path: %s",
         request_root.c_str(), relative_path.c_str(), absolute_path.c_str());
 
     return (absolute_path);
 }
 
 bool AHandler::process_directory_redirect(Connection* conn,
-                                                   std::string& absolute_path) {
+                                          std::string& absolute_path) {
     std::string path = conn->request_data_->path_;
 
     // Check if the request URI ends with a slash (indicating directory)
@@ -95,8 +97,8 @@ bool AHandler::process_directory_redirect(Connection* conn,
 
 // Handle directory path resolution (index file or autoindex)
 bool AHandler::process_directory_index(Connection* conn,
-                                                std::string absolute_path,
-                                                bool& need_autoindex) {
+                                       std::string& absolute_path,
+                                       bool& need_autoindex) {
     // Ensure absolute_path ends with /
     if (absolute_path[absolute_path.length() - 1] != '/') {
         absolute_path += '/';
@@ -105,10 +107,11 @@ bool AHandler::process_directory_index(Connection* conn,
     // Get location config
     const Location* location = conn->location_match_;
     std::string index = location->index_;
-
     if (!index.empty()) {
         std::string index_path = absolute_path + index;
         struct stat index_stat;
+        log(LOG_FATAL, "process_directory_index: Checking for index file at %s",
+            index_path.c_str());
         // Check if index file exists and is a regular file
         if (stat(index_path.c_str(), &index_stat) == 0 &&
             S_ISREG(index_stat.st_mode)) {
@@ -121,28 +124,35 @@ bool AHandler::process_directory_index(Connection* conn,
     // No index file found, check if autoindex is enabled
     if (location->autoindex_) {
         need_autoindex = true;
+        log(LOG_DEBUG,
+            "process_directory_index: No index file found, autoindex enabled "
+            "for %s",
+            absolute_path.c_str());
         return true;  // Will use autoindex
     }
 
     // No index file and autoindex is disabled
     // Fluxogram 403 - autoindex off - call error handler
-    conn->response_data_->status_code_ = 403;
-    conn->response_data_->status_message_ = "Forbidden";
-    // conn->state_ = Connection::CONN_WRITING;
+    ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+    log(LOG_DEBUG,
+        "process_directory_index: No index file and autoindex disabled for %s",
+        absolute_path.c_str());
     return false;  // Error response set
 }
 
-void AHandler::generate_directory_listing(
-    Connection* conn, const std::string& dir_path) {
+void AHandler::generate_directory_listing(Connection* conn,
+                                          const std::string& dir_path) {
     // Open the directory
     DIR* dir = opendir(dir_path.c_str());
+    log(LOG_DEBUG, "AHandler::generate_directory_listing: Opening directory %s",
+        dir_path.c_str());
+
     // Fluxogram 500 - request resource not found - call error handler
     if (!dir) {
-        std::cerr << "Failed to open directory for listing: " << strerror(errno)
-                  << std::endl;
-        conn->response_data_->status_code_ = 500;
-        conn->response_data_->status_message_ = "Internal Server Error";
-        // conn->state_ = Connection::CONN_WRITING;
+        log(LOG_ERROR, "Failed to open directory for listing: %s",
+            strerror(errno));
+        ErrorHandler::generate_error_response(conn,
+                                              codes::INTERNAL_SERVER_ERROR);
         return;
     }
 

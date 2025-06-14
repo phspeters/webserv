@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>Meow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #74ebd5, #ACB6E5);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .container {
+            text-align: center;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        h1 {
+            font-size: 4rem;
+            color: white;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+            letter-spacing: -1px;
+            margin-bottom: 20px;
+        }
+        
+        .circle {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .circle-1 {
+            width: 300px;
+            height: 300px;
+            top: -100px;
+            left: -100px;
+            animation: float 8s infinite ease-in-out;
+        }
+        
+        .circle-2 {
+            width: 200px;
+            height: 200px;
+            bottom: -50px;
+            right: 100px;
+            animation: float 12s infinite ease-in-out;
+        }
+        
+        .circle-3 {
+            width: 400px;
+            height: 400px;
+            bottom: -200px;
+            left: 10%;
+            animation: float 15s infinite ease-in-out;
+        }
+        
+        .circle-4 {
+            width: 100px;
+            height: 100px;
+            top: 20%;
+            right: 10%;
+            animation: float 10s infinite ease-in-out;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) rotate(0deg);
+            }
+            50% {
+                transform: translateY(-20px) rotate(5deg);
+            }
+        }
+        
+        .btn {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 12px 28px;
+            background: white;
+            color: #74ebd5;
+            border-radius: 30px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="circle circle-1"></div>
+    <div class="circle circle-2"></div>
+    <div class="circle circle-3"></div>
+    <div class="circle circle-4"></div>
+    
+    <div class="container">
+        <h1>Meow!</h1>
+        
+        <div name="cat" class="cat">
+            <div class="between_ears">
+                <div class="ears" name="right" style="transform: rotate(150deg);"></div>
+                <div class="ears" name="left" style="transform: rotate(210deg);"></div>
+            </div>
+            <div class="face">
+                <div class="between_eyes">
+                    <div class="eyes" name="right_eye"></div>
+                    <div class="eyes" name="left_eye"></div>
+                </div>
+                <div class="lowerface">
+                    <div class="whiskers_right">
+                        <div class="cheek_top_right" name="right"></div>
+                        <div class="cheek_bottom_right" name="right"></div>
+                    </div>
+                    <div class="nose">
+                        <div class="nose_detail"></div>
+                    </div>
+                    <div class="whiskers_left">
+                        <div class="cheek_top_left" name="left"></div>
+                        <div class="cheek_bottom_left" name="left"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <a href="../index.html" class="btn">Back to Home</a>
+    </div>
+</body>
+</html>
