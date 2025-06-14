@@ -387,81 +387,81 @@ void WebServer::handle_write(Connection* conn) {
         return;
     }
 
-    log(LOG_DEBUG,
-        "handle_write: Pre-access check. client_fd %d. request_data_ pointer: "
-        "%p",
-        conn->client_fd_, static_cast<void*>(conn->request_data_));
+    //log(LOG_DEBUG,
+    //    "handle_write: Pre-access check. client_fd %d. request_data_ pointer: "
+    //    "%p",
+    //    conn->client_fd_, static_cast<void*>(conn->request_data_));
 
-    const char* method_cstr = NULL;
-    const char* path_cstr = NULL;
+    //const char* method_cstr = NULL;
+    //const char* path_cstr = NULL;
 
-    try {
-        if (conn->request_data_->method_.empty()) {
-            log(LOG_DEBUG,
-                "handle_write: conn->request_data_->method_ is empty for "
-                "client_fd %d.",
-                conn->client_fd_);
-        }
-        log(LOG_DEBUG, "handle_write: method_.length() = %zu for client_fd %d",
-            conn->request_data_->method_.length(), conn->client_fd_);
-        method_cstr = conn->request_data_->method_.c_str();
-        log(LOG_DEBUG,
-            "handle_write: Successfully obtained method_.c_str() for client_fd "
-            "%d. Pointer: %p",
-            conn->client_fd_, static_cast<const void*>(method_cstr));
+    //try {
+    //    if (conn->request_data_->method_.empty()) {
+    //        log(LOG_DEBUG,
+    //            "handle_write: conn->request_data_->method_ is empty for "
+    //            "client_fd %d.",
+    //            conn->client_fd_);
+    //    }
+    //    log(LOG_DEBUG, "handle_write: method_.length() = %zu for client_fd %d",
+    //        conn->request_data_->method_.length(), conn->client_fd_);
+    //    method_cstr = conn->request_data_->method_.c_str();
+    //    log(LOG_DEBUG,
+    //        "handle_write: Successfully obtained method_.c_str() for client_fd "
+    //        "%d. Pointer: %p",
+    //        conn->client_fd_, static_cast<const void*>(method_cstr));
 
-        if (conn->request_data_->path_.empty()) {
-            log(LOG_DEBUG,
-                "handle_write: conn->request_data_->path_ is empty for "
-                "client_fd %d.",
-                conn->client_fd_);
-        }
-        log(LOG_DEBUG, "handle_write: path_.length() = %zu for client_fd %d",
-            conn->request_data_->path_.length(), conn->client_fd_);
-        path_cstr = conn->request_data_->path_.c_str();
-        log(LOG_DEBUG,
-            "handle_write: Successfully obtained path_.c_str() for client_fd "
-            "%d. Pointer: %p",
-            conn->client_fd_, static_cast<const void*>(path_cstr));
+    //    if (conn->request_data_->path_.empty()) {
+    //        log(LOG_DEBUG,
+    //            "handle_write: conn->request_data_->path_ is empty for "
+    //            "client_fd %d.",
+    //            conn->client_fd_);
+    //    }
+    //    log(LOG_DEBUG, "handle_write: path_.length() = %zu for client_fd %d",
+    //        conn->request_data_->path_.length(), conn->client_fd_);
+    //    path_cstr = conn->request_data_->path_.c_str();
+    //    log(LOG_DEBUG,
+    //        "handle_write: Successfully obtained path_.c_str() for client_fd "
+    //        "%d. Pointer: %p",
+    //        conn->client_fd_, static_cast<const void*>(path_cstr));
 
-    } catch (const std::exception& e) {
-        log(LOG_ERROR,
-            "handle_write: Exception while accessing method/path string "
-            "members for client_fd %d: %s. request_data_ pointer: %p",
-            conn->client_fd_, e.what(),
-            static_cast<void*>(conn->request_data_));
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
-        if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
-            conn->conn_state_ = codes::CONN_WRITING;
-        }
-        update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
-        return;
-    }
+    //} catch (const std::exception& e) {
+    //    log(LOG_ERROR,
+    //        "handle_write: Exception while accessing method/path string "
+    //        "members for client_fd %d: %s. request_data_ pointer: %p",
+    //        conn->client_fd_, e.what(),
+    //        static_cast<void*>(conn->request_data_));
+    //    ErrorHandler::generate_error_response(conn,
+    //                                          codes::INTERNAL_SERVER_ERROR);
+    //    if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
+    //        conn->conn_state_ = codes::CONN_WRITING;
+    //    }
+    //    update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
+    //    return;
+    //}
 
-    if (method_cstr == NULL || path_cstr == NULL) {
-        log(LOG_ERROR,
-            "handle_write: method_cstr or path_cstr is NULL after try-catch "
-            "for client_fd %d. This indicates a problem. Method ptr: %p, Path "
-            "ptr: %p",
-            conn->client_fd_, static_cast<const void*>(method_cstr),
-            static_cast<const void*>(path_cstr));
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
-        if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
-            conn->conn_state_ = codes::CONN_WRITING;
-        }
-        update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
-        return;
-    }
+    //if (method_cstr == NULL || path_cstr == NULL) {
+    //    log(LOG_ERROR,
+    //        "handle_write: method_cstr or path_cstr is NULL after try-catch "
+    //        "for client_fd %d. This indicates a problem. Method ptr: %p, Path "
+    //        "ptr: %p",
+    //        conn->client_fd_, static_cast<const void*>(method_cstr),
+    //        static_cast<const void*>(path_cstr));
+    //    ErrorHandler::generate_error_response(conn,
+    //                                          codes::INTERNAL_SERVER_ERROR);
+    //    if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
+    //        conn->conn_state_ = codes::CONN_WRITING;
+    //    }
+    //    update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
+    //    return;
+    //}
 
-    log(LOG_DEBUG,
-        "handle_write: Processing request method=%s, path=%s for client_fd %d",
-        method_cstr, path_cstr, conn->client_fd_);
+    //log(LOG_DEBUG,
+    //    "handle_write: Processing request method=%s, path=%s for client_fd %d",
+    //    method_cstr, path_cstr, conn->client_fd_);
 
-    log(LOG_DEBUG,
-        "handle_write: Initial conn->parse_status_ = %d for client_fd %d",
-        conn->parse_status_, conn->client_fd_);
+    //log(LOG_DEBUG,
+    //    "handle_write: Initial conn->parse_status_ = %d for client_fd %d",
+    //    conn->parse_status_, conn->client_fd_);
 
     // log(LOG_DEBUG,
     //     "handle_write: Processing request method=%s, path=%s for client_fd
@@ -474,18 +474,18 @@ void WebServer::handle_write(Connection* conn) {
         ErrorHandler::generate_error_response(conn);
     }
 
-    log(LOG_DEBUG,
-        "handle_write: conn->conn_state_ = %d before handler logic for "
-        "client_fd %d",
-        conn->conn_state_, conn->client_fd_);
+    //log(LOG_DEBUG,
+    //    "handle_write: conn->conn_state_ = %d before handler logic for "
+    //    "client_fd %d",
+    //    conn->conn_state_, conn->client_fd_);
 
     if (conn->conn_state_ == codes::CONN_PROCESSING ||
         conn->conn_state_ == codes::CONN_CGI_EXEC) {
         bool can_execute_handler = true;
-        log(LOG_DEBUG,
-            "handle_write: [Checkpoint 1] Inside handler logic block for "
-            "client_fd %d.",
-            conn->client_fd_);  // NOVO LOG
+        //log(LOG_DEBUG,
+        //    "handle_write: [Checkpoint 1] Inside handler logic block for "
+        //    "client_fd %d.",
+        //    conn->client_fd_);  // NOVO LOG
 
         // Route the request to the appropriate handler
         if (!conn->active_handler_) {

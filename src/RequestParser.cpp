@@ -78,6 +78,17 @@ codes::ParseStatus RequestParser::parse(Connection* conn) {
                 return parse_status;
                 break;
         }
+
+        if (parse_status == codes::PARSE_INCOMPLETE) {
+            log(LOG_DEBUG, "Parsing incomplete for connection: %i",
+                conn->client_fd_);
+            break;  // Need more data
+        } else if (parse_status >= codes::PARSE_ERROR) {
+            log(LOG_ERROR, "Parsing error for connection: %i, status: %d",
+                conn->client_fd_, parse_status);
+            conn->parser_state_ = codes::PARSING_ERROR;  // Set error state
+            return parse_status;  // Return the error status
+        }
     }
 
     log(LOG_DEBUG,
@@ -102,30 +113,22 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
         if (buffer.size() > http_limits::MAX_REQUEST_LINE_LENGTH) {
             log(LOG_ERROR, "Request line too long for connection: %i",
                 conn->client_fd_);
-            // Update parsing state to indicate error
-            conn->parser_state_ = codes::PARSING_ERROR;
             return codes::PARSE_REQUEST_TOO_LONG;
         }
         log(LOG_DEBUG, "Request line incomplete for connection: %i",
             conn->client_fd_);
-        // CHECK if in this case the parsing state should be updated to
-        // PARSING_ERROR - Carol
         return codes::PARSE_INCOMPLETE;
     }
 
     // Get the complete request line
     std::string request_line(buffer.begin(), line_end);
     if (!split_request_line(request, request_line)) {
-        // Update parsing state to indicate error
-        conn->parser_state_ = codes::PARSING_ERROR;
         return codes::PARSE_INVALID_REQUEST_LINE;
     }
 
     // Validate components
     codes::ParseStatus validation_status = validate_request_line(request);
     if (validation_status != codes::PARSE_SUCCESS) {
-        // Update parsing state to indicate error
-        conn->parser_state_ = codes::PARSING_ERROR;
         // Return the specific validation error
         return validation_status;
     }
@@ -134,11 +137,11 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
     buffer.erase(buffer.begin(), line_end + 2);
 
     // Move to header parsing
-    conn->parser_state_ = codes::PARSING_HEADERS;
     log(LOG_DEBUG, "Request line parsed successfully for connection: %i",
         conn->client_fd_);
 
-    return codes::PARSE_INCOMPLETE;
+    conn->parser_state_ = codes::PARSING_HEADERS;
+    return codes::PARSE_SUCCESS;
 }
 
 bool RequestParser::split_request_line(HttpRequest* request,
@@ -479,14 +482,9 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
             if (buffer.size() > http_limits::MAX_HEADER_VALUE_LENGTH) {
                 log(LOG_ERROR, "Header value too long for connection: %i",
                     conn->client_fd_);
-                conn->parser_state_ = codes::PARSING_ERROR;
                 return codes::PARSE_HEADER_TOO_LONG;
             }
-            // CHECK - CAROL
-            std::cout << "Buffer size " << buffer.size() << std::endl;
-            std::cout << "http_limits " << http_limits::MAX_HEADER_VALUE_LENGTH
-                      << std::endl;
-            std::cout << "HERE" << std::endl;
+
             log(LOG_DEBUG, "Headers parsing incomplete for connection: %i",
                 conn->client_fd_);
             return codes::PARSE_INCOMPLETE;
@@ -508,7 +506,6 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
         if (parse_status != codes::PARSE_SUCCESS) {
             log(LOG_ERROR, "Failed to parse header '%s' for connection: %i",
                 header_line.c_str(), conn->client_fd_);
-            conn->parser_state_ = codes::PARSING_ERROR;
             return parse_status;
         }
 
@@ -525,7 +522,6 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
             log(LOG_ERROR,
                 "Header validation failed for connection: %i with status: %i",
                 conn->client_fd_, parse_status);
-            conn->parser_state_ = codes::PARSING_ERROR;
             return parse_status;
         }
         return determine_request_body_handling(conn);
@@ -607,17 +603,18 @@ codes::ParseStatus RequestParser::determine_request_body_handling(
                 return codes::PARSE_HEADERS_COMPLETE;
             }
         }
+        // TODO - Delete this? Already checked in validate_headers
         // Modification - Carol
-        size_t content_size = std::atoi(content_length.c_str());
-        if (content_size > conn->virtual_server_->client_max_body_size_) {
-            std::cout << content_size << " > "
-                      << conn->virtual_server_->client_max_body_size_
-                      << std::endl;
-            ErrorHandler::generate_error_response(conn,
-                                                  codes::PAYLOAD_TOO_LARGE);
-            conn->parser_state_ = codes::PARSING_ERROR;
-            return codes::PARSE_INVALID_CONTENT_LENGTH;
-        }
+        // size_t content_size = std::atoi(content_length.c_str());
+        // if (content_size > conn->virtual_server_->client_max_body_size_) {
+        //    std::cout << content_size << " > "
+        //              << conn->virtual_server_->client_max_body_size_
+        //              << std::endl;
+        //    ErrorHandler::generate_error_response(conn,
+        //                                          codes::PAYLOAD_TOO_LARGE);
+        //    conn->parser_state_ = codes::PARSING_ERROR;
+        //    return codes::PARSE_INVALID_CONTENT_LENGTH;
+        //}
     }
 
     // No body needed or zero-length body
@@ -750,7 +747,6 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     "Failed to parse chunk header for "
                     "connection: %i with status: %i",
                     conn->client_fd_, parse_status);
-                conn->parser_state_ = codes::PARSING_ERROR;
                 return parse_status;  // Either incomplete or error
             }
 
@@ -778,7 +774,6 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
             log(LOG_ERROR,
                 "Failed to read chunk data for connection: %i with status: %i",
                 conn->client_fd_, parse_status);
-            conn->parser_state_ = codes::PARSING_ERROR;
             return parse_status;
         }
 
@@ -791,7 +786,6 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     "Failed to process chunk terminator for "
                     "connection: %i with status: %i",
                     conn->client_fd_, parse_status);
-                conn->parser_state_ = codes::PARSING_ERROR;
                 return parse_status;
             }
         }

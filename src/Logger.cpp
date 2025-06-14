@@ -220,7 +220,7 @@ int log(log_level level, const char* msg, ...) {
     else if (level == LOG_INFO)
         std::cerr << CYAN << "[INFO]\t";
     else if (level == LOG_WARNING)
-        std::cerr << MAGENTA << "[WARNING]\t";
+        std::cerr << MAGENTA << "[WARN]\t";
     else if (level == LOG_ERROR)
         std::cerr << LIGHT_RED << "[ERROR]\t";
     else if (level == LOG_FATAL)

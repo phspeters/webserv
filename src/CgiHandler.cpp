@@ -612,7 +612,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
         }
 
         std::string header_line(buffer.begin(), line_end_it);
-        log(LOG_FATAL, "CGI header line: %s", header_line.c_str());
+        log(LOG_TRACE, "CGI header line: %s", header_line.c_str());
 
         // Process the header line
         size_t colon_pos = header_line.find(':');
