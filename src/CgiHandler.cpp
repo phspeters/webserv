@@ -172,13 +172,12 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
             return false;
         }
 
-        WebServer* web_server = WebServer::get_instance();
         if (request_method == "POST" && !conn->request_data_->body_.empty()) {
             conn->cgi_handler_state_ = codes::CGI_HANDLER_WRITING_TO_PIPE;
 
             // Register this pipe with epoll for EPOLLOUT events
-            if (!web_server->register_epoll_events(conn->cgi_pipe_stdin_fd_,
-                                                   EPOLLOUT)) {
+            if (!WebServer::register_epoll_events(conn->cgi_pipe_stdin_fd_,
+                                                  EPOLLOUT)) {
                 log(LOG_ERROR, "Failed to register CGI stdin pipe with epoll");
                 finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
                 return false;
@@ -194,8 +193,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
             // If it's a GET request or an empty POST, we can close the stdin
             // pipe
             if (conn->cgi_pipe_stdin_fd_ != -1) {
-                web_server->get_conn_manager()->unregister_pipe(
-                    conn->cgi_pipe_stdin_fd_);
+                WebServer::unregister_active_pipe(conn->cgi_pipe_stdin_fd_);
                 close(conn->cgi_pipe_stdin_fd_);
                 conn->cgi_pipe_stdin_fd_ = -1;  // Mark as closed
                 log(LOG_DEBUG,
@@ -205,8 +203,8 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
             }
 
             // Register this pipe with epoll for EPOLLIN events
-            if (!web_server->register_epoll_events(conn->cgi_pipe_stdout_fd_,
-                                                   EPOLLIN)) {
+            if (!WebServer::register_epoll_events(conn->cgi_pipe_stdout_fd_,
+                                                  EPOLLIN)) {
                 log(LOG_ERROR, "Failed to register CGI stdout pipe with epoll");
                 finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
                 return false;
@@ -394,8 +392,6 @@ void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
 bool CgiHandler::handle_parent_pipes(Connection* conn,
                                      int server_to_cgi_pipe[2],
                                      int cgi_to_server_pipe[2]) {
-    WebServer* web_server = WebServer::get_instance();
-
     close(server_to_cgi_pipe[0]);  // Parent closes read-end of pipe
     conn->cgi_pipe_stdin_fd_ = server_to_cgi_pipe[1];  // Parent keeps write-end
 
@@ -403,7 +399,7 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
     conn->cgi_pipe_stdout_fd_ = cgi_to_server_pipe[0];  // Parent keeps read-end
 
     // Set the pipe stdin to non-blocking mode
-    if (!web_server->set_non_blocking(conn->cgi_pipe_stdin_fd_)) {
+    if (!WebServer::set_non_blocking(conn->cgi_pipe_stdin_fd_)) {
         log(LOG_ERROR,
             "Failed to set CGI stdin pipe to non-blocking mode for "
             "client %d",
@@ -413,7 +409,7 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
     }
 
     // Set the pipe stdout to non-blocking mode
-    if (!web_server->set_non_blocking(conn->cgi_pipe_stdout_fd_)) {
+    if (!WebServer::set_non_blocking(conn->cgi_pipe_stdout_fd_)) {
         log(LOG_ERROR,
             "Failed to set CGI stdout pipe to non-blocking mode for "
             "client %d",
@@ -423,10 +419,8 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
     }
 
     // Register the pipe with the ConnectionManager
-    web_server->get_conn_manager()->register_pipe(conn->cgi_pipe_stdin_fd_,
-                                                  conn);
-    web_server->get_conn_manager()->register_pipe(conn->cgi_pipe_stdout_fd_,
-                                                  conn);
+    WebServer::register_active_pipe(conn->cgi_pipe_stdin_fd_, conn);
+    WebServer::register_active_pipe(conn->cgi_pipe_stdout_fd_, conn);
 
     log(LOG_DEBUG, "Parent pipes set up for CGI: stdin_fd=%d, stdout_fd=%d",
         conn->cgi_pipe_stdin_fd_, conn->cgi_pipe_stdout_fd_);
@@ -434,8 +428,6 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
 }
 
 void CgiHandler::handle_cgi_write(Connection* conn) {
-    WebServer* web_server = WebServer::get_instance();
-
     // Write request body to CGI's stdin pipe
     ssize_t bytes_written =
         write(conn->cgi_pipe_stdin_fd_, conn->request_data_->body_.data(),
@@ -461,8 +453,8 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
             codes::CGI_HANDLER_READING_FROM_PIPE;  // Switch to reading state
 
         // Register the stdout pipe for reading
-        if (!web_server->register_epoll_events(conn->cgi_pipe_stdout_fd_,
-                                               EPOLLIN)) {
+        if (!WebServer::register_epoll_events(conn->cgi_pipe_stdout_fd_,
+                                              EPOLLIN)) {
             log(LOG_ERROR, "Failed to register CGI stdout pipe with epoll");
             finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
             return;
@@ -771,8 +763,6 @@ bool CgiHandler::set_status_line(Connection* conn) {
 }
 
 void CgiHandler::cleanup_cgi_resources(Connection* conn) {
-    WebServer* web_server = WebServer::get_instance();
-
     // Always try to reap/kill any remaining child process
     if (conn->cgi_pid_ > 0) {
         int status;
@@ -798,16 +788,14 @@ void CgiHandler::cleanup_cgi_resources(Connection* conn) {
 
     // Clean up pipes
     if (conn->cgi_pipe_stdin_fd_ != -1) {
+        WebServer::unregister_active_pipe(conn->cgi_pipe_stdin_fd_);
         close(conn->cgi_pipe_stdin_fd_);
-        web_server->get_conn_manager()->unregister_pipe(
-            conn->cgi_pipe_stdin_fd_);
         conn->cgi_pipe_stdin_fd_ = -1;  // Mark as closed
     }
 
     if (conn->cgi_pipe_stdout_fd_ != -1) {
+        WebServer::unregister_active_pipe(conn->cgi_pipe_stdout_fd_);
         close(conn->cgi_pipe_stdout_fd_);
-        web_server->get_conn_manager()->unregister_pipe(
-            conn->cgi_pipe_stdout_fd_);
         conn->cgi_pipe_stdout_fd_ = -1;  // Mark as closed
     }
 

@@ -15,9 +15,9 @@ Connection::Connection(int fd, const VirtualServer* default_virtual_server)
       cgi_handler_state_(codes::CGI_HANDLER_IDLE),
       parse_status_(codes::PARSE_INCOMPLETE),
       write_status_(codes::WRITING_INCOMPLETE),
-      active_handler_(NULL),        
-      location_match_(NULL),        
-      cgi_pid_(-1),                
+      active_handler_(NULL),
+      location_match_(NULL),
+      cgi_pid_(-1),
       cgi_pipe_stdin_fd_(-1),
       cgi_pipe_stdout_fd_(-1),
       cgi_script_path_(""),
@@ -43,13 +43,13 @@ Connection::~Connection() {
     if (static_file_fd_ >= 0) {
         close(static_file_fd_);
     }
-    WebServer* web_server = WebServer::get_instance();
+
     if (cgi_pipe_stdin_fd_ >= 0) {
-        web_server->get_conn_manager()->unregister_pipe(cgi_pipe_stdin_fd_);
+        WebServer::unregister_active_pipe(cgi_pipe_stdin_fd_);
         close(cgi_pipe_stdin_fd_);
     }
     if (cgi_pipe_stdout_fd_ >= 0) {
-        web_server->get_conn_manager()->unregister_pipe(cgi_pipe_stdout_fd_);
+        WebServer::unregister_active_pipe(cgi_pipe_stdout_fd_);
         close(cgi_pipe_stdout_fd_);
     }
 
@@ -94,14 +94,14 @@ void Connection::reset_for_keep_alive() {
         close(static_file_fd_);
         static_file_fd_ = -1;
     }
-    WebServer* web_server = WebServer::get_instance();
+
     if (cgi_pipe_stdin_fd_ >= 0) {
-        web_server->get_conn_manager()->unregister_pipe(cgi_pipe_stdin_fd_);
+        WebServer::unregister_active_pipe(cgi_pipe_stdin_fd_);
         close(cgi_pipe_stdin_fd_);
         cgi_pipe_stdin_fd_ = -1;
     }
     if (cgi_pipe_stdout_fd_ >= 0) {
-        web_server->get_conn_manager()->unregister_pipe(cgi_pipe_stdout_fd_);
+        WebServer::unregister_active_pipe(cgi_pipe_stdout_fd_);
         close(cgi_pipe_stdout_fd_);
         cgi_pipe_stdout_fd_ = -1;
     }

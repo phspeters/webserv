@@ -85,24 +85,26 @@ Connection* ConnectionManager::get_connection(int client_fd) {
 int ConnectionManager::close_timed_out_connections() {
     int closed = 0;
     time_t current_time = time(NULL);
-    
+
     std::map<int, Connection*>::iterator it = active_connections_.begin();
     while (it != active_connections_.end()) {
         Connection* conn = it->second;
-        
-        if (conn && (current_time - conn->last_activity_) > http_limits::TIMEOUT) {
-            log(LOG_WARNING, "Connection (fd: %d) timed out after %ld seconds, closing",
+
+        if (conn &&
+            (current_time - conn->last_activity_) > http_limits::TIMEOUT) {
+            log(LOG_WARNING,
+                "Connection (fd: %d) timed out after %ld seconds, closing",
                 conn->client_fd_, http_limits::TIMEOUT);
-            
+
             int fd_to_close = conn->client_fd_;
-            ++it; 
+            ++it;
             close_connection(fd_to_close);
             closed++;
         } else {
             ++it;
         }
     }
-    
+
     return closed;
 }
 
@@ -127,6 +129,7 @@ void ConnectionManager::unregister_pipe(int pipe_fd) {
     // Unregister a pipe from the connection manager
     std::map<int, Connection*>::iterator it = active_pipes_.find(pipe_fd);
     if (it != active_pipes_.end()) {
+        WebServer::unregister_epoll_events(pipe_fd);
         active_pipes_.erase(it);
         log(LOG_INFO, "Unregistered pipe (fd: %i)", pipe_fd);
     } else {

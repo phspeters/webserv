@@ -785,32 +785,87 @@ bool WebServer::set_non_blocking(int fd) {
 }
 
 bool WebServer::register_epoll_events(int fd, uint32_t events) {
+    WebServer* server = get_instance();
+    if (!server) {
+        log(LOG_FATAL,
+            "WebServer instance is NULL, cannot register epoll events");
+        return false;
+    }
+
     struct epoll_event event;
     memset(&event, 0, sizeof(event));
     event.events = events;
     event.data.fd = fd;
 
-    if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &event) < 0) {
+    if (epoll_ctl(server->epoll_fd_, EPOLL_CTL_ADD, fd, &event) < 0) {
         log(LOG_ERROR, "Failed to register socket '%i' on epoll", fd);
         return false;
     }
 
+    log(LOG_DEBUG, "Registered socket '%i' on epoll with events %u", fd,
+        events);
+    return true;
+}
+
+bool WebServer::unregister_epoll_events(int fd) {
+    WebServer* server = get_instance();
+    if (!server) {
+        log(LOG_FATAL,
+            "WebServer instance is NULL, cannot unregister epoll events");
+        return false;
+    }
+
+    if (epoll_ctl(server->epoll_fd_, EPOLL_CTL_DEL, fd, NULL) < 0) {
+        log(LOG_ERROR, "Failed to unregister socket '%i' on epoll", fd);
+        return false;
+    }
+
+    log(LOG_DEBUG, "Unregistered socket '%i' on epoll", fd);
     return true;
 }
 
 bool WebServer::update_epoll_events(int fd, uint32_t events) {
+    WebServer* server = get_instance();
+    if (!server) {
+        log(LOG_FATAL,
+            "WebServer instance is NULL, cannot update epoll events");
+        return false;
+    }
+
     struct epoll_event event;
     memset(&event, 0, sizeof(event));
     event.events = events;
     event.data.fd = fd;
 
-    if (epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &event) < 0) {
+    if (epoll_ctl(server->epoll_fd_, EPOLL_CTL_MOD, fd, &event) < 0) {
         log(LOG_ERROR, "Failed to up epoll events for socket '%i'", fd);
         return false;
     }
 
     log(LOG_DEBUG, "Updated epoll events for socket '%i' to %u", fd, events);
     return true;
+}
+
+void WebServer::register_active_pipe(int pipe_fd, Connection* conn) {
+    WebServer* server = get_instance();
+    if (!server) {
+        log(LOG_FATAL,
+            "WebServer instance is NULL, cannot register active pipe");
+        return;
+    }
+
+    server->get_conn_manager()->register_pipe(pipe_fd, conn);
+}
+
+void WebServer::unregister_active_pipe(int pipe_fd) {
+    WebServer* server = get_instance();
+    if (!server) {
+        log(LOG_FATAL,
+            "WebServer instance is NULL, cannot unregister active pipe");
+        return;
+    }
+
+    server->get_conn_manager()->unregister_pipe(pipe_fd);
 }
 
 bool WebServer::setup_signal_handlers() {

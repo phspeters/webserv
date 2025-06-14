@@ -38,9 +38,12 @@ class WebServer {
     // Getter for the ConnectionManager
     ConnectionManager* get_conn_manager() const { return conn_manager_; }
 
-    bool set_non_blocking(int fd);
-    bool register_epoll_events(int fd, uint32_t events = EPOLLIN);
-    bool update_epoll_events(int fd, uint32_t mode);
+    static bool set_non_blocking(int fd);
+    static bool register_epoll_events(int fd, uint32_t events = EPOLLIN);
+    static bool unregister_epoll_events(int fd);
+    static bool update_epoll_events(int fd, uint32_t mode);
+    static void register_active_pipe(int pipe_fd, Connection* conn);
+    static void unregister_active_pipe(int pipe_fd);
 
    private:
     //--------------------------------------
@@ -90,7 +93,7 @@ class WebServer {
     void match_host_header(Connection* conn);
     const Location* find_matching_location(const VirtualServer* virtual_server,
                                            const std::string& path) const;
-    bool is_cgi_extension(const std::string &request_uri) const;
+    bool is_cgi_extension(const std::string& request_uri) const;
     bool validate_request_location(Connection* conn);
     AHandler* choose_handler(Connection* conn);
     void close_client_connection(Connection* conn);

@@ -66,8 +66,7 @@ void ErrorHandler::generate_error_response(Connection* conn,
     conn->response_data_->set_header("date", get_current_gmt_time());
 
     // Update connection state to writing
-    WebServer* web_server = WebServer::get_instance();
-    web_server->update_epoll_events(conn->client_fd_, EPOLLOUT);
+    WebServer::update_epoll_events(conn->client_fd_, EPOLLOUT);
     conn->conn_state_ = codes::CONN_WRITING;
 
     std::string status_msg = get_status_message(status_code);
