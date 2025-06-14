@@ -15,7 +15,7 @@ static const std::string DEFAULT_500_ERROR_PAGE = "/error/500.html";
 // Location defaults
 static const bool DEFAULT_AUTOINDEX = false;
 static const bool DEFAULT_CGI_ENABLED = false;
-static const std::string DEFAULT_INDEX = "";
+static const std::string DEFAULT_INDEX = "index.html";
 
 static std::vector<std::string> create_default_allowed_methods() {
     std::vector<std::string> methods;

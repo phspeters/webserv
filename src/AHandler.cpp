@@ -100,15 +100,15 @@ bool AHandler::process_directory_index(Connection* conn,
                                        std::string& absolute_path,
                                        bool& need_autoindex) {
     // Ensure absolute_path ends with /
-    if (absolute_path[absolute_path.length() - 1] != '/') {
-        absolute_path += '/';
-    }
+    // if (absolute_path[absolute_path.length() - 1] != '/') {
+    //     absolute_path += '/';
+    // }
 
     // Get location config
     const Location* location = conn->location_match_;
     std::string index = location->index_;
     if (!index.empty()) {
-        std::string index_path = absolute_path + index;
+        std::string index_path = absolute_path;
         struct stat index_stat;
         log(LOG_FATAL, "process_directory_index: Checking for index file at %s",
             index_path.c_str());
