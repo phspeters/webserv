@@ -36,6 +36,8 @@ bool RequestParser::read_from_socket(Connection* conn) {
     log(LOG_DEBUG, "Read %zd bytes from socket (fd: %i)", bytes_read,
         conn->client_fd_);
 
+    log_buffer(LOG_TRACE, conn->read_buffer_);
+
     return true;
 }
 

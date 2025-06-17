@@ -3,17 +3,6 @@
 
 #include "webserv.hpp"
 
-void print_request(const Connection* conn);
-void print_response(const Connection* conn);
-int print_buffer(std::vector<char>& buffer);
-
-void print_virtual_server(const VirtualServer& virtual_server);
-void log_client_error(int status_code, const Connection* conn,
-                      const VirtualServer& config);
-
-// TEMP
-void build_mock_response(Connection* conn);
-
 #define RESET "\x1B[0m"
 #define RED "\x1B[31m"
 #define LIGHT_RED "\x1B[91m"
@@ -37,6 +26,14 @@ enum log_level {
 };
 
 int log(log_level level, const char* msg, ...);
+void log_request(log_level level, const Connection* conn);
+void log_response(log_level level, const Connection* conn);
+int log_buffer(log_level level, std::vector<char>& buffer);
+
+void log_virtual_server(log_level level,
+                        const VirtualServer& virtual_server);
+void log_client_error(int status_code, const Connection* conn,
+                      const VirtualServer& config);
 std::string get_current_gmt_time();
 
 #endif  // LOGGER_HPP

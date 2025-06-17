@@ -1,6 +1,10 @@
 #include "webserv.hpp"
 
-void print_request(const Connection* conn) {
+void log_request(log_level level,const Connection* conn) {
+    if (level < ACTIVE_LOG_LEVEL) {
+        return;  // No output for lower log levels
+    }
+
     if (conn == NULL) {
         std::cerr << "Error: connection is NULL" << std::endl;
         return;
@@ -24,7 +28,11 @@ void print_request(const Connection* conn) {
     std::cout << "\n====================================\n" << std::endl;
 }
 
-void print_response(const Connection* conn) {
+void log_response(log_level level, Connection* conn) {
+    if (level < ACTIVE_LOG_LEVEL) {
+        return;  // No output for lower log levels
+    }
+
     if (conn == NULL) {
         std::cerr << "Error: connection is NULL" << std::endl;
         return;
@@ -47,9 +55,14 @@ void print_response(const Connection* conn) {
                     conn->response_data_->body_.size());
 }
 
-int print_buffer(std::vector<char>& buffer) {
-    std::cout << "Buffer content: " << std::endl;
+int log_buffer(log_level level,std::vector<char>& buffer) {
+    if (level < ACTIVE_LOG_LEVEL) {
+        return 0;
+    }
+
+    std::cout << "========== BUFFER START ==========" << std::endl;
     int bytes_written = write(1, buffer.data(), buffer.size());
+    std::cout << "=========== BUFFER END ===========" << std::endl;
 
     if (bytes_written < 0) {
         std::cerr << "Error writing to buffer" << std::endl;
@@ -63,8 +76,12 @@ int print_buffer(std::vector<char>& buffer) {
     return bytes_written;
 }
 
-void print_virtual_server(const VirtualServer& virtual_server) {
-    std::cout << "---------- SERVER CONFIG ----------" << std::endl;
+void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
+    if (level < ACTIVE_LOG_LEVEL) {
+        return;  // No output for lower log levels
+    }
+
+    std::cout << "=========== VIRTUAL SERVER ==========" << std::endl;
     std::cout << "Host Name: " << virtual_server.host_name_ << std::endl;
     std::cout << "Host: " << virtual_server.host_ << std::endl;
     std::cout << "Port: " << virtual_server.port_ << std::endl;
@@ -143,7 +160,7 @@ void print_virtual_server(const VirtualServer& virtual_server) {
         }
     }
 
-    std::cout << "----------------------------------" << std::endl;
+    std::cout << "================================" << std::endl;
 }
 
 void log_client_error(int status_code, const Connection* conn,

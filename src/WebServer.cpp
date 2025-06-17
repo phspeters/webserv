@@ -147,9 +147,7 @@ bool WebServer::parse_config_file(const std::string& filename) {
                     port, host.c_str());
             }
 
-            if (log(LOG_TRACE, "Parsed virtual server configuration:") > 0) {
-                print_virtual_server(virtual_server);
-            }
+            log_virtual_server(LOG_TRACE, virtual_server);
 
         } else {
             log(LOG_ERROR, "Error parsing server block");
@@ -361,9 +359,7 @@ void WebServer::handle_read(Connection* conn) {
         return;
     }
 
-    if (log(LOG_TRACE, "Printing request for debugging:") > 0) {
-        print_request(conn);
-    }
+    log_request(LOG_TRACE, conn);
 
     // Match path from uri to best location
     conn->location_match_ = find_matching_location(conn->virtual_server_,
