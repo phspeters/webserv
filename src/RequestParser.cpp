@@ -842,8 +842,10 @@ codes::ParseStatus RequestParser::parse_chunk_header(std::vector<char>& buffer,
         return codes::PARSE_INVALID_CHUNK_SIZE;
     }
 
-    // Remove chunk size line
-    buffer.erase(buffer.begin(), line_end + 2);
+    // Remove chunk size line if not 0 (last chunk)
+    if (out_chunk_size != 0) {
+        buffer.erase(buffer.begin(), line_end + 2);
+    }
 
     log(LOG_DEBUG, "Parsed chunk size: %zu for connection: %i", out_chunk_size,
         buffer.size());
@@ -907,6 +909,16 @@ codes::ParseStatus RequestParser::process_chunk_terminator(
 // Helper method for finishing chunked parsing (last chunk)
 codes::ParseStatus RequestParser::finish_chunked_parsing(
     std::vector<char>& buffer) {
+    std::string terminator = "0\r\n\r\n";
+    std::vector<char>::iterator chunk_terminator =
+        std::search(buffer.begin(), buffer.end(), terminator.begin(), terminator.end());
+    if (chunk_terminator != buffer.end()) {
+        log(LOG_DEBUG, "No trailers found, chunked parsing complete for connection");
+        // Remove the terminator
+        buffer.erase(buffer.begin(), chunk_terminator + terminator.size());
+        return codes::PARSE_SUCCESS;  // Need more data
+    }
+
     // Process trailers line-by-line until we find an empty line
     while (true) {
         // Find the end of the current line
