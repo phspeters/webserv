@@ -4,36 +4,34 @@
 static const int DEFAULT_PORT = 80;
 static const std::string DEFAULT_HOST = "0.0.0.0";
 static const size_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024;  // 1MB
+static const size_t DEFAULT_LOCATION_MAX_BODY_SIZE = 0;
 static const std::string DEFAULT_SERVER_NAME = "default_server";
 
 // Error page defaults
 static const int DEFAULT_404_ERROR_CODE = 404;
-static const std::string DEFAULT_404_ERROR_PAGE = "/error/404.html";
+static const std::string DEFAULT_404_ERROR_PAGE =
+    "<html><body><h1>Error: 404</h1><p>Not Found.</p></body></html>";
 static const int DEFAULT_500_ERROR_CODE = 500;
-static const std::string DEFAULT_500_ERROR_PAGE = "/error/500.html";
+static const std::string DEFAULT_500_ERROR_PAGE =
+    "<html><body><h1>Error: 500</h1><p>Internal Server "
+    "Error.</p></body></html>";
 
 // Location defaults
 static const bool DEFAULT_AUTOINDEX = false;
 static const bool DEFAULT_CGI_ENABLED = false;
 static const std::string DEFAULT_INDEX = "index.html";
 
-static std::vector<std::string> create_default_allowed_methods() {
-    std::vector<std::string> methods;
-    methods.push_back("GET");
-    methods.push_back("POST");
-    methods.push_back("DELETE");
-    return methods;
-}
-
-static const std::vector<std::string> DEFAULT_ALLOWED_METHODS =
-    create_default_allowed_methods();
-
 // Constructor for Location with defaults
 Location::Location()
     : autoindex_(DEFAULT_AUTOINDEX),
       cgi_enabled_(DEFAULT_CGI_ENABLED),
-      index_(DEFAULT_INDEX) {
-    allowed_methods_ = DEFAULT_ALLOWED_METHODS;
+      index_(DEFAULT_INDEX),
+      client_max_body_size_(DEFAULT_LOCATION_MAX_BODY_SIZE) {
+    std::vector<std::string> methods;
+    methods.push_back("GET");
+    methods.push_back("POST");
+    methods.push_back("DELETE");
+    allowed_methods_ = methods;
 }
 
 // Default constructor implementation
@@ -42,10 +40,12 @@ VirtualServer::VirtualServer()
       listen_specified_(false),
       client_max_body_size_(DEFAULT_MAX_BODY_SIZE) {
     host_ = DEFAULT_HOST;
+    server_names_.push_back(DEFAULT_SERVER_NAME);
+    error_pages_[DEFAULT_404_ERROR_CODE] = DEFAULT_404_ERROR_PAGE;
+    error_pages_[DEFAULT_500_ERROR_CODE] = DEFAULT_500_ERROR_PAGE;
 }
 
-bool VirtualServer::parse_server_block(std::ifstream& file,
-                                       VirtualServer& virtual_server) {
+bool VirtualServer::parse_server_block(std::ifstream& file) {
     std::string line;
 
     while (std::getline(file, line)) {
@@ -57,12 +57,11 @@ bool VirtualServer::parse_server_block(std::ifstream& file,
 
         // Check for block end
         if (line == "}") {
-            virtual_server.apply_defaults();
             return true;
         }
 
         if (line.find("location") == 0) {
-            if (!parse_location_block(file, line, virtual_server)) {
+            if (!parse_location_block(file, line)) {
                 return false;
             }
             continue;
@@ -70,7 +69,7 @@ bool VirtualServer::parse_server_block(std::ifstream& file,
 
         std::string key, value;
         if (parse_directive(line, key, value)) {
-            if (!handle_server_directive(key, value, virtual_server)) {
+            if (!handle_server_directive(key, value)) {
                 return false;
             }
         } else {
@@ -84,8 +83,8 @@ bool VirtualServer::parse_server_block(std::ifstream& file,
     return false;
 }
 
-bool VirtualServer::parse_location_block(std::ifstream& file, std::string line,
-                                         VirtualServer& virtual_server) {
+bool VirtualServer::parse_location_block(std::ifstream& file,
+                                         std::string line) {
     // Extract location path
     size_t pathStart = line.find_first_not_of(" \t", 8);  // Skip "location"
     if (pathStart == std::string::npos) return false;
@@ -120,7 +119,7 @@ bool VirtualServer::parse_location_block(std::ifstream& file, std::string line,
         }
 
         if (locLine == "}") {
-            virtual_server.locations_.push_back(location);
+            locations_.push_back(location);
             return true;
         }
 
@@ -137,25 +136,25 @@ bool VirtualServer::parse_location_block(std::ifstream& file, std::string line,
 
 // Handle server directives with a separate method
 bool VirtualServer::handle_server_directive(const std::string& key,
-                                            const std::string& value,
-                                            VirtualServer& virtual_server) {
+                                            const std::string& value) {
     if (key == "listen") {
-        virtual_server.listen_specified_ = true;
-        return parse_listen(value, virtual_server);
+        listen_specified_ = true;
+        return parse_listen(value);
     } else if (key == "server_name") {
-        return parse_server_name(value, virtual_server);
+        return parse_server_name(value);
     } else if (key == "error_page") {
-        return parse_error_page(value, virtual_server);
+        return parse_error_page(value);
     } else if (key == "client_max_body_size") {
-        return parse_client_max_body_size(value, virtual_server);
+        client_max_body_size_ = parse_client_max_body_size(value);
+        if (client_max_body_size_ == -1) return false;
+        return true;
     } else {
         log(LOG_ERROR, "Unknown directive in server block: %s", key.c_str());
         return false;
     }
 }
 
-bool VirtualServer::parse_listen(const std::string& value,
-                                 VirtualServer& virtual_server) {
+bool VirtualServer::parse_listen(const std::string& value) {
     // Extract hostname/IP and port from the value
     std::string host_str;
     size_t colonPos = value.find(':');
@@ -164,7 +163,7 @@ bool VirtualServer::parse_listen(const std::string& value,
         // Format: hostname:port or ip:port
         host_str = value.substr(0, colonPos);
         std::istringstream iss(value.substr(colonPos + 1));
-        if (!(iss >> virtual_server.port_)) {
+        if (!(iss >> port_)) {
             log(LOG_ERROR, "Invalid listen directive format: %s",
                 value.c_str());
             return false;
@@ -172,7 +171,7 @@ bool VirtualServer::parse_listen(const std::string& value,
     } else {
         // Just a port number
         std::istringstream iss(value);
-        if (!(iss >> virtual_server.port_)) {
+        if (!(iss >> port_)) {
             log(LOG_ERROR, "Invalid listen directive format: %s",
                 value.c_str());
             return false;
@@ -181,17 +180,17 @@ bool VirtualServer::parse_listen(const std::string& value,
     }
 
     // Store the original hostname
-    virtual_server.host_name_ = host_str;
+    host_name_ = host_str;
 
     // Special case for "0.0.0.0" (INADDR_ANY) - no need to resolve
     if (host_str == "0.0.0.0") {
-        virtual_server.host_ = host_str;
+        host_ = host_str;
     } else {
         // Check if already a valid IP address
         struct in_addr addr;
         if (inet_pton(AF_INET, host_str.c_str(), &addr) == 1) {
             // Already a valid IP, keep it
-            virtual_server.host_ = host_str;
+            host_ = host_str;
         } else {
             // Resolve hostname to IP
             struct addrinfo hints, *res;
@@ -210,7 +209,7 @@ bool VirtualServer::parse_listen(const std::string& value,
             char ip_str[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &((struct sockaddr_in*)res->ai_addr)->sin_addr,
                       ip_str, sizeof(ip_str));
-            virtual_server.host_ = ip_str;
+            host_ = ip_str;
 
             // Free the linked list returned by getaddrinfo
             freeaddrinfo(res);
@@ -220,11 +219,10 @@ bool VirtualServer::parse_listen(const std::string& value,
     return true;
 }
 
-bool VirtualServer::parse_client_max_body_size(const std::string& value,
-                                               VirtualServer& virtual_server) {
+ssize_t VirtualServer::parse_client_max_body_size(const std::string& value) {
     if (value.empty()) {
         log(LOG_ERROR, "client_max_body_size cannot be empty");
-        return false;
+        return -1;
     }
 
     size_t size = 0;
@@ -244,7 +242,7 @@ bool VirtualServer::parse_client_max_body_size(const std::string& value,
         if (!isdigit(numPart[i])) {
             log(LOG_ERROR, "Invalid client_max_body_size value: %s",
                 value.c_str());
-            return false;
+            return -1;
         }
     }
 
@@ -253,7 +251,7 @@ bool VirtualServer::parse_client_max_body_size(const std::string& value,
     if (!(iss >> size)) {
         log(LOG_ERROR, "Invalid number format in client_max_body_size: %s",
             value.c_str());
-        return false;
+        return -1;
     }
 
     // Apply unit multiplier if present
@@ -271,38 +269,37 @@ bool VirtualServer::parse_client_max_body_size(const std::string& value,
             default:
                 log(LOG_ERROR, "Unknown size unit '%c' in client_max_body_size",
                     unit);
-                return false;
+                return -1;
         }
     }
 
     // Check for zero
     if (size == 0) {
         log(LOG_ERROR, "client_max_body_size cannot be zero");
-        return false;
+        return -1;
     }
 
-    virtual_server.client_max_body_size_ = size;
-    return true;
+    return size;
 }
 
-bool VirtualServer::parse_server_name(const std::string& value,
-                                      VirtualServer& virtual_server) {
+bool VirtualServer::parse_server_name(const std::string& value) {
     std::istringstream iss(value);
     std::string name;
     while (iss >> name) {
-        virtual_server.server_names_.push_back(name);
+        server_names_.push_back(name);
     }
     return true;
 }
 
-bool VirtualServer::parse_error_page(const std::string& value,
-                                     VirtualServer& virtual_server) {
+bool VirtualServer::parse_error_page(const std::string& value) {
     std::istringstream iss(value);
     int code;
     std::string path;
     if (iss >> code >> path) {
-        virtual_server.error_pages_[code] = path;
-        return true;
+        error_pages_[code] = path;
+        if (!has_valid_error_pages()) {
+            return false;
+        }
     }
     log(LOG_ERROR, "Error parsing error_page directive: %s", value.c_str());
     return false;
@@ -351,6 +348,8 @@ bool VirtualServer::add_directive_value(Location& location,
         }
     } else if (key == "redirect") {
         location.redirect_ = value;
+    } else if (key == "client_max_body_size") {
+        location.client_max_body_size_ = parse_client_max_body_size(value);
     } else {
         log(LOG_ERROR, "Unknown directive in location block: %s", key.c_str());
         return false;
@@ -392,23 +391,6 @@ bool VirtualServer::parse_directive(const std::string& line, std::string& key,
     value = trim(value);
 
     return !value.empty();
-}
-
-bool VirtualServer::apply_defaults() {
-    // Apply server-level defaults
-    if (server_names_.empty()) {
-        server_names_.push_back(DEFAULT_SERVER_NAME);
-    }
-
-    // Default error pages if not specified
-    if (error_pages_.find(DEFAULT_404_ERROR_CODE) == error_pages_.end()) {
-        error_pages_[DEFAULT_404_ERROR_CODE] = DEFAULT_404_ERROR_PAGE;
-    }
-    if (error_pages_.find(DEFAULT_500_ERROR_CODE) == error_pages_.end()) {
-        error_pages_[DEFAULT_500_ERROR_CODE] = DEFAULT_500_ERROR_PAGE;
-    }
-
-    return true;
 }
 
 // Implementation of validation methods
@@ -491,13 +473,6 @@ bool VirtualServer::has_valid_error_pages() const {
 
         // Check if the error page file exists and is readable
         struct stat file_stat;
-        if (stat(error_page_path.c_str(), &file_stat) != 0) {
-            // File doesn't exist - this is okay, we'll use default error pages
-            log(LOG_WARNING,
-                "Error page file does not exist: %s (will use default)",
-                error_page_path.c_str());
-            continue;
-        }
 
         if (!S_ISREG(file_stat.st_mode)) {
             log(LOG_ERROR, "Error page path is not a regular file: %s",
@@ -533,9 +508,9 @@ bool VirtualServer::is_valid() const {
         return false;
     }
 
-    if (!has_valid_error_pages()) {
-        return false;
-    }
+    // if (!has_valid_error_pages()) {
+    //     return false;
+    // }
 
     return true;
 }
@@ -645,6 +620,12 @@ bool Location::is_valid() const {
     } else {
         log(LOG_ERROR,
             "At least one HTTP method must be allowed for location: %s",
+            path_.c_str());
+        return false;
+    }
+
+    if (client_max_body_size_ == -1) {
+        log(LOG_ERROR, "invalid client_max_body_size for location: %s",
             path_.c_str());
         return false;
     }

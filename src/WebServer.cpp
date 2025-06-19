@@ -117,7 +117,7 @@ bool WebServer::parse_config_file(const std::string& filename) {
             // Create a new virtual server
             VirtualServer virtual_server;
             // Parse the server block
-            if (VirtualServer::parse_server_block(file, virtual_server)) {
+            if (virtual_server.parse_server_block(file)) {
                 std::string error_msg;
                 if (!virtual_server.is_valid()) {
                     log(LOG_ERROR,

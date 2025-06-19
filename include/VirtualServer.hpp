@@ -12,6 +12,7 @@ struct Location {
     bool cgi_enabled_;
     std::string index_;
     std::string redirect_;
+    ssize_t client_max_body_size_;
 
     // Constructor with defaults
     Location();
@@ -28,7 +29,7 @@ struct VirtualServer {
     int port_;
     bool listen_specified_;
     std::vector<std::string> server_names_;
-    size_t client_max_body_size_;
+    ssize_t client_max_body_size_;
 
     // Error pages mapping (status code -> file path)
     std::map<int, std::string> error_pages_;
@@ -40,23 +41,18 @@ struct VirtualServer {
     VirtualServer();
 
     // Parse configuration from a file
-    static bool parse_server_block(std::ifstream& file, VirtualServer& config);
-    static bool parse_location_block(std::ifstream& file, std::string line,
-                                     VirtualServer& config);
-    static bool handle_server_directive(const std::string& key,
-                                        const std::string& value,
-                                        VirtualServer& config);
-    static bool parse_listen(const std::string& value, VirtualServer& config);
-    static bool parse_server_name(const std::string& value,
-                                  VirtualServer& config);
-    static bool parse_error_page(const std::string& value,
-                                 VirtualServer& config);
-    static bool parse_client_max_body_size(const std::string& value,
-                                           VirtualServer& config);
-    static bool parse_directive(const std::string& line, std::string& key,
-                                std::string& value);
-    static bool add_directive_value(Location& location, const std::string& key,
-                                    const std::string& value);
+    bool parse_server_block(std::ifstream& file);
+    bool parse_location_block(std::ifstream& file, std::string line);
+    bool handle_server_directive(const std::string& key,
+                                 const std::string& value);
+    bool parse_listen(const std::string& value);
+    bool parse_server_name(const std::string& value);
+    bool parse_error_page(const std::string& value);
+    ssize_t parse_client_max_body_size(const std::string& value);
+    bool parse_directive(const std::string& line, std::string& key,
+                         std::string& value);
+    bool add_directive_value(Location& location, const std::string& key,
+                             const std::string& value);
     bool apply_defaults();
 
     // Validation methods
@@ -64,7 +60,7 @@ struct VirtualServer {
     bool is_valid_host() const;
     bool is_valid_port() const;
     bool has_valid_locations() const;
-    bool has_valid_error_pages() const; 
+    bool has_valid_error_pages() const;
 };
 
 #endif  // VIRTUALSERVER_HPP

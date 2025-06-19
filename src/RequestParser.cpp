@@ -660,7 +660,7 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
             // Validate Content-Length
             std::string content_length = request->get_header("content-length");
             char* end_ptr;
-            size_t body_size =
+            ssize_t body_size =
                 std::strtoul(content_length.c_str(), &end_ptr, 10);
 
             // Check for invalid Content-Length format
@@ -670,6 +670,12 @@ codes::ParseStatus RequestParser::validate_headers(Connection* conn) {
                 // Translates to response status 400
                 return codes::PARSE_INVALID_CONTENT_LENGTH;
             }
+
+            // size_t max_size = conn->virtual_server_->client_max_body_size_;
+            // if (conn->location_match_ &&
+            // conn->location_match_->client_max_body_size_ > 0) {
+            //     max_size = conn->location_match_->client_max_body_size_;
+            // }
 
             if (body_size > conn->virtual_server_->client_max_body_size_) {
                 log(LOG_ERROR, "Content-Length exceeds maximum size: %zu",
@@ -910,10 +916,11 @@ codes::ParseStatus RequestParser::process_chunk_terminator(
 codes::ParseStatus RequestParser::finish_chunked_parsing(
     std::vector<char>& buffer) {
     std::string terminator = "0\r\n\r\n";
-    std::vector<char>::iterator chunk_terminator =
-        std::search(buffer.begin(), buffer.end(), terminator.begin(), terminator.end());
+    std::vector<char>::iterator chunk_terminator = std::search(
+        buffer.begin(), buffer.end(), terminator.begin(), terminator.end());
     if (chunk_terminator != buffer.end()) {
-        log(LOG_DEBUG, "No trailers found, chunked parsing complete for connection");
+        log(LOG_DEBUG,
+            "No trailers found, chunked parsing complete for connection");
         // Remove the terminator
         buffer.erase(buffer.begin(), chunk_terminator + terminator.size());
         return codes::PARSE_SUCCESS;  // Need more data
