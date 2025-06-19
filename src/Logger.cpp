@@ -1,6 +1,41 @@
 #include "webserv.hpp"
 
-void log_request(log_level level,const Connection* conn) {
+int log(log_level level, const char* msg, ...) {
+    if (level < ACTIVE_LOG_LEVEL) {
+        return 0;
+    }
+
+    char output[8192];
+    va_list args;
+    int n;
+
+    va_start(args, msg);
+    n = vsnprintf(output, 8192, msg, args);
+
+    std::string timestamp = get_current_gmt_time();
+
+    if (level == LOG_TRACE)
+        std::cerr << WHITE << "[TRACE]\t";
+    else if (level == LOG_DEBUG)
+        std::cerr << WHITE << "[DEBUG]\t";
+    else if (level == LOG_INFO)
+        std::cerr << CYAN << "[INFO]\t";
+    else if (level == LOG_WARNING)
+        std::cerr << MAGENTA << "[WARN]\t";
+    else if (level == LOG_ERROR)
+        std::cerr << LIGHT_RED << "[ERROR]\t";
+    else if (level == LOG_FATAL)
+        std::cerr << RED << "[FATAL]\t";
+    else if (level == LOG_OFF)
+        return 0;  // No output for LOG_OFF
+
+    std::cerr << timestamp << output << RESET << std::endl;
+    va_end(args);
+
+    return n;
+}
+
+void log_request(log_level level, const Connection* conn) {
     if (level < ACTIVE_LOG_LEVEL) {
         return;  // No output for lower log levels
     }
@@ -10,22 +45,42 @@ void log_request(log_level level,const Connection* conn) {
         return;
     }
 
-    std::cout << "\n==== INCOMING REQUEST (fd: " << conn->client_fd_
+    std::string timestamp = get_current_gmt_time();
+
+    if (level == LOG_TRACE)
+        std::cerr << WHITE << "[TRACE]\t";
+    else if (level == LOG_DEBUG)
+        std::cerr << WHITE << "[DEBUG]\t";
+    else if (level == LOG_INFO)
+        std::cerr << CYAN << "[INFO]\t";
+    else if (level == LOG_WARNING)
+        std::cerr << MAGENTA << "[WARN]\t";
+    else if (level == LOG_ERROR)
+        std::cerr << LIGHT_RED << "[ERROR]\t";
+    else if (level == LOG_FATAL)
+        std::cerr << RED << "[FATAL]\t";
+    else if (level == LOG_OFF)
+        return;  // No output for LOG_OFF
+
+    std::cerr << timestamp;
+
+    std::cerr << "\n==== INCOMING REQUEST (fd: " << conn->client_fd_
               << ") ====\n\n";
-    std::cout << "method: " << conn->request_data_->method_ << std::endl;
-    std::cout << "uri: " << conn->request_data_->uri_ << std::endl;
-    std::cout << "version: " << conn->request_data_->version_ << std::endl;
-    std::cout << "headers: " << std::endl;
+    std::cerr << "method: " << conn->request_data_->method_ << std::endl;
+    std::cerr << "uri: " << conn->request_data_->uri_ << std::endl;
+    std::cerr << "version: " << conn->request_data_->version_ << std::endl;
+    std::cerr << "headers: " << std::endl;
     for (std::map<std::string, std::string>::const_iterator it =
              conn->request_data_->headers_.begin();
          it != conn->request_data_->headers_.end(); ++it) {
-        std::cout << "  " << it->first << ": " << it->second << std::endl;
+        std::cerr << "  " << it->first << ": " << it->second << std::endl;
     }
-    std::cout << "body: " << std::endl;
-    std::cout.write(conn->request_data_->body_.data(),
+    std::cerr << "body: " << std::endl;
+    std::cerr.write(conn->request_data_->body_.data(),
                     conn->request_data_->body_.size());
-    std::cout << "Parse status: " << conn->parse_status_ << std::endl;
-    std::cout << "\n====================================\n" << std::endl;
+    std::cerr << "Parse status: " << conn->parse_status_ << std::endl;
+    std::cerr << "\n====================================\n"
+              << RESET << std::endl;
 }
 
 void log_response(log_level level, Connection* conn) {
@@ -38,31 +93,70 @@ void log_response(log_level level, Connection* conn) {
         return;
     }
 
-    std::cout << "\n==== HTTP RESPONSE ====\n";
-    std::cout << "Status: " << conn->response_data_->status_code_ << " "
+    std::string timestamp = get_current_gmt_time();
+
+    if (level == LOG_TRACE)
+        std::cerr << WHITE << "[TRACE]\t";
+    else if (level == LOG_DEBUG)
+        std::cerr << WHITE << "[DEBUG]\t";
+    else if (level == LOG_INFO)
+        std::cerr << CYAN << "[INFO]\t";
+    else if (level == LOG_WARNING)
+        std::cerr << MAGENTA << "[WARN]\t";
+    else if (level == LOG_ERROR)
+        std::cerr << LIGHT_RED << "[ERROR]\t";
+    else if (level == LOG_FATAL)
+        std::cerr << RED << "[FATAL]\t";
+    else if (level == LOG_OFF)
+        return;  // No output for LOG_OFF
+
+    std::cerr << timestamp;
+
+    std::cerr << "\n==== HTTP RESPONSE ====\n";
+    std::cerr << "Status: " << conn->response_data_->status_code_ << " "
               << conn->response_data_->status_message_ << std::endl;
-    std::cout << "Headers: ";
+    std::cerr << "Headers: ";
     for (std::map<std::string, std::string>::const_iterator it =
              conn->response_data_->headers_.begin();
          it != conn->response_data_->headers_.end(); ++it) {
-        std::cout << it->first << "=" << it->second << "; ";
+        std::cerr << it->first << "=" << it->second << "; ";
     }
-    std::cout << std::endl;
-    std::cout << "Body size: " << conn->response_data_->body_.size() << " bytes"
+    std::cerr << std::endl;
+    std::cerr << "Body size: " << conn->response_data_->body_.size() << " bytes"
               << std::endl;
-    std::cout << "=====================" << std::endl;
-    std::cout.write(conn->response_data_->body_.data(),
+    std::cerr << "---------------------" << std::endl;
+    std::cerr.write(conn->response_data_->body_.data(),
                     conn->response_data_->body_.size());
+    std::cerr << "=====================" << RESET << std::endl;
 }
 
-int log_buffer(log_level level,std::vector<char>& buffer) {
+int log_buffer(log_level level, std::vector<char>& buffer) {
     if (level < ACTIVE_LOG_LEVEL) {
         return 0;
     }
 
-    std::cout << "========== BUFFER START ==========" << std::endl;
+    std::string timestamp = get_current_gmt_time();
+
+    if (level == LOG_TRACE)
+        std::cerr << WHITE << "[TRACE]\t";
+    else if (level == LOG_DEBUG)
+        std::cerr << WHITE << "[DEBUG]\t";
+    else if (level == LOG_INFO)
+        std::cerr << CYAN << "[INFO]\t";
+    else if (level == LOG_WARNING)
+        std::cerr << MAGENTA << "[WARN]\t";
+    else if (level == LOG_ERROR)
+        std::cerr << LIGHT_RED << "[ERROR]\t";
+    else if (level == LOG_FATAL)
+        std::cerr << RED << "[FATAL]\t";
+    else if (level == LOG_OFF)
+        return 0;  // No output for LOG_OFF
+
+    std::cerr << timestamp;
+
+    std::cerr << "========== BUFFER START ==========" << std::endl;
     int bytes_written = write(1, buffer.data(), buffer.size());
-    std::cout << "=========== BUFFER END ===========" << std::endl;
+    std::cerr << "=========== BUFFER END ===========" << std::endl;
 
     if (bytes_written < 0) {
         std::cerr << "Error writing to buffer" << std::endl;
@@ -73,6 +167,8 @@ int log_buffer(log_level level,std::vector<char>& buffer) {
         std::cerr << "Buffer is empty" << std::endl;
     }
 
+    std::cerr << RESET << std::endl;
+
     return bytes_written;
 }
 
@@ -80,6 +176,25 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
     if (level < ACTIVE_LOG_LEVEL) {
         return;  // No output for lower log levels
     }
+
+    std::string timestamp = get_current_gmt_time();
+
+    if (level == LOG_TRACE)
+        std::cerr << WHITE << "[TRACE]\t";
+    else if (level == LOG_DEBUG)
+        std::cerr << WHITE << "[DEBUG]\t";
+    else if (level == LOG_INFO)
+        std::cerr << CYAN << "[INFO]\t";
+    else if (level == LOG_WARNING)
+        std::cerr << MAGENTA << "[WARN]\t";
+    else if (level == LOG_ERROR)
+        std::cerr << LIGHT_RED << "[ERROR]\t";
+    else if (level == LOG_FATAL)
+        std::cerr << RED << "[FATAL]\t";
+    else if (level == LOG_OFF)
+        return;  // No output for LOG_OFF
+
+    std::cerr << timestamp;
 
     std::cout << "=========== VIRTUAL SERVER ==========" << std::endl;
     std::cout << "Host Name: " << virtual_server.host_name_ << std::endl;
@@ -160,51 +275,7 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
         }
     }
 
-    std::cout << "================================" << std::endl;
-}
-
-void log_client_error(int status_code, const Connection* conn,
-                      const VirtualServer& virtual_server) {
-    std::cerr << "Client error " << status_code << " ("
-              << get_status_message(status_code) << ") for connection "
-              << conn->client_fd_ << " on ";
-
-    if (!virtual_server.server_names_.empty()) {
-        std::cerr << virtual_server.server_names_[0];
-    } else {
-        std::cerr << "default server";
-    }
-
-    std::cerr << ":" << virtual_server.port_;
-
-    if (conn->request_data_ && !conn->request_data_->uri_.empty()) {
-        std::cerr << " - URI: " << conn->request_data_->uri_;
-    }
-
-    std::cerr << std::endl;
-}
-
-void build_mock_response(Connection* conn) {
-    HttpResponse* mock_response = conn->response_data_;
-    if (mock_response == NULL) {
-        std::cerr << "Error: response_data_ is NULL" << std::endl;
-        return;
-    }
-
-    mock_response->status_code_ = 200;
-    mock_response->status_message_ = "OK";
-    mock_response->set_header("Content-Type", "text/plain");
-    mock_response->set_header("Content-Length", "13");
-    mock_response->set_header("Connection", "close");
-    mock_response->set_header("Date", "Wed, 21 Oct 2015 07:28:00 GMT");
-    mock_response->set_header("Server", "webserv/1.0");
-    mock_response->set_header("Last-Modified", "Wed, 21 Oct 2015 07:28:00 GMT");
-    mock_response->set_header("Content-Language", "en-US");
-    mock_response->set_header("Authorization", "Basic dXNlcm5hbWU6cGFzc3dvcmQ=");
-    mock_response->set_header("Cookie", "sessionId=abc123");
-    mock_response->set_header("Host", "localhost:8080");
-    std::string hello_str = "Hello, World!";
-    mock_response->body_.assign(hello_str.begin(), hello_str.end());
+    std::cout << "================================" << RESET << std::endl;
 }
 
 std::string get_current_gmt_time() {
@@ -214,39 +285,4 @@ std::string get_current_gmt_time() {
 
     strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S: ", tm_info);
     return std::string(buffer);
-}
-
-int log(log_level level, const char* msg, ...) {
-    if (level < ACTIVE_LOG_LEVEL) {
-        return 0;
-    }
-
-    char output[8192];
-    va_list args;
-    int n;
-
-    va_start(args, msg);
-    n = vsnprintf(output, 8192, msg, args);
-
-    std::string timestamp = get_current_gmt_time();
-
-    if (level == LOG_TRACE)
-        std::cerr << WHITE << "[TRACE]\t";
-    else if (level == LOG_DEBUG)
-        std::cerr << WHITE << "[DEBUG]\t";
-    else if (level == LOG_INFO)
-        std::cerr << CYAN << "[INFO]\t";
-    else if (level == LOG_WARNING)
-        std::cerr << MAGENTA << "[WARN]\t";
-    else if (level == LOG_ERROR)
-        std::cerr << LIGHT_RED << "[ERROR]\t";
-    else if (level == LOG_FATAL)
-        std::cerr << RED << "[FATAL]\t";
-    else if (level == LOG_OFF)
-        return 0;  // No output for LOG_OFF
-
-    std::cerr << timestamp << output << RESET << std::endl;
-    va_end(args);
-
-    return n;
 }

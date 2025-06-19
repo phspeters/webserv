@@ -32,8 +32,6 @@ int log_buffer(log_level level, std::vector<char>& buffer);
 
 void log_virtual_server(log_level level,
                         const VirtualServer& virtual_server);
-void log_client_error(int status_code, const Connection* conn,
-                      const VirtualServer& config);
 std::string get_current_gmt_time();
 
 #endif  // LOGGER_HPP
