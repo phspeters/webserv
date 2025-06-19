@@ -7,22 +7,13 @@ RequestParser::~RequestParser() {}
 bool RequestParser::read_from_socket(Connection* conn) {
     log(LOG_DEBUG, "Reading from socket (fd: %i)", conn->client_fd_);
 
-    // Read data from the client socket
-    size_t read_size = 0;
-    if (conn->conn_state_ == codes::PARSING_REQUEST_LINE ||
-        conn->conn_state_ == codes::PARSING_HEADERS) {
-        read_size = conn->read_buffer_.writable_space();
-    } else if (conn->conn_state_ == codes::PARSING_CHUNKED_BODY ||
-               conn->conn_state_ == codes::PARSING_BODY) {
-        read_size = conn->read_buffer_.size();
-    } else {
-        log(LOG_FATAL, "Invalid connection state for reading: %d",
-            conn->conn_state_);
-        return false;  // Invalid state for reading
-    }
+    // Resize the read buffer to accommodate incoming data
+    size_t original_size = conn->read_buffer_.size();
+    conn->read_buffer_.resize(original_size + CHUNK_SIZE);
 
-    ssize_t bytes_read =
-        recv(conn->client_fd_, conn->read_buffer_.write_ptr(), read_size, 0);
+    // Read data from the client socket
+    ssize_t bytes_read = recv(
+        conn->client_fd_, &conn->read_buffer_[original_size], CHUNK_SIZE, 0);
 
     if (bytes_read == 0) {
         // Connection closed by client
@@ -36,11 +27,11 @@ bool RequestParser::read_from_socket(Connection* conn) {
         return false;
     }
 
-	// Move the last pointer forward by the number of bytes read	
-	conn->read_buffer_.has_written(bytes_read);
-
     // Update the last activity timestamp
     conn->last_activity_ = time(NULL);
+
+    // Resize the buffer to the actual size read
+    conn->read_buffer_.resize(original_size + bytes_read);
 
     log(LOG_DEBUG, "Read %zd bytes from socket (fd: %i)", bytes_read,
         conn->client_fd_);
@@ -919,11 +910,10 @@ codes::ParseStatus RequestParser::process_chunk_terminator(
 codes::ParseStatus RequestParser::finish_chunked_parsing(
     std::vector<char>& buffer) {
     std::string terminator = "0\r\n\r\n";
-    std::vector<char>::iterator chunk_terminator = std::search(
-        buffer.begin(), buffer.end(), terminator.begin(), terminator.end());
+    std::vector<char>::iterator chunk_terminator =
+        std::search(buffer.begin(), buffer.end(), terminator.begin(), terminator.end());
     if (chunk_terminator != buffer.end()) {
-        log(LOG_DEBUG,
-            "No trailers found, chunked parsing complete for connection");
+        log(LOG_DEBUG, "No trailers found, chunked parsing complete for connection");
         // Remove the terminator
         buffer.erase(buffer.begin(), chunk_terminator + terminator.size());
         return codes::PARSE_SUCCESS;  // Need more data

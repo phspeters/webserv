@@ -28,7 +28,7 @@ enum log_level {
 int log(log_level level, const char* msg, ...);
 void log_request(log_level level, const Connection* conn);
 void log_response(log_level level, const Connection* conn);
-int log_buffer(log_level level, std::vector<char>& buffer);
+int log_buffer(log_level level, const Buffer& buffer);
 
 void log_virtual_server(log_level level,
                         const VirtualServer& virtual_server);

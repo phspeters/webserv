@@ -13,7 +13,7 @@ struct VirtualServer;
 class Buffer {
    public:
     // Allocate the buffer with a specific size, e.g., 4096
-    Buffer(size_t size = CHUNK_SIZE) : buffer_(size) {}
+    Buffer(size_t size = 4096) : buffer_(size) {}
 
     // Resets the buffer for keep-alive by just moving the pointers
     void reset() {
@@ -38,9 +38,6 @@ class Buffer {
 
     // Call this after you've parsed `bytes_parsed`
     void has_read(size_t bytes_parsed) { pos_ += bytes_parsed; }
-
-	// Get the current size of the buffer
-	size_t size() const { return buffer_.size(); }
 
    private:
     std::vector<char> buffer_;
@@ -70,9 +67,13 @@ struct Connection {
     //--------------------------------------
     // Buffers
     //--------------------------------------
-    Buffer read_buffer_;   // Buffer for incoming data from client
-    Buffer write_buffer_;  // Buffer for outgoing data to client
+    std::vector<char> read_buffer_;   // Buffer for incoming data from client
     size_t chunk_remaining_bytes_;    // Remaining bytes in the current chunk
+    std::vector<char> write_buffer_;  // Buffer for outgoing data to client
+    size_t write_buffer_offset_;  // How much of the write_buffer has been sent
+    std::vector<char>
+        cgi_read_buffer_;  // Buffer for writing to CGI stdin (if active)
+    size_t cgi_read_buffer_offset_;  // Offset for CGI write buffer
 
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)
@@ -86,6 +87,7 @@ struct Connection {
     // State Management
     //--------------------------------------
     codes::ConnectionState conn_state_;  // Current state of the connection
+    codes::ParserState parser_state_;    // Current state of the parser
     codes::CgiHandlerState
         cgi_handler_state_;            // State of the CGI handler (if active)
     codes::ParseStatus parse_status_;  // Status of the last parsing attempt

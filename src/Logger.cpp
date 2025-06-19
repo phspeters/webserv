@@ -130,7 +130,7 @@ void log_response(log_level level, Connection* conn) {
     std::cerr << "=====================" << RESET << std::endl;
 }
 
-int log_buffer(log_level level, std::vector<char>& buffer) {
+int log_buffer(log_level level, const Buffer& buffer) {
     if (level < ACTIVE_LOG_LEVEL) {
         return 0;
     }
@@ -155,7 +155,7 @@ int log_buffer(log_level level, std::vector<char>& buffer) {
     std::cerr << timestamp;
 
     std::cerr << "========== BUFFER START ==========" << std::endl;
-    int bytes_written = write(1, buffer.data(), buffer.size());
+    int bytes_written = write(1, buffer.read_ptr(), buffer.readable_bytes());
     std::cerr << "=========== BUFFER END ===========" << std::endl;
 
     if (bytes_written < 0) {

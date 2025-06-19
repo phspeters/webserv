@@ -328,12 +328,6 @@ void WebServer::close_client_connection(Connection* conn) {
 void WebServer::handle_read(Connection* conn) {
     log(LOG_DEBUG, "handle_read: Starting for client_fd %d", conn->client_fd_);
 
-    if (conn->conn_state_ > codes::PARSING_CHUNKED_BODY) {
-        log(LOG_FATAL, "handle_read: Wrong connection state for client: %d",
-            conn->client_fd_);
-        return;
-    }
-
     // Read data from the socket
     if (!request_parser_->read_from_socket(conn)) {
         log(LOG_ERROR,
@@ -343,82 +337,37 @@ void WebServer::handle_read(Connection* conn) {
         return;
     }
 
-    if (conn->conn_state_ == codes::PARSING_REQUEST_LINE) {
-        conn->parse_status_ = request_parser_->parse_request_line(conn);
-        if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
-            return;
-        }
-        if (conn->parse_status_ == codes::PARSE_SUCCESS) {
-            conn->conn_state_ = codes::PARSING_HEADERS;
-        }
-    }
+    // Try to parse the buffer into a full request
+    conn->parse_status_ = request_parser_->parse(conn);
 
-    if (conn->conn_state_ == codes::PARSING_HEADERS) {
-        conn->parse_status_ = request_parser_->parse_headers(conn);
-        if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
-            log(LOG_DEBUG,
-                "handle_read: Incomplete headers for client_fd %d, waiting for "
-                "more data",
-                conn->client_fd_);
-            return;  // Need more data to complete headers
-        }
-        if (conn->parse_status_ == codes::PARSE_SUCCESS) {
-            conn->conn_state_ = codes::PROCESSING_REQUEST;
-        }
-    }
-
-    if (conn->conn_state_ == codes::PROCESSING_REQUEST) {
-        conn->parse_status_ = request_parser_->process_request(conn);
-        if (conn->parse_status_ == codes::PARSE_SUCCESS) {
-            conn->conn_state_ = request_parser_->determine_body_handling_state(conn);
-        }
-    }
-
-    if (conn->conn_state_ == codes::PARSING_BODY) {
-        log(LOG_DEBUG, "handle_read: Reading body for client_fd %d",
-            conn->client_fd_);
-        conn->parse_status_ = request_parser_->parse_body(conn);
-        if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
-            log(LOG_DEBUG,
-                "handle_read: Incomplete body for client_fd %d, waiting for "
-                "more data",
-                conn->client_fd_);
-            return;  // Need more data to complete body
-        }
-        log(LOG_DEBUG, "handle_read: Body parsed successfully for client_fd %d",
-            conn->client_fd_);
-    }
-
-    if (conn->conn_state_ == codes::PARSING_CHUNKED_BODY) {
-        log(LOG_DEBUG, "handle_read: Reading chunked body for client_fd %d",
-            conn->client_fd_);
-        conn->parse_status_ = request_parser_->parse_chunked_body(conn);
-        if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
-            log(LOG_DEBUG,
-                "handle_read: Incomplete chunked body for client_fd %d, "
-                "waiting for more data",
-                conn->client_fd_);
-            return;  // Need more data to complete chunked body
-        }
+    // If we have completed parsing headers, we need to match the host header
+    if (conn->parse_status_ == codes::PARSE_HEADERS_COMPLETE) {
         log(LOG_DEBUG,
-            "handle_read: Chunked body parsed successfully for client_fd %d",
+            "handle_read: Headers complete, matching host for client_fd %d",
             conn->client_fd_);
+        match_host_header(conn);
+        // Re-parse the request with the matched virtual server
+        conn->parse_status_ = request_parser_->parse(conn);
+    }
+
+    // If request parsing is incomplete, return and wait for more data
+    if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
+        log(LOG_DEBUG,
+            "handle_read: Parsing incomplete for client_fd %d, waiting for "
+            "more data",
+            conn->client_fd_);
+        return;
     }
 
     log_request(LOG_TRACE, conn);
 
-    if (conn->parse_status_ >= codes::PARSE_ERROR) {
-        log(LOG_ERROR,
-            "handle_read: Error processing request for client_fd %d, "
-            "status: %d",
-            conn->client_fd_, conn->parse_status_);
-        ErrorHandler::generate_error_response(conn);
-        return;
-    }
+    // Match path from uri to best location
+    conn->location_match_ = find_matching_location(conn->virtual_server_,
+                                                   conn->request_data_->path_);
 
     // Change epoll interest event to EPOLLOUT for writing
     update_epoll_events(conn->client_fd_, EPOLLOUT);
-    conn->conn_state_ = codes::GENERATING_RESPONSE;
+    conn->conn_state_ = codes::CONN_PROCESSING;
 }
 
 void WebServer::handle_write(Connection* conn) {
@@ -434,11 +383,88 @@ void WebServer::handle_write(Connection* conn) {
         return;
     }
 
-	if (conn->conn_state_ < codes::GENERATING_RESPONSE) {
-		log(LOG_FATAL, "handle_write: Invalid connection state %d for client_fd %d",
-			conn->conn_state_, conn->client_fd_);
-		return;
-	}
+    // log(LOG_DEBUG,
+    //     "handle_write: Pre-access check. client_fd %d. request_data_ pointer:
+    //     "
+    //     "%p",
+    //     conn->client_fd_, static_cast<void*>(conn->request_data_));
+
+    // const char* method_cstr = NULL;
+    // const char* path_cstr = NULL;
+
+    // try {
+    //     if (conn->request_data_->method_.empty()) {
+    //         log(LOG_DEBUG,
+    //             "handle_write: conn->request_data_->method_ is empty for "
+    //             "client_fd %d.",
+    //             conn->client_fd_);
+    //     }
+    //     log(LOG_DEBUG, "handle_write: method_.length() = %zu for client_fd
+    //     %d",
+    //         conn->request_data_->method_.length(), conn->client_fd_);
+    //     method_cstr = conn->request_data_->method_.c_str();
+    //     log(LOG_DEBUG,
+    //         "handle_write: Successfully obtained method_.c_str() for
+    //         client_fd "
+    //         "%d. Pointer: %p",
+    //         conn->client_fd_, static_cast<const void*>(method_cstr));
+
+    //    if (conn->request_data_->path_.empty()) {
+    //        log(LOG_DEBUG,
+    //            "handle_write: conn->request_data_->path_ is empty for "
+    //            "client_fd %d.",
+    //            conn->client_fd_);
+    //    }
+    //    log(LOG_DEBUG, "handle_write: path_.length() = %zu for client_fd %d",
+    //        conn->request_data_->path_.length(), conn->client_fd_);
+    //    path_cstr = conn->request_data_->path_.c_str();
+    //    log(LOG_DEBUG,
+    //        "handle_write: Successfully obtained path_.c_str() for client_fd "
+    //        "%d. Pointer: %p",
+    //        conn->client_fd_, static_cast<const void*>(path_cstr));
+
+    //} catch (const std::exception& e) {
+    //    log(LOG_ERROR,
+    //        "handle_write: Exception while accessing method/path string "
+    //        "members for client_fd %d: %s. request_data_ pointer: %p",
+    //        conn->client_fd_, e.what(),
+    //        static_cast<void*>(conn->request_data_));
+    //    ErrorHandler::generate_error_response(conn,
+    //                                          codes::INTERNAL_SERVER_ERROR);
+    //    if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
+    //        conn->conn_state_ = codes::CONN_WRITING;
+    //    }
+    //    update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
+    //    return;
+    //}
+
+    // if (method_cstr == NULL || path_cstr == NULL) {
+    //     log(LOG_ERROR,
+    //         "handle_write: method_cstr or path_cstr is NULL after try-catch "
+    //         "for client_fd %d. This indicates a problem. Method ptr: %p, Path
+    //         " "ptr: %p", conn->client_fd_, static_cast<const
+    //         void*>(method_cstr), static_cast<const void*>(path_cstr));
+    //     ErrorHandler::generate_error_response(conn,
+    //                                           codes::INTERNAL_SERVER_ERROR);
+    //     if (conn->conn_state_ != codes::CONN_CGI_EXEC) {
+    //         conn->conn_state_ = codes::CONN_WRITING;
+    //     }
+    //     update_epoll_events(conn->client_fd_, EPOLLOUT | EPOLLRDHUP);
+    //     return;
+    // }
+
+    // log(LOG_DEBUG,
+    //     "handle_write: Processing request method=%s, path=%s for client_fd
+    //     %d", method_cstr, path_cstr, conn->client_fd_);
+
+    // log(LOG_DEBUG,
+    //     "handle_write: Initial conn->parse_status_ = %d for client_fd %d",
+    //     conn->parse_status_, conn->client_fd_);
+
+    // log(LOG_DEBUG,
+    //     "handle_write: Processing request method=%s, path=%s for client_fd
+    //     %d", conn->request_data_->method_.c_str(),
+    //     conn->request_data_->path_.c_str(), conn->client_fd_);
 
     if (conn->parse_status_ != codes::PARSE_SUCCESS) {
         log(LOG_WARNING, "handle_write: Invalid request from client_fd %d",
@@ -446,10 +472,18 @@ void WebServer::handle_write(Connection* conn) {
         ErrorHandler::generate_error_response(conn);
     }
 
+    // log(LOG_DEBUG,
+    //     "handle_write: conn->conn_state_ = %d before handler logic for "
+    //     "client_fd %d",
+    //     conn->conn_state_, conn->client_fd_);
+
     if (conn->conn_state_ == codes::CONN_PROCESSING ||
         conn->conn_state_ == codes::CONN_CGI_EXEC) {
         bool can_execute_handler = true;
-    
+        // log(LOG_DEBUG,
+        //     "handle_write: [Checkpoint 1] Inside handler logic block for "
+        //     "client_fd %d.",
+        //     conn->client_fd_);  // NOVO LOG
 
         // Route the request to the appropriate handler
         if (!conn->active_handler_) {
@@ -457,13 +491,62 @@ void WebServer::handle_write(Connection* conn) {
                 "handle_write: conn->active_handler_ IS NULL. Validating "
                 "request location for client_fd %d.",
                 conn->client_fd_);
+            if (!validate_request_location(conn)) {
+                // ErrorHandler::generate_error_response was already called
+                can_execute_handler = false;
+            } else {
+                // Choose handler always return a handler
                 conn->active_handler_ = choose_handler(conn);
+            }
         }
         // Call the handler to process the request and generate a response
-        if (conn->active_handler_) {
+        if (conn->active_handler_ && can_execute_handler) {
             conn->active_handler_->handle(conn);
         }
     }
+
+    // // TEMP - Call StaticFileHandler to test
+    //  conn->active_handler_ = static_file_handler_;
+    //  log(LOG_DEBUG, "handle_write: Using static_file_handler for client_fd
+    //  %d", conn->client_fd_); conn->active_handler_->handle(conn);
+    //  // Print the HTTP response for debugging
+    //  std::cout << "\n==== HTTP RESPONSE ====\n";
+    //  std::cout << "Status: " << conn->response_data_->status_code_ << " "
+    //          << conn->response_data_->status_message_ << std::endl;
+    // std::cout << "Headers:" << std::endl;
+    // for (std::map<std::string, std::string>::const_iterator it =
+    //      conn->response_data_->headers_.begin();
+    //      it != conn->response_data_->headers_.end(); ++it) {
+    //     std::cout << "  " << it->first << ": " << it->second << std::endl;
+    // }
+    // std::cout << "Body size: " << conn->response_data_->body_.size() <<
+    //              "bytes" << std::endl;
+    // std::cout << "====================================" << std::endl;
+
+    //// // TEMP - Call FileUploadHandler to test
+    // conn->active_handler_ = file_upload_handler_;
+    // log(LOG_DEBUG, "handle_write: Using file_upload_handler for client_fd
+    // %d",
+    //     conn->client_fd_);
+    // conn->active_handler_->handle(conn);
+    //// Print the HTTP response for debugging
+    // std::cout << "\n==== HTTP RESPONSE ====\n";
+    // std::cout << "Status: " << conn->response_data_->status_code_ << " "
+    //           << conn->response_data_->status_message_ << std::endl;
+    // std::cout << "Headers:" << std::endl;
+    // for (std::map<std::string, std::string>::const_iterator it =
+    //          conn->response_data_->headers_.begin();
+    //      it != conn->response_data_->headers_.end(); ++it) {
+    //     std::cout << "  " << it->first << ": " << it->second << std::endl;
+    // }
+    // std::cout << "Body size: " << conn->response_data_->body_.size() << "
+    // bytes"
+    //           << std::endl;
+    // std::cout << "====================================" << std::endl;
+
+    // TEMP - For now, create mock response
+    // build_mock_response(conn);
+    // TEMP
 
     if (conn->conn_state_ == codes::CONN_WRITING) {
         // Write the response to the client

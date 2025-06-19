@@ -7,36 +7,32 @@
 
 namespace codes {
 enum ConnectionState {
-    CONN_READING,     // Waiting for/reading request data
-    CONN_PROCESSING,  // Request received, handler is processing
-    CONN_CGI_EXEC,    // Special state for active CGI execution
-    CONN_WRITING,     // Handler generated response, sending data
-    CONN_ERROR        // Connection encountered an error
-};
-
-// Represents the current state of the parser
-enum ParserState {
-    PARSING_REQUEST_LINE,  // Combines method, URI, HTTP version
-    PARSING_HEADERS,       // All header parsing
-    PARSING_BODY,          // Normal body
-    PARSING_CHUNKED_BODY,  // Chunked transfer encoding
-    PARSING_COMPLETE,       // Request fully parsed
-    PARSING_ERROR          // Error occurred during parsing
+    PARSING_REQUEST_LINE,  // Parsing the request line (method, URI, version)
+	PARSING_HEADERS,       // Parsing headers from the request
+	PROCESSING_REQUEST,    // Processing the request logic (routing, validation)
+	PARSING_BODY,          // Parsing the request body (if any)
+	PARSING_CHUNKED_BODY,  // Reading chunked transfer encoding body
+	GENERATING_RESPONSE,   // Generating response headers and body
+	CGI_EXECUTING,         // Executing a CGI script
+	WRITING_RESPONSE,      // Writing response to the client
+	COMPLETE,              // Request processing complete (keep-alive ready)
+	CLOSING,               // Closing the connection
+	ERROR                  // An error occurred during processing
 };
 
 enum CgiHandlerState {
-    CGI_HANDLER_IDLE,
-    CGI_HANDLER_WRITING_TO_PIPE,    // Writing request body to CGI stdin
-    CGI_HANDLER_READING_FROM_PIPE,  // Reading response from CGI stdout
-    CGI_HANDLER_HEADERS_PARSED,     // Headers parsed, waiting for body
-    CGI_HANDLER_COMPLETE,           // CGI script finished
-    CGI_HANDLER_ERROR               // Error occurred during CGI handling
+    CGI_IDLE,
+    CGI_WRITING_TO_PIPE,    // Writing request body to CGI stdin
+    CGI_READING_FROM_PIPE,  // Reading response from CGI stdout
+    CGI_HEADERS_PARSED,     // Headers parsed, waiting for body
+    CGI_COMPLETE,           // CGI script finished
+    CGI_ERROR               // Error occurred during CGI handling
 };
 
 enum WriteStatus {
-    WRITING_SUCCESS,   	 // Response fully sent
-    WRITING_INCOMPLETE,  // Partial write, needs another EPOLLOUT event
-    WRITING_ERROR        // Error occurred during writing
+    WRITE_SUCCESS,   	 // Response fully sent
+    WRITE_INCOMPLETE,  // Partial write, needs another EPOLLOUT event
+    WRITE_ERROR        // Error occurred during writing
 };
 
 // Result of a parsing attempt
