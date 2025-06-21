@@ -2,7 +2,7 @@
 #define BUFFER_HPP
 
 #include "webserv.hpp"
-
+// TODO: Handle buffer resetting after full
 class Buffer {
    public:
     // Allocate the buffer with a specific size, e.g., 4096
@@ -22,7 +22,7 @@ class Buffer {
     size_t readable_bytes() const { return last_ - pos_; }
 
     // How many bytes have been processed so far
-    size_t processed_bytes() const { return pos_; }
+    size_t processed_bytes() const { return pos_; } // TODO: Check for edge cases
 
     // Call this after you've read `bytes_read` from the socket
     void has_written(size_t bytes_written) { last_ += bytes_written; }

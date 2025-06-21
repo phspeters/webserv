@@ -188,7 +188,9 @@ void WebServer::event_loop() {
         // DEBATE: Create IOContext for each fd/socket and return it from epoll
         // Based on fd type, we call a specific handle function
         /* e.g.
-            for (int i = 0; i < ready_events; i++) {
+		int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
+									  http_limits::TIMEOUT);
+        for (int i = 0; i < ready_events; i++) {
         // The pointer gives you ALL the context you need.
         IOContext* ctx = static_cast<IOContext*>(events[i].data.ptr);
         uint32_t event_flags = events[i].events;
@@ -199,14 +201,41 @@ void WebServer::event_loop() {
                 accept_new_connection(ctx->fd);
                 break;
             case IOContext::CLIENT_SOCKET:
-                handle_client_socket_event(ctx, event_flags);
+                handle_client_socket_event(ctx->conn, event_flags);
+				-- Se EPOLLIN = read_from_socket
+				---- Se state == codes::READING_REQUEST = parse_request
+				------- Se PARSE_SUCCESS = setup_next_event_state
+				-- Se EPOLLOUT = write_to_socket (state WRITING_RESPONSE required?) e limpa o que foi escrito
                 break;
             case IOContext::STATIC_FILE:
-                handle_static_file_event(ctx, event_flags);
+			(Atencao especial ao FileDelete que já executará após check_permissions ou similar)
+                handle_static_file_event(ctx->conn, event_flags);
+				-- Sempre EPOLLIN
+				-- Se state HANDLING_REQUEST -> handler prepara a response (request line, headers e fd do static file)
+				---- Se sucesso, troca state para WRITING_RESPONSE
+				-- Se state WRITING_RESPONSE -> Response writer escreve a response no write_buffer e troca client socket para EPOLLOUT
                 break;
+			case IOContext::CGI_PIPE_WRITE:
+				handle_cgi_write_event(ctx->conn, event_flags);
+				(ONDE SERÁ O SETUP DO CGI??)
+				(ONDE SERÁ O FORK??)
+				-- Se EPOLLOUT = write body to pipe
+				break;
             case IOContext::CGI_PIPE_READ:
-                handle_cgi_read_event(ctx, event_flags);
+			(VERIFICAR FORMA DE SABER SE O SCRIPT ESTÁ FUNCIONANDO ANTES DE TENTAR LER)
+                handle_cgi_read_event(ctx->conn, event_flags);
+				-- Sempre EPOLLIN
+				-- Se state HANDLING_REQUEST -> handler prepara a response (request line, headers e fd do cgi_read_pipe)
+				---- Se sucesso, troca state para WRITING_RESPONSE
+				-- Se state WRITING_RESPONSE -> Response writer escreve a response no write_buffer e troca client socket para EPOLLOUT
                 break;
+			case IOContext::FILE_UPLOAD:
+				handle_file_upload_event(ctx->conn, event_flags);
+				-- Sempre EPOLLOUT
+				-- Se state HANDLING_REQUEST -> handler prepara a response (request line, headers e fd do file_upload)
+				---- Se sucesso, troca state para WRITING_RESPONSE
+				-- Se state WRITING_RESPONSE -> Response writer escreve a request line e headers no write_buffer, depois le direto do client socket o que falta e troca client socket para EPOLLOUT
+				break;
             // ... etc
         }*/
 
@@ -321,6 +350,20 @@ void WebServer::handle_connection_event(int client_fd, uint32_t events) {
     } else {
         handle_event(conn);
     }
+
+	/*
+
+	    IOContext* ctx = (IOContext*)event.data.ptr;
+    switch (ctx->type) {
+        case IOContext::CLIENT_SOCKET:
+            handle_client_socket_event(ctx->conn, events);
+            break;
+        case IOContext::STATIC_FILE:
+            handle_static_file_event(ctx->conn, events);
+            break;
+        // ... etc.
+    }
+	*/
 }
 
 void WebServer::close_client_connection(Connection* conn) {
@@ -351,6 +394,7 @@ void WebServer::handle_event(Connection* conn) {
         return;
     }
 
+	// Start of handle_client_socket_event
     if (conn->conn_state_ >= codes::PARSING_REQUEST_LINE ||
         conn->conn_state_ <= codes::PARSING_CHUNKED_BODY) {
         if (!request_parser_->read_from_socket(conn)) {
@@ -471,6 +515,7 @@ void WebServer::handle_event(Connection* conn) {
                 conn->client_fd_);
             conn->active_handler_ = choose_handler(conn);
         }
+		// Handler part sould move to their respective handle event function
         // Call the handler to process the request and generate a response
         if (conn->active_handler_) {
             conn->active_handler_->handle(conn);
@@ -858,6 +903,7 @@ std::string WebServer::get_file_extension(const std::string& uri_path) const {
 
 // TODO -----------------------------------------------------------------------
 
+// Dentro de handle_client_socket_event
 codes::ParseStatus WebServer::process_request(Connection* conn) {
     log(LOG_DEBUG, "Processing request for connection: %i", conn->client_fd_);
     // Phase 1: Estabilish context
@@ -870,8 +916,11 @@ codes::ParseStatus WebServer::process_request(Connection* conn) {
     // Phase 3: Choose handler and validate permissions
     // f. Choose handler based on request method and location (choose_handler
     // function) g. Validate permissions
-    // (active_handler_->validate_permissions(conn)) Phase 4: Prepare for body
-    // handling and execution h. Determine if body is needed and what kind
+    // (active_handler_->validate_permissions(conn)) 
+	// Phase 4: Prepare for body handling and execution 
+	// h. Determine if body is needed and what kind
+
+	// after that: parse_body (if needed) and setup_next_event_state
 
     // REFACTOR AND DELETE
     // Host header required for HTTP/1.1
@@ -1022,9 +1071,7 @@ codes::ConnectionState WebServer::determine_body_handling_state(
     return codes::GENERATING_RESPONSE;
 }
 
-// ------------- TODO: fix functions on the corner of shame below -----------
-
-// TODO: improve this ugly ass function
+// Add Location Type Check
 const Location* WebServer::find_matching_location(
     const VirtualServer* virtual_server, const std::string& uri) const {
     // Use a reference instead of making a copy
@@ -1076,7 +1123,8 @@ const Location* WebServer::find_matching_location(
     return best_match;
 }
 
-// TODO: improve this ugly ass function
+// ------------- TODO: fix functions on the corner of shame below -----------
+
 bool WebServer::validate_request_location(Connection* conn) {
     const Location* matching_location = conn->location_match_;
     if (!matching_location) {
