@@ -167,6 +167,8 @@ void StaticFileHandler::handle(Connection* conn) {
         return;
     }
 
+    // TODO: Make fd non-blocking
+
     // Get file info
     // Not in the Fluxogram, but possible 500 - call error handler
     struct stat file_info;

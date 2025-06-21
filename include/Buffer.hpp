@@ -33,6 +33,9 @@ class Buffer {
     // Get the current size of the buffer
     size_t size() const { return buffer_.size(); }
 
+    // Check if the buffer is empty
+    bool empty() const { return pos_ == last_; }
+
     // Resets the buffer for keep-alive by just moving the pointers
     void reset() {
         pos_ = 0;

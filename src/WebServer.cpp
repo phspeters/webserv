@@ -185,6 +185,31 @@ void WebServer::event_loop() {
             log(LOG_INFO, "Closed '%i' timed out connections.", timed_out);
         }
 
+        // DEBATE: Create IOContext for each fd/socket and return it from epoll
+        // Based on fd type, we call a specific handle function
+        /* e.g.
+            for (int i = 0; i < ready_events; i++) {
+        // The pointer gives you ALL the context you need.
+        IOContext* ctx = static_cast<IOContext*>(events[i].data.ptr);
+        uint32_t event_flags = events[i].events;
+
+        // Dispatch based on the context type, not the FD number.
+        switch (ctx->type) {
+            case IOContext::LISTENER_SOCKET:
+                accept_new_connection(ctx->fd);
+                break;
+            case IOContext::CLIENT_SOCKET:
+                handle_client_socket_event(ctx, event_flags);
+                break;
+            case IOContext::STATIC_FILE:
+                handle_static_file_event(ctx, event_flags);
+                break;
+            case IOContext::CGI_PIPE_READ:
+                handle_cgi_read_event(ctx, event_flags);
+                break;
+            // ... etc
+        }*/
+
         // Wait for events on the epoll instance
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
                                       http_limits::TIMEOUT);

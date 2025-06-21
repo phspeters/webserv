@@ -14,6 +14,8 @@ struct ParserContext {
     unsigned int parser_state_;  // Current state of the request parser
     unsigned int return_state_;  // State to return to after parsing
 
+    size_t chunk_remaining_bytes_;  // Remaining bytes in the current chunk
+
     const char* method_start_;
     const char* method_end_;
     const char* uri_start_;
@@ -32,6 +34,7 @@ struct ParserContext {
     void reset() {
         parser_state_ = 0;
         return_state_ = 0;
+        chunk_remaining_bytes_ = 0;
         method_start_ = NULL;
         method_end_ = NULL;
         uri_start_ = NULL;

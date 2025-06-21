@@ -1,0 +1,115 @@
+Of course. It's a great idea to consolidate these architectural decisions. Here is a comprehensive summary of the proposed changes, the reasoning behind them, and how they fit together. You can share this with your colleagues.
+
+---
+
+### **Executive Summary: Proposed Architectural Refactor for Webserv**
+
+To meet the strict non-blocking requirements of the assignment and build a truly robust, scalable server, we need to evolve our architecture from a simple linear model to a fully event-driven one. The current approach has fundamental ambiguities when dealing with multiple I/O sources (files, CGI) for a single connection.
+
+This proposal outlines a new architecture based on standard high-performance server design patterns. The key changes are:
+
+1.  **An `IOContext` Dispatcher:** To unambiguously handle multiple file descriptors (client socket, files, CGI pipes) per connection.
+2.  **A Simplified `ConnectionState` Machine:** To manage the high-level phases of a request, not the low-level I/O operations.
+3.  **True Non-Blocking I/O for Everything:** Implementing a streaming model for files and CGI to avoid blocking the server and to use memory efficiently.
+4.  **Clear Separation of Roles:** Defining strict boundaries between Handlers (logic) and the `ResponseWriter` (protocol/IO).
+5.  **Robust Resource Management:** A clear strategy for allocating and deallocating `IOContext` objects to prevent memory and file descriptor leaks.
+
+While this involves a significant refactor, it results in a server that is compliant, more stable, more memory-efficient, and easier to extend.
+
+---
+
+### **1. The Core Problem: `errno` and I/O Ambiguity**
+
+The assignment forbids checking `errno` after a `read`/`write` call. This makes it impossible to distinguish a temporary, recoverable error (like `EAGAIN` when a write buffer is full) from a fatal, unrecoverable error (like `EPIPE` when a client disconnects).
+
+**The Solution:** We must stop *imperatively* trying to perform I/O and instead adopt a *declarative*, event-driven model.
+*   **The Rule:** We will **only** attempt to `read()` or `write()` on a file descriptor when `epoll` has explicitly notified us via an `EPOLLIN` or `EPOLLOUT` event that the operation will not block.
+*   **The Benefit:** Under this model, a failed `write()` (returning -1) after an `EPOLLOUT` event is guaranteed to be a fatal error, not `EAGAIN`. This satisfies the assignment's constraint and makes our error handling unambiguous.
+
+### **2. The `IOContext` Dispatcher Model**
+
+A single HTTP request can involve multiple file descriptors (the client socket, a static file to read, CGI pipes). Our current model of mapping one FD to one `Connection` is insufficient. If `epoll` returns an event, we can't tell *which* of the connection's FDs triggered it.
+
+**The Solution:** We introduce a small `IOContext` struct.
+
+````cpp
+struct IOContext {
+    enum FdType {
+        CLIENT_SOCKET,
+        STATIC_FILE,
+        CGI_PIPE_READ,
+        CGI_PIPE_WRITE
+        // ... can be extended
+    };
+
+    Connection* conn; // Pointer back to the parent connection
+    FdType      type; // What kind of FD is this?
+    int         fd;   // The actual file descriptor
+};
+````
+
+*   **How it Works:** Instead of storing a raw FD or `Connection*` in `epoll`, we store a `IOContext*`. When `epoll_wait` returns, the `IOContext*` tells us **exactly which FD** is ready and **what its purpose is**.
+*   **The New Event Loop:** Our main event loop becomes a clean dispatcher:
+    ````cpp
+    IOContext* ctx = (IOContext*)event.data.ptr;
+    switch (ctx->type) {
+        case IOContext::CLIENT_SOCKET:
+            handle_client_socket_event(ctx->conn, events);
+            break;
+        case IOContext::STATIC_FILE:
+            handle_static_file_event(ctx->conn, events);
+            break;
+        // ... etc.
+    }
+    ````
+
+### **3. A New, Simpler `ConnectionState` Machine**
+
+Our current `ConnectionState` enum is too granular and linear (e.g., `PARSING_BODY`, `PARSING_CHUNKED_BODY`). An event-driven flow is not linear.
+
+**The Solution:** We simplify the state to represent the high-level *phase* of the transaction.
+
+````cpp
+enum ConnectionState {
+    READING_REQUEST,    // Waiting for/parsing an incoming request.
+    EXECUTING_HANDLER,  // Request parsed, handler is preparing the response (e.g., opening a file).
+    WRITING_RESPONSE,   // Actively sending the response to the client.
+    COMPLETE,           // Transaction finished, ready for keep-alive or closing.
+    CLOSING             // Marked for cleanup.
+};
+````
+
+*   **How it Works:** The `IOContext` tells us **WHICH** channel is ready. The `ConnectionState` tells us **WHY** we care. For example, an `EPOLLIN` on a `STATIC_FILE` context means something different if the state is `EXECUTING_HANDLER` (start the stream) versus `WRITING_RESPONSE` (continue the stream).
+
+### **4. True Non-Blocking I/O and Streaming**
+
+The assignment requires that we never block. A `read()` from a regular file is a blocking operation that can freeze the entire server. Allocating memory for a large file is also a scalability killer.
+
+**The Solution:** We treat files and pipes just like slow network clients.
+*   **The Flow:**
+    1.  The `StaticFileHandler` `open()`s the file non-blockingly and registers its `IOContext` with `epoll` for `EPOLLIN`.
+    2.  An `EPOLLIN` event on the **file FD** triggers a `read()` of a small chunk (e.g., 4KB) into the `Connection`'s `write_buffer_`.
+    3.  This makes the `write_buffer_` non-empty, which triggers us to arm `EPOLLOUT` for the **client socket FD**.
+    4.  An `EPOLLOUT` event on the **client socket FD** triggers a `send()` that drains the `write_buffer_`.
+*   **The Benefit:** This creates a non-blocking "conveyor belt." We can serve gigabyte-sized files with a tiny, constant memory footprint (e.g., a 4KB buffer), and the server remains responsive to all other clients.
+
+### **5. Handling HTTP Pipelining**
+
+A client can send a second request before the response to the first is finished. Our server must not drop this data.
+
+**The Solution:** We separate I/O from processing.
+*   **The Rule:** If `epoll` signals `EPOLLIN` on a client socket, we **always** `read()` the data into the `read_buffer_` to drain the kernel.
+*   **The Logic:** We only call the `RequestParser` on that data if the `ConnectionState` is `READING_REQUEST`. If the state is `WRITING_RESPONSE`, the new request data simply waits safely in our buffer until the current response is finished.
+
+### **6. Resource Lifecycle Management**
+
+Using dynamic `IOContext` objects requires a robust strategy to prevent memory and FD leaks.
+
+**The Solution:**
+1.  **Dynamic Allocation:** `IOContext` objects for files and pipes are stored in a `std::vector<IOContext*>` within the `Connection` object. They are allocated **only when needed**. This is memory-efficient.
+2.  **Centralized Cleanup:** We will implement a `Connection::remove_io_context(ctx)` helper function. This function is the single source of truth for cleanup. It will:
+    *   Unregister the FD from `epoll` (`EPOLL_CTL_DEL`).
+    *   `close()` the FD.
+    *   `delete` the `IOContext` object.
+    *   `erase()` the pointer from the `Connection`'s vector.
+3.  **Destructor as Safety Net:** The `Connection` destructor will loop through any remaining contexts in its vector and call this cleanup logic, guaranteeing no leaks even on unexpected client disconnections.

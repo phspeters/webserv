@@ -644,7 +644,7 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
     log(LOG_DEBUG, "Parsing body for connection: %i", conn->client_fd_);
 
     HttpRequest* req = conn->request_data_;
-    Buffer&      buff = conn->read_buffer_;
+    Buffer& buff = conn->read_buffer_;
 
     if (req->content_length_ == 0) {
         return codes::PARSE_SUCCESS;
@@ -666,7 +666,8 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
         req->body_.insert(req->body_.end(), buff.read_ptr(),
                           buff.read_ptr() + bytes_to_move);
 
-        // Correctly consume only the bytes that were moved from the read buffer.
+        // Correctly consume only the bytes that were moved from the read
+        // buffer.
         buff.has_read(bytes_to_move);
         log(LOG_TRACE, "Moved %zu bytes from read buffer to request body.",
             bytes_to_move);
@@ -680,10 +681,13 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
     }
 
     // If we reach here, it means we still need more data.
-    log(LOG_DEBUG, "Body parsing incomplete for connection: %i, need %zu more bytes.",
+    log(LOG_DEBUG,
+        "Body parsing incomplete for connection: %i, need %zu more bytes.",
         conn->client_fd_, req->content_length_ - req->body_.size());
     return codes::PARSE_INCOMPLETE;
 }
+
+// TODO ----------------------------------------------------------
 
 // Chunked transfer encoding sends HTTP message bodies in a series of
 // "chunks" without needing to know the total size in advance. Each chunk
@@ -705,4 +709,87 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
         TRAILER_HEADER,
         TRAILER_HEADER_ALMOST_DONE
     };
+
+    Buffer& buff = conn->read_buffer_;
+    unsigned int& state = conn->parser_context_.parser_state_;
+    ParserContext& context = conn->parser_context_;
+
+    // The main loop processes every available byte in the buffer.
+    while (buff.readable_bytes() > 0) {
+        // Look at the current character without consuming it yet.
+        const char ch = *buff.read_ptr();
+
+        switch (state) {
+            case ChunkParseState::CHUNK_START:
+                if (ch == '\r') {
+                    // Skip leading CRLF from some clients.
+                    break;  // Character is consumed at the end of the loop.
+                }
+
+                if (!isxdigit(ch)) {
+                    return codes::PARSE_INVALID_CHUNK_SIZE;  // Invalid start
+                }
+
+                context.value_start_ = buff.read_ptr();
+                state = ChunkParseState::CHUNK_SIZE;
+                continue;  // This skips the buff.has_read(1) at the end of
+                           // the loop
+
+            case ChunkParseState::CHUNK_SIZE:
+                if (ch == ';') {
+                    // Optional chunk extension starts.
+                    context.value_end_ = buff.read_ptr();
+                    state = ChunkParseState::CHUNK_EXTENSION;
+                } else if (ch == '\r') {
+                    // End of chunk size. Prepare to read data.
+                    context.value_end_ = buff.read_ptr();
+                    state = ChunkParseState::CHUNK_DATA;
+                } else if (!isxdigit(ch)) {
+                    return codes::PARSE_INVALID_CHUNK_SIZE;  // Invalid size
+                }
+                break;
+
+            case ChunkParseState::CHUNK_EXTENSION:
+                if (ch == '\r') {
+                    context.value_end_ = buff.read_ptr();
+                    state = ChunkParseState::CHUNK_EXTENSION_ALMOST_DONE;
+                }
+                break;
+
+            case ChunkParseState::CHUNK_EXTENSION_ALMOST_DONE:
+                if (ch == '\n') {
+                    // We have seen CRLF after the chunk size and extension.
+                    state = ChunkParseState::CHUNK_DATA;
+                } else {
+                    return codes::PARSE_ERROR;  // Expected LF after CR
+                }
+                break;
+
+            case ChunkParseState::CHUNK_DATA:
+                if (context.chunk_remaining_bytes_ == 0) {
+                    // We need to read the chunk size next.
+                    state = ChunkParseState::AFTER_DATA;
+                    continue;  // Re-evaluate this character in the new state.
+                }
+
+                conn->request_data_->body_.push_back(ch);
+                context.chunk_remaining_bytes_--;
+                break;
+
+            case ChunkParseState::AFTER_DATA:
+                if (ch == '\r') {
+                    // End of chunk data. Prepare to read the next chunk size.
+                    state = ChunkParseState::AFTER_DATA_ALMOST_DONE;
+                } else {
+                    return codes::PARSE_ERROR;  // Expected CR after chunk data
+                }
+        }
+    }
+
+    // If we exit the loop, it's because the buffer is empty. We need more
+    // data.
+    log(LOG_DEBUG,
+        "Chunked body parsing incomplete for connection: %i, need more data.",
+        conn->client_fd_);
+    return codes::PARSE_INCOMPLETE;
 }

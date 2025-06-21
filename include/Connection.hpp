@@ -35,7 +35,6 @@ struct Connection {
     //--------------------------------------
     Buffer read_buffer_;            // Buffer for incoming data from client
     Buffer write_buffer_;           // Buffer for outgoing data to client
-    size_t chunk_remaining_bytes_;  // Remaining bytes in the current chunk
 
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)
