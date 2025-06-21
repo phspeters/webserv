@@ -9,7 +9,7 @@
 #include <iostream>
 #include <string>
 
-#define CHUNK_SIZE 4096
+#define DEFAULT_CHUNK_SIZE 4096
 
 class SimpleHttpClient {
    private:
@@ -73,7 +73,7 @@ class SimpleHttpClient {
     }
 
     std::string receive_response() {
-        char buffer[CHUNK_SIZE];
+        char buffer[DEFAULT_CHUNK_SIZE];
         std::string response;
         ssize_t bytes_read;
 

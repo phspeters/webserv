@@ -31,7 +31,7 @@ void FileUploadHandler::handle(Connection* conn) {
         ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
     }
 
-    conn->conn_state_ = codes::CONN_WRITING;
+    conn->conn_state_ = codes::WRITING_RESPONSE;
 }
 
 bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {

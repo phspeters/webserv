@@ -36,7 +36,7 @@ void FileDeleteHandler::handle(Connection* conn) {
     }
     // Error response already set by delete_file() on failure
 
-    conn->conn_state_ = codes::CONN_WRITING;
+    conn->conn_state_ = codes::WRITING_RESPONSE;
 }
 
 bool FileDeleteHandler::validate_delete_request(Connection* conn) {

@@ -8,45 +8,8 @@ class AHandler;
 struct HttpRequest;
 struct HttpResponse;
 struct VirtualServer;
-
-// A simplified buffer structure for your project
-class Buffer {
-   public:
-    // Allocate the buffer with a specific size, e.g., 4096
-    Buffer(size_t size = CHUNK_SIZE) : buffer_(size) {}
-
-    // Resets the buffer for keep-alive by just moving the pointers
-    void reset() {
-        pos_ = 0;
-        last_ = 0;
-    }
-
-    // How much space is left for writing new data
-    size_t writable_space() const { return buffer_.size() - last_; }
-
-    // A pointer to the start of the writable area
-    char* write_ptr() { return &buffer_[last_]; }
-
-    // A pointer to the start of the readable data
-    const char* read_ptr() const { return &buffer_[pos_]; }
-
-    // How many bytes are available to be parsed
-    size_t readable_bytes() const { return last_ - pos_; }
-
-    // Call this after you've read `bytes_read` from the socket
-    void has_written(size_t bytes_written) { last_ += bytes_written; }
-
-    // Call this after you've parsed `bytes_parsed`
-    void has_read(size_t bytes_parsed) { pos_ += bytes_parsed; }
-
-	// Get the current size of the buffer
-	size_t size() const { return buffer_.size(); }
-
-   private:
-    std::vector<char> buffer_;
-    size_t pos_ = 0; // Current position in the buffer for reading
-    size_t last_ = 0; // Last position in the buffer for writing (end of valid data)
-};
+struct ParserContext;
+class Buffer;
 
 // Represents the state associated with a single client connection
 struct Connection {
@@ -70,9 +33,9 @@ struct Connection {
     //--------------------------------------
     // Buffers
     //--------------------------------------
-    Buffer read_buffer_;   // Buffer for incoming data from client
-    Buffer write_buffer_;  // Buffer for outgoing data to client
-    size_t chunk_remaining_bytes_;    // Remaining bytes in the current chunk
+    Buffer read_buffer_;            // Buffer for incoming data from client
+    Buffer write_buffer_;           // Buffer for outgoing data to client
+    size_t chunk_remaining_bytes_;  // Remaining bytes in the current chunk
 
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)
@@ -87,20 +50,14 @@ struct Connection {
     //--------------------------------------
     codes::ConnectionState conn_state_;  // Current state of the connection
     codes::CgiHandlerState
-        cgi_handler_state_;            // State of the CGI handler (if active)
-    codes::ParseStatus parse_status_;  // Status of the last parsing attempt
-    codes::WriteStatus write_status_;  // Current state of the writer
+        cgi_handler_state_;         // State of the CGI handler (if active)
+    ParserContext parser_context_;  // Context for parsing requests
 
     //--------------------------------------
     // Connection Management
     //--------------------------------------
     void reset_for_keep_alive();  // Resets state for handling another request
-
-    // Connection state checks
-    bool is_readable() const;
-    bool is_cgi() const;
-    bool is_writable() const;
-    bool is_keep_alive() const;
+    bool is_keep_alive() const;   // Checks if the connection is keep-alive
 
     //--------------------------------------
     // Handler-Specific State (Example for CGI - could be a union or void*)
@@ -108,6 +65,7 @@ struct Connection {
     AHandler* active_handler_;        // Pointer to the currently active handler
     const Location* location_match_;  // Best matching location for the request
 
+    // TODO: encapulate all cgi related members in a CgiState struct
     // CGI State (Only relevant if active_handler is CgiHandler)
     pid_t cgi_pid_;           // Process ID of the CGI script (-1 if none)
     int cgi_pipe_stdin_fd_;   // FD for writing request body TO CGI (-1 if none)
@@ -115,6 +73,7 @@ struct Connection {
     std::string cgi_script_path_;  // Path to the CGI script
     std::vector<std::string>
         cgi_envp_;  // Environment variables for the CGI script execution
+    Buffer cgi_output_buffer_;  // Buffer for reading CGI output
 
     // Static File State (Only relevant if active_handler is StaticFileHandler)
     int static_file_fd_;        // FD of the file being sent (-1 if none)

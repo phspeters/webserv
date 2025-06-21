@@ -293,15 +293,8 @@ void WebServer::handle_connection_event(int client_fd, uint32_t events) {
             "%u",
             client_fd, events);
         handle_error(conn);
-    } else if ((events & EPOLLIN) && conn->is_readable()) {
-        handle_read(conn);
-    } else if (((events & EPOLLOUT) && conn->is_writable()) || conn->is_cgi()) {
-        handle_write(conn);
     } else {
-        log(LOG_FATAL,
-            "handle_connection_event: Unhandled event %u for client_fd %d",
-            events, client_fd);
-        handle_error(conn);
+        handle_event(conn);
     }
 }
 
@@ -325,139 +318,133 @@ void WebServer::close_client_connection(Connection* conn) {
     conn_manager_->close_connection(conn);
 }
 
-void WebServer::handle_read(Connection* conn) {
-    log(LOG_DEBUG, "handle_read: Starting for client_fd %d", conn->client_fd_);
+void WebServer::handle_event(Connection* conn) {
+    log(LOG_DEBUG, "handle_event: Starting for client_fd %d", conn->client_fd_);
 
-    if (conn->conn_state_ > codes::PARSING_CHUNKED_BODY) {
-        log(LOG_FATAL, "handle_read: Wrong connection state for client: %d",
-            conn->client_fd_);
+    if (!conn) {
+        log(LOG_FATAL, "handle_event: Connection pointer is NULL");
         return;
     }
 
-    // Read data from the socket
-    if (!request_parser_->read_from_socket(conn)) {
-        log(LOG_ERROR,
-            "handle_read: Failed to read from socket for client_fd %d",
-            conn->client_fd_);
-        handle_error(conn);
-        return;
-    }
-
-    if (conn->conn_state_ == codes::PARSING_REQUEST_LINE) {
-        conn->parse_status_ = request_parser_->parse_request_line(conn);
-        if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
+    if (conn->conn_state_ >= codes::PARSING_REQUEST_LINE ||
+        conn->conn_state_ <= codes::PARSING_CHUNKED_BODY) {
+        if (!request_parser_->read_from_socket(conn)) {
+            log(LOG_ERROR,
+                "handle_event: Failed to read from socket for client_fd %d",
+                conn->client_fd_);
+            handle_error(conn);
             return;
         }
-        if (conn->parse_status_ == codes::PARSE_SUCCESS) {
+    }
+
+    codes::ParseStatus parse_status = codes::PARSE_SUCCESS;
+    if (conn->conn_state_ == codes::PARSING_REQUEST_LINE) {
+        parse_status = request_parser_->parse_request_line(conn);
+        if (parse_status == codes::PARSE_INCOMPLETE) {
+            log(LOG_DEBUG,
+                "handle_event: Incomplete request line for client_fd %d, "
+                "waiting for more data",
+                conn->client_fd_);
+            return;  // Need more data to complete request line
+        }
+        if (parse_status == codes::PARSE_SUCCESS) {
             conn->conn_state_ = codes::PARSING_HEADERS;
+            conn->parser_context_.parser_state_ = 0;
         }
     }
 
     if (conn->conn_state_ == codes::PARSING_HEADERS) {
-        conn->parse_status_ = request_parser_->parse_headers(conn);
-        if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
+        parse_status = request_parser_->parse_headers(conn);
+        if (parse_status == codes::PARSE_INCOMPLETE) {
             log(LOG_DEBUG,
-                "handle_read: Incomplete headers for client_fd %d, waiting for "
+                "handle_event: Incomplete headers for client_fd %d, waiting "
+                "for "
                 "more data",
                 conn->client_fd_);
             return;  // Need more data to complete headers
         }
-        if (conn->parse_status_ == codes::PARSE_SUCCESS) {
+        if (parse_status == codes::PARSE_SUCCESS) {
             conn->conn_state_ = codes::PROCESSING_REQUEST;
+            conn->parser_context_.parser_state_ = 0;
         }
     }
 
     if (conn->conn_state_ == codes::PROCESSING_REQUEST) {
-        conn->parse_status_ = request_parser_->process_request(conn);
-        if (conn->parse_status_ == codes::PARSE_SUCCESS) {
-            conn->conn_state_ = request_parser_->determine_body_handling_state(conn);
+        // Process the request after headers are parsed
+        parse_status = process_request(conn);
+        if (parse_status == codes::PARSE_SUCCESS) {
+            // Determine if we need to handle a body and if so, what kind
+            conn->conn_state_ =
+                determine_body_handling_state(conn);  // TODO reset context
         }
     }
 
     if (conn->conn_state_ == codes::PARSING_BODY) {
-        log(LOG_DEBUG, "handle_read: Reading body for client_fd %d",
+        log(LOG_DEBUG, "handle_event: Reading body for client_fd %d",
             conn->client_fd_);
-        conn->parse_status_ = request_parser_->parse_body(conn);
-        if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
+        parse_status = request_parser_->parse_body(conn);
+        if (parse_status == codes::PARSE_INCOMPLETE) {
             log(LOG_DEBUG,
-                "handle_read: Incomplete body for client_fd %d, waiting for "
+                "handle_event: Incomplete body for client_fd %d, waiting for "
                 "more data",
                 conn->client_fd_);
             return;  // Need more data to complete body
         }
-        log(LOG_DEBUG, "handle_read: Body parsed successfully for client_fd %d",
+        log(LOG_DEBUG,
+            "handle_event: Body parsed successfully for client_fd %d",
             conn->client_fd_);
     }
 
     if (conn->conn_state_ == codes::PARSING_CHUNKED_BODY) {
-        log(LOG_DEBUG, "handle_read: Reading chunked body for client_fd %d",
+        log(LOG_DEBUG, "handle_event: Reading chunked body for client_fd %d",
             conn->client_fd_);
-        conn->parse_status_ = request_parser_->parse_chunked_body(conn);
-        if (conn->parse_status_ == codes::PARSE_INCOMPLETE) {
+        parse_status = request_parser_->parse_chunked_body(conn);
+        if (parse_status == codes::PARSE_INCOMPLETE) {
             log(LOG_DEBUG,
-                "handle_read: Incomplete chunked body for client_fd %d, "
+                "handle_event: Incomplete chunked body for client_fd %d, "
                 "waiting for more data",
                 conn->client_fd_);
             return;  // Need more data to complete chunked body
         }
         log(LOG_DEBUG,
-            "handle_read: Chunked body parsed successfully for client_fd %d",
+            "handle_event: Chunked body parsed successfully for client_fd %d",
             conn->client_fd_);
     }
 
     log_request(LOG_TRACE, conn);
 
-    if (conn->parse_status_ >= codes::PARSE_ERROR) {
+    if (parse_status >= codes::PARSE_ERROR) {
         log(LOG_ERROR,
-            "handle_read: Error processing request for client_fd %d, "
+            "handle_event: Error processing request for client_fd %d, "
             "status: %d",
-            conn->client_fd_, conn->parse_status_);
-        ErrorHandler::generate_error_response(conn);
-        return;
+            conn->client_fd_, parse_status);
+        ErrorHandler::generate_error_response(conn, parse_status);
+        // Connection state already set to WRITING_RESPONSE
     }
 
-    // Change epoll interest event to EPOLLOUT for writing
-    update_epoll_events(conn->client_fd_, EPOLLOUT);
-    conn->conn_state_ = codes::GENERATING_RESPONSE;
-}
-
-void WebServer::handle_write(Connection* conn) {
-    if (!conn) {
-        log(LOG_FATAL, "handle_write: Connection pointer is NULL");
-        return;
-    }
-
-    if (!conn->request_data_) {
-        log(LOG_FATAL, "handle_write: Request data is NULL for client_fd %d",
+    // If we reach here, the request has been successfully parsed and processed
+    if (conn->conn_state_ <= codes::PARSING_CHUNKED_BODY) {
+        log(LOG_DEBUG,
+            "handle_event: Request processing complete for client_fd %d, "
+            "moving to response generation",
             conn->client_fd_);
-        handle_error(conn);
-        return;
     }
 
-	if (conn->conn_state_ < codes::GENERATING_RESPONSE) {
-		log(LOG_FATAL, "handle_write: Invalid connection state %d for client_fd %d",
-			conn->conn_state_, conn->client_fd_);
-		return;
-	}
+    //--- <= codes::PARSING_CHUNKED_BODY
+    //--- split here into two functions? Decide which to call based on state ---
+    //--- >= codes::GENERATING_RESPONSE
 
-    if (conn->parse_status_ != codes::PARSE_SUCCESS) {
-        log(LOG_WARNING, "handle_write: Invalid request from client_fd %d",
-            conn->client_fd_);
-        ErrorHandler::generate_error_response(conn);
-    }
-
-    if (conn->conn_state_ == codes::CONN_PROCESSING ||
-        conn->conn_state_ == codes::CONN_CGI_EXEC) {
-        bool can_execute_handler = true;
-    
-
+    if (conn->conn_state_ == codes::GENERATING_RESPONSE ||
+        conn->conn_state_ == codes::EXECUTING_CGI) {
         // Route the request to the appropriate handler
+        // DEBATE: nginx calls this and all the validations needed for the
+        // handler before commiting to reading the body
         if (!conn->active_handler_) {
             log(LOG_DEBUG,
                 "handle_write: conn->active_handler_ IS NULL. Validating "
                 "request location for client_fd %d.",
                 conn->client_fd_);
-                conn->active_handler_ = choose_handler(conn);
+            conn->active_handler_ = choose_handler(conn);
         }
         // Call the handler to process the request and generate a response
         if (conn->active_handler_) {
@@ -465,31 +452,32 @@ void WebServer::handle_write(Connection* conn) {
         }
     }
 
-    if (conn->conn_state_ == codes::CONN_WRITING) {
+    if (conn->conn_state_ == codes::WRITING_RESPONSE) {
         // Write the response to the client
         codes::WriteStatus status = response_writer_->write_response(conn);
 
         // TODO - Remove switch state, call logs and handle_error before
         // returning the status. Leave condition if(status ==
-        // codes::WRITING_INCOMPLETE) { return; } because if it is incomplete,
+        // codes::WRITE_INCOMPLETE) { return; } because if it is incomplete,
         // we should return and wait for the next call, and if it is an writing
         // error, the connection should be closed inse write_response, never
-        // reaching this point. Only WRITING_SUCCESS will continue the flow.
+        // reaching this point. Only WRITE_SUCCESS will continue the flow.
         switch (status) {
-            case codes::WRITING_INCOMPLETE:
+            case codes::WRITE_INCOMPLETE:
                 log(LOG_DEBUG,
                     "handle_write: Response writing incomplete for client_fd "
                     "%d, "
                     "will resume later",
                     conn->client_fd_);
+                update_epoll_events(conn->client_fd_, EPOLLOUT);
                 return;
-            case codes::WRITING_ERROR:
+            case codes::WRITE_ERROR:
                 log(LOG_ERROR,
                     "handle_write: Error writing response to client_fd %d",
                     conn->client_fd_);
                 handle_error(conn);
                 return;
-            case codes::WRITING_SUCCESS:
+            case codes::WRITE_SUCCESS:
                 log(LOG_DEBUG,
                     "handle_write: Response completely written to client_fd %d",
                     conn->client_fd_);
@@ -817,6 +805,201 @@ void WebServer::signal_handler(int signal) {
     }
 }
 
+bool WebServer::is_cgi_extension(const std::string& request_uri) const {
+    // CHECK the extension allowed for CGI - Carol
+    std::string extension = get_file_extension(request_uri);
+    if (!extension.empty() &&
+        (extension == ".php" || extension == ".py" || extension == ".sh")) {
+        log(LOG_DEBUG, "Request uri: '%s' is a CGI script",
+            request_uri.c_str());
+        return true;
+    }
+    return false;
+}
+
+std::string WebServer::get_file_extension(const std::string& uri_path) const {
+    size_t dot_pos = uri_path.find_last_of('.');
+    if (dot_pos == std::string::npos) {
+        return "";  // No extension found
+    }
+    std::string extension = uri_path.substr(dot_pos);
+    // Convert to lowercase for case-insensitive comparison
+    for (std::string::iterator it = extension.begin(); it != extension.end();
+         ++it) {
+        *it = std::tolower(*it);
+    }
+    return extension;
+}
+
+// TODO -----------------------------------------------------------------------
+
+codes::ParseStatus WebServer::process_request(Connection* conn) {
+    log(LOG_DEBUG, "Processing request for connection: %i", conn->client_fd_);
+    // Phase 1: Estabilish context
+    // a. Match host header with virtual server
+    // b. Match best location block within virtual server
+    // Phase 2: Validate request
+    // c. Validate version (and host header for HTTP/1.1)
+    // d. Validate request method is valid and allowed
+    // e. Validate content length or transfer encoding: chunked
+    // Phase 3: Choose handler and validate permissions
+    // f. Choose handler based on request method and location (choose_handler
+    // function) g. Validate permissions
+    // (active_handler_->validate_permissions(conn)) Phase 4: Prepare for body
+    // handling and execution h. Determine if body is needed and what kind
+
+    // REFACTOR AND DELETE
+    // Host header required for HTTP/1.1
+    HttpRequest* request = conn->request_data_;
+    if (request->version_ == "HTTP/1.1" &&
+        request->get_header("host").empty()) {
+        // Translates to response status 400
+        log(LOG_ERROR,
+            "Missing Host header in HTTP/1.1 request for connection: %i",
+            conn->client_fd_);
+        return codes::PARSE_MISSING_HOST_HEADER;
+    }
+
+    if (request->method_ == "POST" || request->method_ == "PUT") {
+        bool has_content_length =
+            !request->get_header("content-length").empty();
+        bool has_transfer_encoding =
+            !request->get_header("transfer-encoding").empty();
+
+        if (!has_content_length && !has_transfer_encoding) {
+            // Translates to response status 411
+            log(LOG_ERROR,
+                "POST/PUT without Content-Length or Transfer-Encoding");
+            return codes::PARSE_MISSING_CONTENT_LENGTH;
+        }
+
+        if (has_content_length && has_transfer_encoding) {
+            // Translates to response status 400
+            log(LOG_ERROR,
+                "POST/PUT with both Content-Length and Transfer-Encoding");
+            return codes::PARSE_INVALID_CONTENT_LENGTH;
+        }
+
+        if (has_content_length) {
+            // Validate Content-Length
+            std::string content_length = request->get_header("content-length");
+            char* end_ptr;
+            size_t body_size =
+                std::strtoul(content_length.c_str(), &end_ptr, 10);
+
+            // Check for invalid Content-Length format
+            if (end_ptr == content_length.c_str() || *end_ptr != '\0') {
+                log(LOG_ERROR, "Invalid Content-Length header: '%s'",
+                    content_length.c_str());
+                // Translates to response status 400
+                return codes::PARSE_INVALID_CONTENT_LENGTH;
+            }
+
+            if (body_size > conn->virtual_server_->client_max_body_size_) {
+                log(LOG_ERROR, "Content-Length exceeds maximum size: %zu",
+                    body_size);
+                // Translates to response status 413
+                return codes::PARSE_CONTENT_TOO_LARGE;
+            }
+        }
+
+        if (has_transfer_encoding) {
+            // Validate Transfer-Encoding
+            std::string transfer_encoding =
+                request->get_header("transfer-encoding");
+            if (transfer_encoding != "chunked") {
+                log(LOG_ERROR, "Unknown Transfer-Encoding: '%s'",
+                    transfer_encoding.c_str());
+                // Translates to response status 501
+                return codes::PARSE_UNKNOWN_ENCODING;
+            }
+        }
+    }
+
+    log(LOG_DEBUG, "Headers validated successfully for connection: %i",
+        conn->client_fd_);
+    return codes::PARSE_SUCCESS;
+}  // REFACTOR AND DELETE
+
+AHandler* WebServer::choose_handler(Connection* conn) {
+    log(LOG_DEBUG,
+        "choose_handler: Finding handler for client_fd %d, method %s, path %s",
+        conn->client_fd_, conn->request_data_->method_.c_str(),
+        conn->request_data_->path_.c_str());
+
+    const Location* matching_location = conn->location_match_;
+    const std::string& request_method = conn->request_data_->method_;
+    const std::string& request_path = conn->request_data_->path_;
+
+    // TODO - Change CGI condition to cgi_enabled + executable file + valid
+    // script extension?
+    // Return appropriate handler based on location config
+    // CHECK AND TEST - Carol
+    if (matching_location->cgi_enabled_ && is_cgi_extension(request_path) &&
+        request_method != "DELETE") {
+        // CGI handler for CGI-enabled locations
+        log(LOG_DEBUG,
+            "choose_handler: Using CgiHandler for client_fd %d, path %s",
+            conn->client_fd_, matching_location->path_.c_str());
+        conn->conn_state_ = codes::EXECUTING_CGI;
+        return cgi_handler_;
+    } else if (request_method == "POST") {
+        // FileUploadHandler for file uploads
+        log(LOG_DEBUG,
+            "choose_handler: Using FileUploadHandler for client_fd %d, path %s",
+            conn->client_fd_, matching_location->path_.c_str());
+        conn->conn_state_ = codes::GENERATING_RESPONSE;
+        return file_upload_handler_;
+    } else if (request_method == "DELETE") {
+        // DeleteHandler for dlete requests
+        log(LOG_DEBUG,
+            "choose_handler: Using DeleteHandler for client_fd %d, path %s",
+            conn->client_fd_, matching_location->path_.c_str());
+        conn->conn_state_ = codes::GENERATING_RESPONSE;
+        return file_delete_handler_;
+    } else {
+        // Default to StaticFileHandler for regular files
+        log(LOG_DEBUG,
+            "choose_handler: Using StaticFileHandler for client_fd %d, path %s",
+            conn->client_fd_, matching_location->path_.c_str());
+        conn->conn_state_ = codes::GENERATING_RESPONSE;
+        return static_file_handler_;
+    }
+}
+
+codes::ConnectionState WebServer::determine_body_handling_state(
+    Connection* conn) {
+    HttpRequest* request = conn->request_data_;
+    // Check for request body
+    if (request->method_ == "POST" || request->method_ == "PUT") {
+        // Check for Transfer-Encoding header
+        std::string transfer_encoding =
+            request->get_header("transfer-encoding");
+        if (!transfer_encoding.empty() &&
+            transfer_encoding.find("chunked") != std::string::npos) {
+            return codes::PARSING_CHUNKED_BODY;
+        }
+
+        // Check for Content-Length header
+        std::string content_length = request->get_header("content-length");
+        if (!content_length.empty()) {
+            char* end_ptr;
+            size_t body_size =
+                std::strtoul(content_length.c_str(), &end_ptr, 10);
+
+            if (body_size > 0) {
+                return codes::PARSING_BODY;
+            }
+        }
+    }
+
+    // No body needed or zero-length body
+    return codes::GENERATING_RESPONSE;
+}
+
+// ------------- TODO: fix functions on the corner of shame below -----------
+
+// TODO: improve this ugly ass function
 const Location* WebServer::find_matching_location(
     const VirtualServer* virtual_server, const std::string& uri) const {
     // Use a reference instead of making a copy
@@ -868,6 +1051,7 @@ const Location* WebServer::find_matching_location(
     return best_match;
 }
 
+// TODO: improve this ugly ass function
 bool WebServer::validate_request_location(Connection* conn) {
     const Location* matching_location = conn->location_match_;
     if (!matching_location) {
@@ -928,52 +1112,7 @@ bool WebServer::validate_request_location(Connection* conn) {
     return true;
 }
 
-AHandler* WebServer::choose_handler(Connection* conn) {
-    log(LOG_DEBUG,
-        "choose_handler: Finding handler for client_fd %d, method %s, path %s",
-        conn->client_fd_, conn->request_data_->method_.c_str(),
-        conn->request_data_->path_.c_str());
-
-    const Location* matching_location = conn->location_match_;
-    const std::string& request_method = conn->request_data_->method_;
-    const std::string& request_path = conn->request_data_->path_;
-
-    // TODO - Change CGI condition to cgi_enabled + executable file + valid
-    // script extension?
-    // Return appropriate handler based on location config
-    // CHECK AND TEST - Carol
-    if (matching_location->cgi_enabled_ && is_cgi_extension(request_path) &&
-        request_method != "DELETE") {
-        // CGI handler for CGI-enabled locations
-        log(LOG_DEBUG,
-            "choose_handler: Using CgiHandler for client_fd %d, path %s",
-            conn->client_fd_, matching_location->path_.c_str());
-        conn->conn_state_ = codes::CONN_CGI_EXEC;
-        return cgi_handler_;
-    } else if (request_method == "POST") {
-        // FileUploadHandler for file uploads
-        log(LOG_DEBUG,
-            "choose_handler: Using FileUploadHandler for client_fd %d, path %s",
-            conn->client_fd_, matching_location->path_.c_str());
-        conn->conn_state_ = codes::CONN_PROCESSING;
-        return file_upload_handler_;
-    } else if (request_method == "DELETE") {
-        // DeleteHandler for dlete requests
-        log(LOG_DEBUG,
-            "choose_handler: Using DeleteHandler for client_fd %d, path %s",
-            conn->client_fd_, matching_location->path_.c_str());
-        conn->conn_state_ = codes::CONN_PROCESSING;
-        return file_delete_handler_;
-    } else {
-        // Default to StaticFileHandler for regular files
-        log(LOG_DEBUG,
-            "choose_handler: Using StaticFileHandler for client_fd %d, path %s",
-            conn->client_fd_, matching_location->path_.c_str());
-        conn->conn_state_ = codes::CONN_PROCESSING;
-        return static_file_handler_;
-    }
-}
-
+// TODO: improve this ugly ass function
 void WebServer::match_host_header(Connection* conn) {
     if (!conn || !conn->request_data_ || !conn->default_virtual_server_) {
         log(LOG_FATAL, "match_host_header: Invalid connection or data.");
@@ -1091,30 +1230,4 @@ void WebServer::match_host_header(Connection* conn) {
                 ? conn->virtual_server_->host_name_.c_str()
                 : conn->virtual_server_->server_names_[0].c_str());
     }
-}
-
-bool WebServer::is_cgi_extension(const std::string& request_uri) const {
-    // CHECK the extension allowed for CGI - Carol
-    std::string extension = get_file_extension(request_uri);
-    if (!extension.empty() &&
-        (extension == ".php" || extension == ".py" || extension == ".sh")) {
-        log(LOG_DEBUG, "Request uri: '%s' is a CGI script",
-            request_uri.c_str());
-        return true;
-    }
-    return false;
-}
-
-std::string get_file_extension(const std::string& uri_path) {
-    size_t dot_pos = uri_path.find_last_of('.');
-    if (dot_pos == std::string::npos) {
-        return "";  // No extension found
-    }
-    std::string extension = uri_path.substr(dot_pos);
-    // Convert to lowercase for case-insensitive comparison
-    for (std::string::iterator it = extension.begin(); it != extension.end();
-         ++it) {
-        *it = std::tolower(*it);
-    }
-    return extension;
 }

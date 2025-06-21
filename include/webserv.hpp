@@ -8,16 +8,16 @@
 namespace codes {
 enum ConnectionState {
     PARSING_REQUEST_LINE,  // Parsing the request line (method, URI, version)
-	PARSING_HEADERS,       // Parsing headers from the request
-	PROCESSING_REQUEST,    // Processing the request logic (routing, validation)
-	PARSING_BODY,          // Parsing the request body (if any)
-	PARSING_CHUNKED_BODY,  // Reading chunked transfer encoding body
-	GENERATING_RESPONSE,   // Generating response headers and body
-	CGI_EXECUTING,         // Executing a CGI script
-	WRITING_RESPONSE,      // Writing response to the client
-	COMPLETE,              // Request processing complete (keep-alive ready)
-	CLOSING,               // Closing the connection
-	ERROR                  // An error occurred during processing
+    PARSING_HEADERS,       // Parsing headers from the request
+    PROCESSING_REQUEST,    // Processing the request logic (routing, validation)
+    PARSING_BODY,          // Parsing the request body (if any)
+    PARSING_CHUNKED_BODY, //  Reading chunked transfer encoding body
+    GENERATING_RESPONSE,   // Generating response headers and body
+    EXECUTING_CGI,         // Executing a CGI script
+    WRITING_RESPONSE,      // Writing response to the client
+    COMPLETE,              // Request processing complete (keep-alive ready)
+    CLOSING,               // Closing the connection
+    ERROR                  // An error occurred during processing
 };
 
 enum CgiHandlerState {
@@ -30,16 +30,14 @@ enum CgiHandlerState {
 };
 
 enum WriteStatus {
-    WRITE_SUCCESS,   	 // Response fully sent
+    WRITE_SUCCESS,     // Response fully sent
     WRITE_INCOMPLETE,  // Partial write, needs another EPOLLOUT event
     WRITE_ERROR        // Error occurred during writing
 };
 
-// Result of a parsing attempt
 enum ParseStatus {
-    PARSE_HEADERS_COMPLETE,       // Headers parsed
-    PARSE_SUCCESS,                // Request fully parsed
     PARSE_INCOMPLETE,             // Need more data
+    PARSE_SUCCESS,                // Request fully parsed
     PARSE_ERROR,                  // General parsing error
     PARSE_INVALID_REQUEST_LINE,   // Invalid request line
     PARSE_METHOD_NOT_ALLOWED,     // Unsupported HTTP method
@@ -93,7 +91,6 @@ enum ResponseStatus {
     GATEWAY_TIMEOUT = 504,  //  Gateway server did not receive response in time
     HTTP_VERSION_NOT_SUPPORTED = 505,  // HTTP version in request not supported
     INSUFFICIENT_STORAGE = 507         // Insufficient Storage
-
 };
 
 }  // namespace codes
@@ -101,19 +98,17 @@ enum ResponseStatus {
 namespace http_limits {
 const time_t TIMEOUT = 60;                    // Timeout in seconds
 const size_t MAX_METHOD_LENGTH = 8;           // HTTP method length
-const size_t MAX_REQUEST_LINE_LENGTH = 8192;  // 8KB
-const size_t MAX_PATH_LENGTH = 2048;          // Path component
-const size_t MAX_QUERY_LENGTH = 2048;         // Query string
-const size_t MAX_FRAGMENT_LENGTH = 1024;      // Fragment identifier
+const size_t MAX_REQUEST_LINE_LENGTH = 1024;  // 1KB
+const size_t MAX_REQUEST_HEAD_LENGTH = 4096;  // 4KB
 const size_t MAX_HEADER_NAME_LENGTH = 256;    // Header name length
-const size_t MAX_HEADER_VALUE_LENGTH = 8192;  // Header value length
+const size_t MAX_HEADER_VALUE_LENGTH = 1024;  // Header value length
 const size_t MAX_HEADERS = 100;               // Maximum number of headers
-const size_t MAX_CONTENT_LENGTH = 10485760;   // 10MB
+const size_t MAX_CONTENT_LENGTH = 8388608;    // 8MB
 const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 }  // namespace http_limits
 
 #define CRLF "\r\n"  // Carriage return + line feed
-#define CHUNK_SIZE 4096
+#define DEFAULT_CHUNK_SIZE 4096
 
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -143,6 +138,7 @@ const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 #include <vector>
 
 #include "AHandler.hpp"
+#include "Buffer.hpp"
 #include "ErrorHandler.hpp"
 #include "RequestParser.hpp"
 #include "VirtualServer.hpp"
@@ -150,13 +146,13 @@ const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 #include "CgiHandler.hpp"
 #include "Connection.hpp"
 #include "ConnectionManager.hpp"
+#include "FileDeleteHandler.hpp"
 #include "FileUploadHandler.hpp"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
 #include "Logger.hpp"
 #include "ResponseWriter.hpp"
 #include "StaticFileHandler.hpp"
-#include "FileDeleteHandler.hpp"
 #include "WebServer.hpp"
 
 // utils

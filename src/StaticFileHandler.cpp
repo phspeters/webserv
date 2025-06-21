@@ -127,7 +127,7 @@ void StaticFileHandler::handle(Connection* conn) {
                 "StaticFileHandler::handle: Autoindex generated for client_fd "
                 "%d",
                 conn->client_fd_);
-            conn->conn_state_ = codes::CONN_WRITING;
+            conn->conn_state_ = codes::WRITING_RESPONSE;
             return;
         }
     }
@@ -245,7 +245,7 @@ void StaticFileHandler::handle(Connection* conn) {
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->body_.assign(file_content.begin(),
                                        file_content.end());
-    conn->conn_state_ = codes::CONN_WRITING;
+    conn->conn_state_ = codes::WRITING_RESPONSE;
     log(LOG_DEBUG,
         "StaticFileHandler::handle: File served successfully for client_fd %d",
         conn->client_fd_);

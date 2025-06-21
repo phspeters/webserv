@@ -20,6 +20,7 @@ struct HttpRequest {
         headers_;  // Map of header names to values
 
     std::vector<char> body_;  // Request body content
+    size_t content_length_;  // Size of the request body (for POST/PUT requests)
 
     // Parsed components of the URI (populated after basic parsing)
     std::string path_;          // Path part of the URI (e.g., "/index.html")

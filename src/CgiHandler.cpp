@@ -9,7 +9,7 @@ void CgiHandler::handle(Connection* conn) {
         conn->client_fd_);
 
     switch (conn->cgi_handler_state_) {
-        case codes::CGI_HANDLER_IDLE:
+        case codes::CGI_IDLE:
             // Initial state, ready to start CGI execution
             if (!validate_cgi_request(conn)) {
                 // Validation failed, error response already generated
@@ -17,18 +17,18 @@ void CgiHandler::handle(Connection* conn) {
             }
             setup_cgi_execution(conn);
             break;
-        case codes::CGI_HANDLER_WRITING_TO_PIPE:
+        case codes::CGI_WRITING_TO_PIPE:
             // Write request body to CGI's stdi, should not reach here
             handle_cgi_write(conn);
             break;
-        case codes::CGI_HANDLER_READING_FROM_PIPE:
-        case codes::CGI_HANDLER_HEADERS_PARSED:
+        case codes::CGI_READING_FROM_PIPE:
+        case codes::CGI_HEADERS_PARSED:
             // Read from CGI's stdout
             handle_cgi_read(conn);
             break;
-        case codes::CGI_HANDLER_COMPLETE:
-        case codes::CGI_HANDLER_ERROR:
-            conn->conn_state_ = codes::CONN_WRITING;
+        case codes::CGI_COMPLETE:
+        case codes::CGI_ERROR:
+            conn->conn_state_ = codes::WRITING_RESPONSE;
             break;
     }
 }
@@ -173,7 +173,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
         }
 
         if (request_method == "POST" && !conn->request_data_->body_.empty()) {
-            conn->cgi_handler_state_ = codes::CGI_HANDLER_WRITING_TO_PIPE;
+            conn->cgi_handler_state_ = codes::CGI_WRITING_TO_PIPE;
 
             // Register this pipe with epoll for EPOLLOUT events
             if (!WebServer::register_epoll_events(conn->cgi_pipe_stdin_fd_,
@@ -188,7 +188,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
                 "stdin_fd %d",
                 conn->client_fd_, conn->cgi_pipe_stdin_fd_);
         } else {
-            conn->cgi_handler_state_ = codes::CGI_HANDLER_READING_FROM_PIPE;
+            conn->cgi_handler_state_ = codes::CGI_READING_FROM_PIPE;
 
             // If it's a GET request or an empty POST, we can close the stdin
             // pipe
@@ -450,7 +450,7 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
         close(conn->cgi_pipe_stdin_fd_);
         conn->cgi_pipe_stdin_fd_ = -1;  // Mark as closed
         conn->cgi_handler_state_ =
-            codes::CGI_HANDLER_READING_FROM_PIPE;  // Switch to reading state
+            codes::CGI_READING_FROM_PIPE;  // Switch to reading state
 
         // Register the stdout pipe for reading
         if (!WebServer::register_epoll_events(conn->cgi_pipe_stdout_fd_,
@@ -502,12 +502,12 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
 
     // Resize the read buffer to accommodate incoming data
     size_t original_size = conn->cgi_read_buffer_.size();
-    conn->cgi_read_buffer_.resize(original_size + CHUNK_SIZE);
+    conn->cgi_read_buffer_.resize(original_size + DEFAULT_CHUNK_SIZE);
 
     // Read from CGI's stdout pipe
     ssize_t bytes_read =
         read(conn->cgi_pipe_stdout_fd_, &conn->cgi_read_buffer_[original_size],
-             CHUNK_SIZE);
+             DEFAULT_CHUNK_SIZE);
 
     if (bytes_read < 0) {
         log(LOG_ERROR, "CGI: Failed to read from stdout pipe for client %d: %s",
@@ -526,7 +526,7 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
         parse_cgi_output(conn);  // This might change conn->cgi_handler_state_
     }
 
-    if (conn->cgi_handler_state_ == codes::CGI_HANDLER_ERROR) {
+    if (conn->cgi_handler_state_ == codes::CGI_ERROR) {
         log(LOG_ERROR,
             "CGI: Error state reached for client %d, cleaning up resources",
             conn->client_fd_);
@@ -537,7 +537,7 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
         log(LOG_DEBUG, "CGI: EOF received from stdout for client %d.",
             conn->client_fd_);
 
-        if (conn->cgi_handler_state_ == codes::CGI_HANDLER_READING_FROM_PIPE) {
+        if (conn->cgi_handler_state_ == codes::CGI_READING_FROM_PIPE) {
             // Headers not fully parsed before EOF - this is an error
             if (conn->cgi_read_buffer_.empty() &&
                 conn->response_data_->headers_.empty()) {
@@ -589,7 +589,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
 
     // 1. Parse Headers
     std::vector<char>& buffer = conn->cgi_read_buffer_;
-    while ((conn->cgi_handler_state_ != codes::CGI_HANDLER_HEADERS_PARSED) &&
+    while ((conn->cgi_handler_state_ != codes::CGI_HEADERS_PARSED) &&
            (!buffer.empty())) {
         std::vector<char>::iterator line_end_it =
             std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
@@ -607,7 +607,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
             log(LOG_DEBUG, "CGI: End of headers found for client %d.",
                 conn->client_fd_);
             buffer.erase(buffer.begin(), buffer.begin() + 2);  // Consume CRLF
-            conn->cgi_handler_state_ = codes::CGI_HANDLER_HEADERS_PARSED;
+            conn->cgi_handler_state_ = codes::CGI_HEADERS_PARSED;
             break;  // Move to body parsing
         }
 
@@ -657,7 +657,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
                      line_end_it + 2);  // Remove the line from the buffer
     }
 
-    if (conn->cgi_handler_state_ == codes::CGI_HANDLER_READING_FROM_PIPE) {
+    if (conn->cgi_handler_state_ == codes::CGI_READING_FROM_PIPE) {
         log(LOG_DEBUG,
             "CGI headers not fully parsed yet, waiting for more data");
         return;
@@ -720,8 +720,8 @@ void CgiHandler::finalize_cgi_response(Connection* conn) {
     conn->response_data_->set_header("Content-Length", oss.str());
 
     // Change states
-    conn->cgi_handler_state_ = codes::CGI_HANDLER_COMPLETE;
-    conn->conn_state_ = codes::CONN_WRITING;
+    conn->cgi_handler_state_ = codes::CGI_COMPLETE;
+    conn->conn_state_ = codes::WRITING_RESPONSE;
 
     cleanup_cgi_resources(conn);
 
@@ -732,7 +732,7 @@ void CgiHandler::finalize_cgi_response(Connection* conn) {
 void CgiHandler::finalize_cgi_error(Connection* conn,
                                     codes::ResponseStatus status) {
     ErrorHandler::generate_error_response(conn, status);
-    conn->cgi_handler_state_ = codes::CGI_HANDLER_ERROR;
+    conn->cgi_handler_state_ = codes::CGI_ERROR;
 
     cleanup_cgi_resources(conn);
 }

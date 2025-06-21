@@ -6,15 +6,11 @@ Connection::Connection(int fd, const VirtualServer* default_virtual_server)
       virtual_server_(default_virtual_server),
       last_activity_(time(NULL)),
       chunk_remaining_bytes_(0),
-      write_buffer_offset_(0),
-      cgi_read_buffer_offset_(0),
       request_data_(new HttpRequest()),
       response_data_(new HttpResponse()),
-      conn_state_(codes::CONN_READING),
-      parser_state_(codes::PARSING_REQUEST_LINE),
-      cgi_handler_state_(codes::CGI_HANDLER_IDLE),
-      parse_status_(codes::PARSE_INCOMPLETE),
-      write_status_(codes::WRITING_INCOMPLETE),
+      conn_state_(codes::PARSING_REQUEST_LINE),
+      cgi_handler_state_(codes::CGI_IDLE),
+      parser_context_(),
       active_handler_(NULL),
       location_match_(NULL),
       cgi_pid_(-1),
@@ -63,10 +59,8 @@ void Connection::reset_for_keep_alive() {
 
     // Reset write buffer and offsets
     chunk_remaining_bytes_ = 0;
-    write_buffer_.clear();
-    write_buffer_offset_ = 0;
-    cgi_read_buffer_.clear();
-    cgi_read_buffer_offset_ = 0;
+    write_buffer_.reset();
+    cgi_output_buffer_.reset();
 
     // Reset request/response
     if (request_data_) {
@@ -77,11 +71,9 @@ void Connection::reset_for_keep_alive() {
     }
 
     // Reset state variables
-    conn_state_ = codes::CONN_READING;
-    parser_state_ = codes::PARSING_REQUEST_LINE;
-    cgi_handler_state_ = codes::CGI_HANDLER_IDLE;
-    parse_status_ = codes::PARSE_INCOMPLETE;
-    write_status_ = codes::WRITING_INCOMPLETE;
+    conn_state_ = codes::PARSING_REQUEST_LINE;
+    cgi_handler_state_ = codes::CGI_IDLE;
+    parser_context_.reset();
 
     // Reset location match
     location_match_ = NULL;
@@ -118,17 +110,6 @@ void Connection::reset_for_keep_alive() {
 
     log(LOG_DEBUG, "Connection reset for keep-alive on socket '%i'",
         client_fd_);
-}
-
-bool Connection::is_readable() const {
-    return conn_state_ == codes::CONN_READING;
-}
-
-bool Connection::is_cgi() const { return conn_state_ == codes::CONN_CGI_EXEC; }
-
-bool Connection::is_writable() const {
-    return conn_state_ == codes::CONN_PROCESSING ||
-           conn_state_ == codes::CONN_WRITING;
 }
 
 bool Connection::is_keep_alive() const {

@@ -13,7 +13,8 @@ namespace ErrorHandler {
 
 // ==================== MAIN ERROR RESPONSE GENERATORS ====================
 void generate_error_response(Connection* conn,
-                             codes::ResponseStatus status = codes::UNDEFINED);
+                             codes::ResponseStatus response_status);
+void generate_error_response(Connection* conn, codes::ParseStatus parse_status);
 
 // ==================== ERROR INFO MAPPING ====================
 int get_parse_message_status(codes::ParseStatus parse_status);

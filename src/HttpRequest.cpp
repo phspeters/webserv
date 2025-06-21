@@ -1,6 +1,6 @@
 #include "webserv.hpp"
 
-HttpRequest::HttpRequest() {}
+HttpRequest::HttpRequest() : content_length_(0) {}
 
 HttpRequest::~HttpRequest() {}
 
@@ -41,6 +41,7 @@ void HttpRequest::clear() {
     version_.clear();
     headers_.clear();
     body_.clear();
+    content_length_ = 0;
     path_.clear();
     query_string_.clear();
 
