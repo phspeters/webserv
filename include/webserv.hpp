@@ -7,16 +7,11 @@
 
 namespace codes {
 enum ConnectionState {
-    PARSING_REQUEST_LINE,  // Parsing the request line (method, URI, version)
-    PARSING_HEADERS,       // Parsing headers from the request
-    PROCESSING_REQUEST,    // Processing the request logic (routing, validation)
-    PARSING_BODY,          // Parsing the request body (if any)
-    PARSING_CHUNKED_BODY, //  Reading chunked transfer encoding body
+    READING_HEADERS,  // Parsing the request line (method, URI, version)
+    PROCESSING_BODY,    // Processing the request logic (routing, validation)
     GENERATING_RESPONSE,   // Generating response headers and body
-    EXECUTING_CGI,         // Executing a CGI script
     WRITING_RESPONSE,      // Writing response to the client
     COMPLETE,              // Request processing complete (keep-alive ready)
-    CLOSING,               // Closing the connection
     ERROR                  // An error occurred during processing
 };
 

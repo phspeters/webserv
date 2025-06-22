@@ -203,15 +203,15 @@ void WebServer::event_loop() {
             case IOContext::CLIENT_SOCKET:
                 handle_client_socket_event(ctx->conn, event_flags);
 				-- Se EPOLLIN = read_from_socket
-				---- Se state == codes::READING_REQUEST = parse_request
+				---- Se state == codes::READING_HEADERS || PROCESSING_BODY = parse_request
 				------- Se PARSE_SUCCESS = setup_next_event_state
-				-- Se EPOLLOUT = write_to_socket (state WRITING_RESPONSE required?) e limpa o que foi escrito
+				-- Se EPOLLOUT = write_to_socket (state WRITING_RESPONSE required? Deixar um else de log de aviso que algo está errado?) e limpa o que foi escrito
                 break;
             case IOContext::STATIC_FILE:
 			(Atencao especial ao FileDelete que já executará após check_permissions ou similar)
                 handle_static_file_event(ctx->conn, event_flags);
 				-- Sempre EPOLLIN
-				-- Se state HANDLING_REQUEST -> handler prepara a response (request line, headers e fd do static file)
+				-- Se state GENERATING_RESPONSE -> handler prepara a response (response line, headers e fd do static file)
 				---- Se sucesso, troca state para WRITING_RESPONSE
 				-- Se state WRITING_RESPONSE -> Response writer escreve a response no write_buffer e troca client socket para EPOLLOUT
                 break;
@@ -225,16 +225,16 @@ void WebServer::event_loop() {
 			(VERIFICAR FORMA DE SABER SE O SCRIPT ESTÁ FUNCIONANDO ANTES DE TENTAR LER)
                 handle_cgi_read_event(ctx->conn, event_flags);
 				-- Sempre EPOLLIN
-				-- Se state HANDLING_REQUEST -> handler prepara a response (request line, headers e fd do cgi_read_pipe)
+				-- Se state GENERATING_RESPONSE -> handler prepara a response (request line, headers e fd do cgi_read_pipe)
 				---- Se sucesso, troca state para WRITING_RESPONSE
 				-- Se state WRITING_RESPONSE -> Response writer escreve a response no write_buffer e troca client socket para EPOLLOUT
                 break;
 			case IOContext::FILE_UPLOAD:
 				handle_file_upload_event(ctx->conn, event_flags);
 				-- Sempre EPOLLOUT
-				-- Se state HANDLING_REQUEST -> handler prepara a response (request line, headers e fd do file_upload)
+				-- Se state GENERATING_RESPONSE -> handler prepara a response (request line, headers e fd do file_upload)
 				---- Se sucesso, troca state para WRITING_RESPONSE
-				-- Se state WRITING_RESPONSE -> Response writer escreve a request line e headers no write_buffer, depois le direto do client socket o que falta e troca client socket para EPOLLOUT
+				-- Se state WRITING_RESPONSE -> Response writer escreve a request line e headers no write_buffer, depois le direto do file_upload_buffer o que falta e troca client socket para EPOLLOUT
 				break;
             // ... etc
         }*/

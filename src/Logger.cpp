@@ -154,7 +154,7 @@ int log_buffer(log_level level, const Buffer& buffer) {
     std::cerr << timestamp;
 
     std::cerr << "========== BUFFER START ==========" << std::endl;
-    int bytes_written = write(1, buffer.read_ptr(), buffer.readable_bytes());
+    int bytes_written = write(1, buffer.data(), buffer.readable_bytes());
     std::cerr << "=========== BUFFER END ===========" << std::endl;
 
     if (bytes_written < 0) {

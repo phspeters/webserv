@@ -11,6 +11,8 @@ struct VirtualServer;
 struct ParserContext {
     ParserContext() { reset(); }
 
+    // TODO: add BodyType enum to handle different body types
+    
     unsigned int parser_state_;  // Current state of the request parser
     unsigned int return_state_;  // State to return to after parsing
 

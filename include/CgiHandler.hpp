@@ -8,6 +8,27 @@ struct Connection;
 class AHandler;
 struct HttpRequest;
 
+
+struct CgiContext {
+    // CGI State (Only relevant if active_handler is CgiHandler)
+    codes::CgiHandlerState
+        cgi_handler_state_;   // State of the CGI handler (if active)
+    pid_t cgi_pid_;           // Process ID of the CGI script (-1 if none)
+    int cgi_pipe_stdin_fd_;   // FD for writing request body TO CGI (-1 if none)
+    int cgi_pipe_stdout_fd_;  // FD for reading response FROM CGI (-1 if none)
+    std::string cgi_script_path_;  // Path to the CGI script
+    std::vector<std::string>
+        cgi_envp_;  // Environment variables for the CGI script execution
+    Buffer cgi_input_buffer_;  // Buffer for writing CGI input
+    Buffer cgi_output_buffer_;  // Buffer for reading CGI output
+
+    CgiContext()
+        : cgi_handler_state_(codes::CGI_IDLE),
+          cgi_pid_(-1),
+          cgi_pipe_stdin_fd_(-1),
+          cgi_pipe_stdout_fd_(-1) {}
+};
+
 // Handles requests by executing CGI scripts.
 class CgiHandler : public AHandler {
    public:

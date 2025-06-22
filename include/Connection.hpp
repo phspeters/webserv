@@ -33,8 +33,10 @@ struct Connection {
     //--------------------------------------
     // Buffers
     //--------------------------------------
-    Buffer read_buffer_;            // Buffer for incoming data from client
-    Buffer write_buffer_;           // Buffer for outgoing data to client
+    Buffer read_buffer_;   // Buffer for incoming data from client
+    Buffer write_buffer_;  // Buffer for outgoing data to client
+    Buffer*
+        decoded_buffer_;  // Buffer for decoded data (e.g., from chunked body)
 
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)
@@ -48,9 +50,7 @@ struct Connection {
     // State Management
     //--------------------------------------
     codes::ConnectionState conn_state_;  // Current state of the connection
-    codes::CgiHandlerState
-        cgi_handler_state_;         // State of the CGI handler (if active)
-    ParserContext parser_context_;  // Context for parsing requests
+    ParserContext parser_context_;       // Context for parsing requests
 
     //--------------------------------------
     // Connection Management
@@ -59,25 +59,17 @@ struct Connection {
     bool is_keep_alive() const;   // Checks if the connection is keep-alive
 
     //--------------------------------------
-    // Handler-Specific State (Example for CGI - could be a union or void*)
+    // Handler-Specific Context
     //--------------------------------------
     AHandler* active_handler_;        // Pointer to the currently active handler
     const Location* location_match_;  // Best matching location for the request
 
-    // TODO: encapulate all cgi related members in a CgiState struct
-    // CGI State (Only relevant if active_handler is CgiHandler)
-    pid_t cgi_pid_;           // Process ID of the CGI script (-1 if none)
-    int cgi_pipe_stdin_fd_;   // FD for writing request body TO CGI (-1 if none)
-    int cgi_pipe_stdout_fd_;  // FD for reading response FROM CGI (-1 if none)
-    std::string cgi_script_path_;  // Path to the CGI script
-    std::vector<std::string>
-        cgi_envp_;  // Environment variables for the CGI script execution
-    Buffer cgi_output_buffer_;  // Buffer for reading CGI output
-
-    // Static File State (Only relevant if active_handler is StaticFileHandler)
-    int static_file_fd_;        // FD of the file being sent (-1 if none)
-    off_t static_file_offset_;  // Current position within the file
-    size_t static_file_bytes_to_send_;  // Total bytes to send from file
+    StaticFileContext*
+        static_file_context_;  // Context for static file handling
+    FileUploadContext*
+        file_upload_context_;  // Context for file upload handling
+    CgiContext* cgi_context_;  // Context for CGI handling (if active_handler is
+                               // CgiHandler)
 
    private:
     // Prevent copying

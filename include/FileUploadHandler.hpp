@@ -6,6 +6,15 @@
 // Forward declarations
 struct Connection;
 
+struct FileUploadContext {
+    // State for file upload handling
+    int file_fd_;  // File descriptor for the opened uploaded file (-1 if none)
+    Buffer upload_buffer_;  // Buffer for reading file data
+
+    FileUploadContext()
+        : file_fd_(-1) {}  // Initialize file_fd_ to -1 indicating no file opened
+};
+
 // Handles file upload requests
 class FileUploadHandler : public AHandler {
    public:

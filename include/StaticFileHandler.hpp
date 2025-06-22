@@ -7,6 +7,17 @@
 struct Connection;
 struct VirtualServer;
 
+struct StaticFileContext {
+    // State for static file handling
+    int file_fd_;  // File descriptor for the opened static file (-1 if none)
+    off_t offset_;  // Offset in the file for sending data
+    size_t bytes_to_send_;  // Total bytes to send from the file
+    size_t bytes_sent_;  // Bytes already sent from the file
+
+    StaticFileContext()
+        : file_fd_(-1), offset_(0), bytes_to_send_(0), bytes_sent_(0) {}
+};
+
 // Handles requests for static files.
 class StaticFileHandler : public AHandler {
    public:
