@@ -7,17 +7,18 @@
 struct Connection;
 struct HttpResponse;
 struct VirtualServer;
+enum ParseStatus;
+enum ResponseStatus;
 
 // Centralized error handling for HTTP responses
 namespace ErrorHandler {
 
 // ==================== MAIN ERROR RESPONSE GENERATORS ====================
-void generate_error_response(Connection* conn,
-                             codes::ResponseStatus response_status);
-void generate_error_response(Connection* conn, codes::ParseStatus parse_status);
+void generate_error_response(Connection* conn, ResponseStatus response_status);
+void generate_error_response(Connection* conn, ParseStatus parse_status);
 
 // ==================== ERROR INFO MAPPING ====================
-int get_parse_message_status(codes::ParseStatus parse_status);
+int get_parse_message_status(ParseStatus parse_status);
 
 // ==================== CORE ERROR HANDLING ====================
 void handle_error(HttpResponse* resp, int status_code,

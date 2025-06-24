@@ -10,19 +10,22 @@ struct HttpResponse;
 struct VirtualServer;
 struct ParserContext;
 class Buffer;
+enum ConnectionState;
 
 // Represents the state associated with a single client connection
 struct Connection {
     //--------------------------------------
     // Constructor / Destructor
     //--------------------------------------
-    Connection(int fd, const VirtualServer* default_virtual_server);
+    Connection(WebServer* owner, int fd,
+               const VirtualServer* default_virtual_server);
     ~Connection();  // Cleans up owned resources (Request, Response, FDs)
 
     //--------------------------------------
     // Core Connection Identification & I/O
     //--------------------------------------
-    int client_fd_;  // File descriptor for the client socket
+    WebServer* const owner_server_;  // Pointer to the owning WebServer instance
+    int client_fd_;                  // File descriptor for the client socket
     const VirtualServer* const
         default_virtual_server_;           // Pointer to default virtual server
     const VirtualServer* virtual_server_;  // Pointer to virtual server matching
@@ -49,14 +52,20 @@ struct Connection {
     //--------------------------------------
     // State Management
     //--------------------------------------
-    codes::ConnectionState conn_state_;  // Current state of the connection
-    ParserContext parser_context_;       // Context for parsing requests
+    ConnectionState conn_state_;    // Current state of the connection
+    ParserContext parser_context_;  // Context for parsing requests
+    std::vector<IOContext*>
+        io_contexts_;  // List of I/O contexts associated with this connection
 
     //--------------------------------------
     // Connection Management
     //--------------------------------------
     void reset_for_keep_alive();  // Resets state for handling another request
     bool is_keep_alive() const;   // Checks if the connection is keep-alive
+    void add_io_context(
+        IOContext* io_context);  // Adds an I/O context for this connection
+    void remove_io_context(
+        IOContext* io_context);  // Removes an I/O context for this connection
 
     //--------------------------------------
     // Handler-Specific Context
@@ -77,5 +86,13 @@ struct Connection {
     Connection& operator=(const Connection&);
 
 };  // struct Connection
+
+enum ConnectionState {
+    CONN_READING_REQUEST,      // Parsing the request
+    CONN_GENERATING_RESPONSE,  // Generating response headers and body
+    CONN_WRITING_RESPONSE,     // Writing response to the client
+    CONN_COMPLETE,             // Request processing complete (keep-alive ready)
+    CONN_ERROR                 // An error occurred during processing
+};
 
 #endif  // CONNECTION_HPP

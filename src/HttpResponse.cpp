@@ -1,6 +1,6 @@
 #include "webserv.hpp"
 
-HttpResponse::HttpResponse() : status_code_(codes::OK), content_length_(0) {
+HttpResponse::HttpResponse() : status_code_(OK), content_length_(0) {
     version_ = "HTTP/1.1";
 }
 

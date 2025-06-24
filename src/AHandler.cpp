@@ -15,7 +15,7 @@ bool AHandler::process_location_redirect(Connection* conn) {
         location->path_.c_str(), location->redirect_.c_str());
 
     // Set up redirect response
-    ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
+    ErrorHandler::generate_error_response(conn, MOVED_PERMANENTLY);
     conn->response_data_->set_header("Location", location->redirect_);
     return true;  // Redirect was processed
 }
@@ -87,7 +87,7 @@ bool AHandler::process_directory_redirect(Connection* conn,
             redirect_url += "?" + query;
         }
 
-        ErrorHandler::generate_error_response(conn, codes::MOVED_PERMANENTLY);
+        ErrorHandler::generate_error_response(conn, MOVED_PERMANENTLY);
         conn->response_data_->set_header("Location", redirect_url);
         return true;
     }
@@ -133,7 +133,7 @@ bool AHandler::process_directory_index(Connection* conn,
 
     // No index file and autoindex is disabled
     // Fluxogram 403 - autoindex off - call error handler
-    ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+    ErrorHandler::generate_error_response(conn, FORBIDDEN);
     log(LOG_DEBUG,
         "process_directory_index: No index file and autoindex disabled for %s",
         absolute_path.c_str());
@@ -151,8 +151,7 @@ void AHandler::generate_directory_listing(Connection* conn,
     if (!dir) {
         log(LOG_ERROR, "Failed to open directory for listing: %s",
             strerror(errno));
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return;
     }
 
@@ -297,7 +296,7 @@ void AHandler::generate_directory_listing(Connection* conn,
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->set_header("Content-Type", "text/html");
     conn->response_data_->body_.assign(html.begin(), html.end());
-    conn->conn_state_ = codes::WRITING_RESPONSE;
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
 
     // Clean up
     closedir(dir);

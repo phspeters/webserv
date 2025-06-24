@@ -4,31 +4,31 @@ ResponseWriter::ResponseWriter() {}
 
 ResponseWriter::~ResponseWriter() {}
 
-codes::WriteStatus ResponseWriter::write_response(Connection* conn) {
+WriteStatus ResponseWriter::write_response(Connection* conn) {
     log(LOG_DEBUG, "handle_write: Writing response to client_fd %d",
         conn->client_fd_);
 
     // Validate connection
     if (!conn || conn->client_fd_ < 0) {
-        return codes::WRITE_ERROR;
+        return WRITE_ERROR;
     }
 
     // If buffer is empty, prepare the response data first
     if (conn->write_buffer_.empty()) {
         // Write headers
         if (!write_headers(conn)) {
-            return codes::WRITE_ERROR;
+            return WRITE_ERROR;
         }
 
         // Write body
         if (!write_body(conn)) {
-            return codes::WRITE_ERROR;
+            return WRITE_ERROR;
         }
     }
 
     // Nothing to send
     if (conn->write_buffer_.empty()) {
-        return codes::WRITE_SUCCESS;
+        return WRITE_SUCCESS;
     }
 
     // Send the response
@@ -42,7 +42,7 @@ codes::WriteStatus ResponseWriter::write_response(Connection* conn) {
     if (bytes_written <= 0) {
         // With level-triggered epoll, if we're here, it's a real error
         // No need to check errno specifically
-        return codes::WRITE_ERROR;
+        return WRITE_ERROR;
     }
 
     // Update the offset instead of erasing
@@ -53,11 +53,11 @@ codes::WriteStatus ResponseWriter::write_response(Connection* conn) {
 
     // Check if we've written everything
     if (conn->write_buffer_offset_ == conn->write_buffer_.size()) {
-        return codes::WRITE_SUCCESS;
+        return WRITE_SUCCESS;
     }
 
     // More data to send
-    return codes::WRITE_INCOMPLETE;
+    return WRITE_INCOMPLETE;
 }
 
 bool ResponseWriter::write_headers(Connection* conn) {
@@ -117,16 +117,18 @@ bool ResponseWriter::write_body(Connection* conn) {
     // Add body content to write buffer if it exists
     if (!conn->response_data_->body_.empty()) {
         // Insert body content into write buffer (vector<char>)
-        conn->write_buffer_.insert(conn->write_buffer_.end(), 
-                                  conn->response_data_->body_.begin(),
-                                  conn->response_data_->body_.end());
-        
-        log(LOG_DEBUG, "Added %zu bytes of body content to write buffer for client_fd %d", 
+        conn->write_buffer_.insert(conn->write_buffer_.end(),
+                                   conn->response_data_->body_.begin(),
+                                   conn->response_data_->body_.end());
+
+        log(LOG_DEBUG,
+            "Added %zu bytes of body content to write buffer for client_fd %d",
             conn->response_data_->body_.size(), conn->client_fd_);
     } else {
-        log(LOG_WARNING, "Response body is empty for client_fd %d", conn->client_fd_);
+        log(LOG_WARNING, "Response body is empty for client_fd %d",
+            conn->client_fd_);
     }
-    
+
     return true;
 }
 

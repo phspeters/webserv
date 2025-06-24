@@ -7,6 +7,7 @@
 struct Connection;
 struct HttpResponse;
 struct VirtualServer;
+enum WriteStatus;
 
 // Utility class to help format HTTP responses.
 class ResponseWriter {
@@ -14,7 +15,7 @@ class ResponseWriter {
     ResponseWriter();
     ~ResponseWriter();
 
-    codes::WriteStatus write_response(Connection* conn);
+    WriteStatus write_response(Connection* conn);
 
     // Prepares the initial part of the response (status line + headers)
     // and places it into the Connection's write buffer.
@@ -32,5 +33,11 @@ class ResponseWriter {
     ResponseWriter& operator=(const ResponseWriter&);
 
 };  // class ResponseWriter
+
+enum WriteStatus {
+    WRITE_SUCCESS,     // Response fully sent
+    WRITE_INCOMPLETE,  // Partial write, needs another EPOLLOUT event
+    WRITE_ERROR        // Error occurred during writing
+};
 
 #endif  // RESPONSEWRITER_HPP

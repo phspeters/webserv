@@ -1,27 +1,26 @@
 #include "webserv.hpp"
 
-Connection::Connection(int fd, const VirtualServer* default_virtual_server)
-    : client_fd_(fd),
+// TODO: review initialization order and dependencies
+Connection::Connection(WebServer* owner, int fd,
+                       const VirtualServer* default_virtual_server)
+    : owner_server_(owner),
+      client_fd_(fd),
       default_virtual_server_(default_virtual_server),
       virtual_server_(default_virtual_server),
       last_activity_(time(NULL)),
-      chunk_remaining_bytes_(0),
       request_data_(new HttpRequest()),
       response_data_(new HttpResponse()),
-      conn_state_(codes::PARSING_REQUEST_LINE),
-      cgi_handler_state_(codes::CGI_IDLE),
+      conn_state_(CONN_READING_REQUEST),
       parser_context_(),
       active_handler_(NULL),
-      location_match_(NULL),
-      cgi_pid_(-1),
-      cgi_pipe_stdin_fd_(-1),
-      cgi_pipe_stdout_fd_(-1),
-      cgi_script_path_(""),
-      cgi_envp_(),
-      static_file_fd_(-1),
-      static_file_offset_(0),
-      static_file_bytes_to_send_(0) {}
+      location_match_(NULL) {
+    IOContext* client_ctx = new IOContext(this, FD_CLIENT_SOCKET, client_fd_);
+    owner->add_fd_to_epoll(client_ctx, EPOLLIN);
+    io_contexts_.push_back(client_ctx);
+    log(LOG_DEBUG, "Connection created for socket '%i'", client_fd_);
+}
 
+// TODO: review destruction order and dependencies
 Connection::~Connection() {
     // Clean up owned resources
     if (request_data_) {
@@ -53,6 +52,7 @@ Connection::~Connection() {
         client_fd_);
 }
 
+// TODO: review reset order and dependencies
 void Connection::reset_for_keep_alive() {
     // Reset virtual server
     virtual_server_ = default_virtual_server_;
@@ -71,8 +71,8 @@ void Connection::reset_for_keep_alive() {
     }
 
     // Reset state variables
-    conn_state_ = codes::PARSING_REQUEST_LINE;
-    cgi_handler_state_ = codes::CGI_IDLE;
+    conn_state_ = PARSING_REQUEST_LINE;
+    cgi_handler_state_ = CGI_IDLE;
     parser_context_.reset();
 
     // Reset location match

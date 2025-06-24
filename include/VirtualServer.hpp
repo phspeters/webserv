@@ -4,22 +4,7 @@
 #include "webserv.hpp"
 
 // Location configuration block
-struct Location {
-    std::string path_;
-    std::string root_;
-    bool autoindex_;
-    std::vector<std::string> allowed_methods_;
-    bool cgi_enabled_;
-    std::string index_;
-    std::string redirect_;
-    ssize_t client_max_body_size_;
-
-    // Constructor with defaults
-    Location();
-
-    // Validation method
-    bool is_valid() const;
-};
+struct Location;
 
 // Server configuration
 struct VirtualServer {
@@ -53,7 +38,6 @@ struct VirtualServer {
                          std::string& value);
     bool add_directive_value(Location& location, const std::string& key,
                              const std::string& value);
-    bool apply_defaults();
 
     // Validation methods
     bool is_valid() const;
@@ -61,6 +45,24 @@ struct VirtualServer {
     bool is_valid_port() const;
     bool has_valid_locations() const;
     bool has_valid_error_pages() const;
+};
+
+// Location configuration block
+struct Location {
+    std::string path_;
+    std::string root_;
+    bool autoindex_;
+    std::vector<std::string> allowed_methods_;
+    bool cgi_enabled_;
+    std::string index_;
+    std::string redirect_;
+    ssize_t client_max_body_size_;
+
+    // Constructor with defaults
+    Location();
+
+    // Validation method
+    bool is_valid() const;
 };
 
 #endif  // VIRTUALSERVER_HPP

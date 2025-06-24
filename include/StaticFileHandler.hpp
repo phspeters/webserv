@@ -6,17 +6,7 @@
 // Forward declarations
 struct Connection;
 struct VirtualServer;
-
-struct StaticFileContext {
-    // State for static file handling
-    int file_fd_;  // File descriptor for the opened static file (-1 if none)
-    off_t offset_;  // Offset in the file for sending data
-    size_t bytes_to_send_;  // Total bytes to send from the file
-    size_t bytes_sent_;  // Bytes already sent from the file
-
-    StaticFileContext()
-        : file_fd_(-1), offset_(0), bytes_to_send_(0), bytes_sent_(0) {}
-};
+struct StaticFileContext;
 
 // Handles requests for static files.
 class StaticFileHandler : public AHandler {
@@ -41,7 +31,8 @@ class StaticFileHandler : public AHandler {
     // Helper methods for path resolution, MIME type lookup etc. go in .cpp
     // bool process_directory_redirect(Connection* conn,
     //                                 std::string& absolute_path);
-    // bool process_directory_index(Connection* conn, std::string& absolute_path,
+    // bool process_directory_index(Connection* conn, std::string&
+    // absolute_path,
     //                              bool& need_autoindex);
     // void generate_directory_listing(Connection* conn,
     //                                 const std::string& dir_path);
@@ -50,5 +41,16 @@ class StaticFileHandler : public AHandler {
     StaticFileHandler(const StaticFileHandler&);
     StaticFileHandler& operator=(const StaticFileHandler&);
 };  // class StaticFileHandler
+
+struct StaticFileContext {
+    // State for static file handling
+    int file_fd_;   // File descriptor for the opened static file (-1 if none)
+    off_t offset_;  // Offset in the file for sending data
+    size_t bytes_to_send_;  // Total bytes to send from the file
+    size_t bytes_sent_;     // Bytes already sent from the file
+
+    StaticFileContext()
+        : file_fd_(-1), offset_(0), bytes_to_send_(0), bytes_sent_(0) {}
+};
 
 #endif  // STATICFILEHANDLER_HPP

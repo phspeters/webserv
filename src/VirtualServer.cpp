@@ -146,7 +146,9 @@ bool VirtualServer::handle_server_directive(const std::string& key,
         return parse_error_page(value);
     } else if (key == "client_max_body_size") {
         client_max_body_size_ = parse_client_max_body_size(value);
-        if (client_max_body_size_ == -1) return false;
+        if (client_max_body_size_ == -1) {
+            return false;
+        }
         return true;
     } else {
         log(LOG_ERROR, "Unknown directive in server block: %s", key.c_str());

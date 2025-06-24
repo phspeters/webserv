@@ -10,7 +10,6 @@ std::string trim(const std::string& str) {
     return str.substr(first, last - first + 1);
 }
 
-
 std::string get_status_message(int code) {
     switch (code) {
         // 2xx - Success
@@ -83,7 +82,6 @@ std::string get_status_message(int code) {
             return "Unknown Status";
     }
 }
-
 
 int main(int argc, char* argv[]) {
     // Check if the user wants to validate the configuration file only

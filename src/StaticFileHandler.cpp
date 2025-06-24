@@ -75,7 +75,7 @@ void StaticFileHandler::handle(Connection* conn) {
     // --CHECK I don't think it is necessary because of route
     // if (conn->request_data_->method_ != "GET") {
     //     ErrorHandler::generate_error_response(conn,
-    //     codes::METHOD_NOT_ALLOWED); conn->response_data_->headers_["Allow"] =
+    //     METHOD_NOT_ALLOWED); conn->response_data_->headers_["Allow"] =
     //     "GET"; log(LOG_DEBUG, "StaticFileHandler::handle: Method not allowed
     //     for client_fd %d",
     //         conn->client_fd_);
@@ -105,8 +105,7 @@ void StaticFileHandler::handle(Connection* conn) {
                 "StaticFileHandler::handle: location_match_ is NULL for "
                 "client_fd %d",
                 conn->client_fd_);
-            ErrorHandler::generate_error_response(conn,
-                                                  codes::INTERNAL_SERVER_ERROR);
+            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
             return;
         }
     }
@@ -127,7 +126,7 @@ void StaticFileHandler::handle(Connection* conn) {
                 "StaticFileHandler::handle: Autoindex generated for client_fd "
                 "%d",
                 conn->client_fd_);
-            conn->conn_state_ = codes::WRITING_RESPONSE;
+            conn->conn_state_ = CONN_WRITING_RESPONSE;
             return;
         }
     }
@@ -142,14 +141,14 @@ void StaticFileHandler::handle(Connection* conn) {
         // Fluxogram 404 - request resource not found - call error handler
         if (errno == ENOENT) {
             // File not found
-            ErrorHandler::generate_error_response(conn, codes::NOT_FOUND);
+            ErrorHandler::generate_error_response(conn, NOT_FOUND);
             log(LOG_DEBUG,
                 "StaticFileHandler::handle: File not found for client_fd %d",
                 conn->client_fd_);
             // Not in the Fluxogram, but possible 403 - call error handler
         } else if (errno == EACCES) {
             // Permission denied
-            ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+            ErrorHandler::generate_error_response(conn, FORBIDDEN);
             log(LOG_DEBUG,
                 "StaticFileHandler::handle: Permission denied for client_fd %d",
                 conn->client_fd_);
@@ -157,8 +156,7 @@ void StaticFileHandler::handle(Connection* conn) {
         } else {
             // Other error
             std::cout << "1" << std::endl;
-            ErrorHandler::generate_error_response(conn,
-                                                  codes::INTERNAL_SERVER_ERROR);
+            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
             log(LOG_DEBUG,
                 "StaticFileHandler::handle: Internal server error for "
                 "client_fd %d",
@@ -175,8 +173,7 @@ void StaticFileHandler::handle(Connection* conn) {
     if (fstat(fd, &file_info) == -1) {
         close(fd);
         std::cout << "2" << std::endl;
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         log(LOG_DEBUG,
             "StaticFileHandler::handle: fstat failed for client_fd %d",
             conn->client_fd_);
@@ -187,7 +184,7 @@ void StaticFileHandler::handle(Connection* conn) {
     // Not in the Fluxogram, but possible 403 - call error handler
     if (!S_ISREG(file_info.st_mode)) {
         close(fd);
-        ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+        ErrorHandler::generate_error_response(conn, FORBIDDEN);
         log(LOG_DEBUG,
             "StaticFileHandler::handle: File is not a regular file for "
             "client_fd %d",
@@ -226,8 +223,7 @@ void StaticFileHandler::handle(Connection* conn) {
     // Not in the Fluxogram, but possible 500 - call error handler
     if (bytes_read != file_info.st_size) {
         std::cout << "3" << std::endl;
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         log(LOG_DEBUG, "StaticFileHandler::handle: Read error for client_fd %d",
             conn->client_fd_);
         return;
@@ -247,7 +243,7 @@ void StaticFileHandler::handle(Connection* conn) {
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->body_.assign(file_content.begin(),
                                        file_content.end());
-    conn->conn_state_ = codes::WRITING_RESPONSE;
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
     log(LOG_DEBUG,
         "StaticFileHandler::handle: File served successfully for client_fd %d",
         conn->client_fd_);

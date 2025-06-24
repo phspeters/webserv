@@ -3,19 +3,53 @@
 
 #include "webserv.hpp"
 
-// Forward declarations
 struct Connection;
 struct HttpRequest;
 struct VirtualServer;
+enum ParserState;
+enum ParseStatus;
+struct ParserContext;
+
+// Parses HTTP requests incrementally from a Connection's read buffer.
+class RequestParser {
+   public:
+    RequestParser();
+    ~RequestParser();
+
+    bool read_from_socket(Connection* conn);
+    ParseStatus parse_request_line(Connection* conn);
+    ParseStatus parse_headers(Connection* conn);
+    ParseStatus process_request(Connection* conn);
+    ConnectionState determine_body_handling_state(Connection* conn);
+    ParseStatus parse_body(Connection* conn);
+    ParseStatus parse_chunked_body(Connection* conn);
+    ParseStatus parse_multipart_body(Connection* conn);
+
+   private:
+    ParseStatus commit_request_line(HttpRequest* request,
+                                    const ParserContext& context);
+    std::string decode_uri_path(const std::string& uri);
+    std::string normalize_path(const std::string& decoded_path);
+    std::string decode_uri_query(const std::string& uri);
+    inline int hex_to_int(char c);
+    void commit_header(HttpRequest* request, const ParserContext& context);
+
+    // Prevent copying
+    RequestParser(const RequestParser&);
+    RequestParser& operator=(const RequestParser&);
+
+};  // class RequestParser
 
 struct ParserContext {
     ParserContext() { reset(); }
 
-    // TODO: add BodyType enum to handle different body types
-    
-    unsigned int parser_state_;  // Current state of the request parser
-    unsigned int return_state_;  // State to return to after parsing
+    ParserState parser_state_;
 
+    unsigned int granular_parser_state_;  // Current state of the request parser
+    unsigned int return_state_;           // State to return to after parsing
+
+    size_t
+        total_bytes_processed_;  // Total bytes processed in the current request
     size_t chunk_remaining_bytes_;  // Remaining bytes in the current chunk
 
     const char* method_start_;
@@ -33,8 +67,10 @@ struct ParserContext {
     int version_major_;
     int version_minor_;
 
+    // TODO: Split states by when they should be reset
     void reset() {
-        parser_state_ = 0;
+        parser_state_ = CONN_READING_REQUEST_LINE;
+        granular_parser_state_ = 0;
         return_state_ = 0;
         chunk_remaining_bytes_ = 0;
         method_start_ = NULL;
@@ -55,57 +91,37 @@ struct ParserContext {
 
 };  // class ParserContext
 
-// Parses HTTP requests incrementally from a Connection's read buffer.
-class RequestParser {
-   public:
-    RequestParser();
-    ~RequestParser();
+enum ParserState {
+    CONN_READING_REQUEST_LINE,  // Parsing the request line (method, URI,
+                                // version)
+    READING_HEADERS,            // Parsing headers
+    PROCESSING_REQUEST,         // Processing headers after parsing
+    READING_CONTENT_BODY,       // Reading the body (if present)
+    READING_CHUNKED_BODY,       // Reading chunked body
+    DECODING_MULTIPART_BODY,    // Decoding multipart body
+    PARSING_COMPLETE,           // Request parsing complete
+    PARSE_ERROR                 // An error occurred during parsing
+};
 
-    bool read_from_socket(Connection* conn);
-    codes::ParseStatus parse_request_line(Connection* conn);
-    codes::ParseStatus parse_headers(Connection* conn);
-    codes::ParseStatus process_request(Connection* conn);
-    codes::ConnectionState determine_body_handling_state(Connection* conn);
-    codes::ParseStatus parse_body(Connection* conn);
-    codes::ParseStatus parse_chunked_body(Connection* conn);
-
-   private:
-    // Request line parsing methods
-    codes::ParseStatus commit_request_line(HttpRequest* request,
-                                           const ParserContext& context);
-    std::string decode_uri_path(const std::string& uri);
-    std::string normalize_path(const std::string& decoded_path);
-    std::string decode_uri_query(const std::string& uri);
-    inline int hex_to_int(char c);
-    void commit_header(HttpRequest* request, const ParserContext& context);
-
-    // DELETE OR REUSE
-    codes::ParseStatus validate_request_line(const HttpRequest* request);
-    bool validate_method(const std::string& method);
-    bool validate_path(const std::string& path);
-    bool validate_query_string(const std::string& query_string);
-    bool validate_http_version(const std::string& version);
-
-    // Header parsing methods
-    codes::ParseStatus process_single_header(const std::string& header_line,
-                                             HttpRequest* request);
-    codes::ParseStatus validate_headers(Connection* conn);
-
-    // Body parsing methods
-    codes::ParseStatus parse_chunk_header(std::vector<char>& buffer,
-                                          size_t& out_chunk_size);
-    codes::ParseStatus read_chunk_data(std::vector<char>& buffer,
-                                       HttpRequest* request,
-                                       size_t& chunk_remaining_bytes,
-                                       size_t client_max_body_size);
-    codes::ParseStatus process_chunk_terminator(std::vector<char>& buffer);
-    codes::ParseStatus finish_chunked_parsing(std::vector<char>& buffer);
-    // DELETE OR REUSE
-
-    // Prevent copying
-    RequestParser(const RequestParser&);
-    RequestParser& operator=(const RequestParser&);
-
-};  // class RequestParser
+enum ParseStatus {
+    PARSE_INCOMPLETE,             // Need more data
+    PARSE_SUCCESS,                // Request fully parsed
+    PARSE_ERROR,                  // General parsing error
+    PARSE_INVALID_REQUEST_LINE,   // Invalid request line
+    PARSE_METHOD_NOT_ALLOWED,     // Unsupported HTTP method
+    PARSE_INVALID_PATH,           // Invalid path in URI
+    PARSE_INVALID_QUERY_STRING,   // Invalid query string in URI
+    PARSE_VERSION_NOT_SUPPORTED,  // Unsupported HTTP version
+    PARSE_REQUEST_TOO_LONG,       // Request exceeds maximum length
+    PARSE_MISSING_HOST_HEADER,    // Host header is missing on HTTP/1.1 requests
+    PARSE_HEADER_TOO_LONG,        // Header exceeds maximum length
+    PARSE_TOO_MANY_HEADERS,       // Too many headers
+    PARSE_MISSING_CONTENT_LENGTH,  // Content-Length or Transfer-encoding header
+                                   // is missing
+    PARSE_INVALID_CONTENT_LENGTH,  // Content-Length header is invalid
+    PARSE_CONTENT_TOO_LARGE,       // Content length exceeds maximum
+    PARSE_UNKNOWN_ENCODING,        // Unknown or unimplemented transfer encoding
+    PARSE_INVALID_CHUNK_SIZE       // Invalid chunk size in chunked encoding
+};
 
 #endif  // REQUESTPARSER_HPP

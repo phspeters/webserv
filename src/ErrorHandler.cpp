@@ -1,50 +1,50 @@
 #include "webserv.hpp"
 
-int ErrorHandler::get_parse_message_status(codes::ParseStatus parse_status) {
+int ErrorHandler::get_parse_message_status(ParseStatus parse_status) {
     int status_code = 500;  // Default to Internal Server Error
 
     switch (parse_status) {
-        case codes::PARSE_ERROR:
-        case codes::PARSE_INVALID_REQUEST_LINE:
-        case codes::PARSE_INVALID_PATH:
-        case codes::PARSE_INVALID_QUERY_STRING:
-        case codes::PARSE_MISSING_HOST_HEADER:
-        case codes::PARSE_INVALID_CONTENT_LENGTH:
-        case codes::PARSE_INVALID_CHUNK_SIZE:
-            status_code = codes::BAD_REQUEST;
+        case PARSE_ERROR:
+        case PARSE_INVALID_REQUEST_LINE:
+        case PARSE_INVALID_PATH:
+        case PARSE_INVALID_QUERY_STRING:
+        case PARSE_MISSING_HOST_HEADER:
+        case PARSE_INVALID_CONTENT_LENGTH:
+        case PARSE_INVALID_CHUNK_SIZE:
+            status_code = BAD_REQUEST;
             break;
-        case codes::PARSE_METHOD_NOT_ALLOWED:
-            status_code = codes::METHOD_NOT_ALLOWED;
+        case PARSE_METHOD_NOT_ALLOWED:
+            status_code = METHOD_NOT_ALLOWED;
             break;
-        case codes::PARSE_CONTENT_TOO_LARGE:
-            status_code = codes::PAYLOAD_TOO_LARGE;
+        case PARSE_CONTENT_TOO_LARGE:
+            status_code = PAYLOAD_TOO_LARGE;
             break;
-        case codes::PARSE_REQUEST_TOO_LONG:
-            status_code = codes::URI_TOO_LONG;
+        case PARSE_REQUEST_TOO_LONG:
+            status_code = URI_TOO_LONG;
             break;
-        case codes::PARSE_HEADER_TOO_LONG:
-        case codes::PARSE_TOO_MANY_HEADERS:
-            status_code = codes::HEADER_TOO_LONG;
+        case PARSE_HEADER_TOO_LONG:
+        case PARSE_TOO_MANY_HEADERS:
+            status_code = HEADER_TOO_LONG;
             break;
-        case codes::PARSE_VERSION_NOT_SUPPORTED:
-            status_code = codes::HTTP_VERSION_NOT_SUPPORTED;
+        case PARSE_VERSION_NOT_SUPPORTED:
+            status_code = HTTP_VERSION_NOT_SUPPORTED;
             break;
-        case codes::PARSE_MISSING_CONTENT_LENGTH:
-            status_code = codes::LENGTH_REQUIRED;
+        case PARSE_MISSING_CONTENT_LENGTH:
+            status_code = LENGTH_REQUIRED;
             break;
-        case codes::PARSE_UNKNOWN_ENCODING:
-            status_code = codes::NOT_IMPLEMENTED;
+        case PARSE_UNKNOWN_ENCODING:
+            status_code = NOT_IMPLEMENTED;
             break;
         default:
-            status_code = codes::INTERNAL_SERVER_ERROR;
+            status_code = INTERNAL_SERVER_ERROR;
             break;
     }
 
     return status_code;
 }
 
-void ErrorHandler::generate_error_response(
-    Connection* conn, codes::ResponseStatus response_status) {
+void ErrorHandler::generate_error_response(Connection* conn,
+                                           ResponseStatus response_status) {
     if (!conn || !conn->response_data_) {
         log(LOG_FATAL,
             "generate_error_response: Invalid connection or response data");
@@ -59,7 +59,7 @@ void ErrorHandler::generate_error_response(
     conn->response_data_->set_header("date", get_current_gmt_time());
 
     // Update connection state to writing
-    conn->conn_state_ = codes::WRITING_RESPONSE;
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
 
     std::string status_msg = get_status_message(response_status);
     log(LOG_INFO, "Generated error response %d for client_fd %d: %s",
@@ -67,7 +67,7 @@ void ErrorHandler::generate_error_response(
 }
 
 void ErrorHandler::generate_error_response(Connection* conn,
-                                           codes::ParseStatus parse_status) {
+                                           ParseStatus parse_status) {
     if (!conn || !conn->response_data_) {
         log(LOG_FATAL,
             "generate_error_response: Invalid connection or response data");
@@ -83,7 +83,7 @@ void ErrorHandler::generate_error_response(Connection* conn,
     conn->response_data_->set_header("date", get_current_gmt_time());
 
     // Update connection state to writing
-    conn->conn_state_ = codes::WRITING_RESPONSE;
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
 
     std::string status_msg = get_status_message(parse_status);
     log(LOG_INFO, "Generated error response %d for client_fd %d: %s",

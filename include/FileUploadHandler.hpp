@@ -5,15 +5,7 @@
 
 // Forward declarations
 struct Connection;
-
-struct FileUploadContext {
-    // State for file upload handling
-    int file_fd_;  // File descriptor for the opened uploaded file (-1 if none)
-    Buffer upload_buffer_;  // Buffer for reading file data
-
-    FileUploadContext()
-        : file_fd_(-1) {}  // Initialize file_fd_ to -1 indicating no file opened
-};
+struct FileUploadContext;
 
 // Handles file upload requests
 class FileUploadHandler : public AHandler {
@@ -28,7 +20,7 @@ class FileUploadHandler : public AHandler {
     // Request validation and processing
     bool validate_request(Connection* conn, std::string& boundary);
     bool process_trailing_slash_redirect(Connection* conn);
-    
+
     // Response generation
     void send_success_response(Connection* conn);
 
@@ -47,19 +39,19 @@ class FileUploadHandler : public AHandler {
                               const std::string& full_boundary,
                               const std::string& end_boundary,
                               const std::string& filename, bool& file_found);
-    
+
     // File saving operations
     bool save_uploaded_file(Connection* conn, const std::string& filename,
                             const std::vector<char>& data);
     bool write_file_to_disk(Connection* conn, const std::string& file_path,
                             const std::vector<char>& data);
-    
+
     // Directory operations
     std::string get_upload_directory(Connection* conn);
-    bool ensure_upload_directory_exists(Connection* conn, 
+    bool ensure_upload_directory_exists(Connection* conn,
                                         const std::string& upload_dir);
     bool create_directory_recursive(Connection* conn, const std::string& path);
-    
+
     // Utility methods
     std::string extract_boundary(const std::string& content_type);
     std::string sanitize_filename(const std::string& filename);
@@ -67,6 +59,16 @@ class FileUploadHandler : public AHandler {
     // Prevent copying
     FileUploadHandler(const FileUploadHandler&);
     FileUploadHandler& operator=(const FileUploadHandler&);
+};
+
+struct FileUploadContext {
+    // State for file upload handling
+    int file_fd_;  // File descriptor for the opened uploaded file (-1 if none)
+    Buffer upload_buffer_;  // Buffer for reading file data
+
+    FileUploadContext()
+        : file_fd_(-1) {
+    }  // Initialize file_fd_ to -1 indicating no file opened
 };
 
 #endif  // FILEUPLOADHANDLER_HPP

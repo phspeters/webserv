@@ -4,40 +4,7 @@ RequestParser::RequestParser() {}
 
 RequestParser::~RequestParser() {}
 
-bool RequestParser::read_from_socket(Connection* conn) {
-    log(LOG_DEBUG, "Reading from socket (fd: %i)", conn->client_fd_);
-
-    // Read data from the client socket
-    ssize_t bytes_read = recv(conn->client_fd_, conn->read_buffer_.write_ptr(),
-                              conn->read_buffer_.writable_space(), 0);
-
-    if (bytes_read == 0) {
-        // Connection closed by client
-        log(LOG_WARNING, "Client disconnected (fd: %i)", conn->client_fd_);
-        return false;
-    }
-
-    if (bytes_read < 0) {
-        log(LOG_ERROR, "Error reading from socket (fd: %i): %s",
-            conn->client_fd_, strerror(errno));
-        return false;
-    }
-
-    // Move the last pointer forward by the number of bytes read
-    conn->read_buffer_.has_written(bytes_read);
-
-    // Update the last activity timestamp
-    conn->last_activity_ = time(NULL);
-
-    log(LOG_DEBUG, "Read %zd bytes from socket (fd: %i)", bytes_read,
-        conn->client_fd_);
-
-    log_buffer(LOG_TRACE, conn->read_buffer_);
-
-    return true;
-}
-
-codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
+ParseStatus RequestParser::parse_request_line(Connection* conn) {
     log(LOG_DEBUG, "Parsing request line for connection: %i", conn->client_fd_);
 
     enum ReqLineState {
@@ -62,8 +29,10 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
     };
 
     Buffer& buff = conn->read_buffer_;
-    unsigned int& state = conn->parser_context_.parser_state_;
+    unsigned int& state = conn->parser_context_.granular_parser_state_;
     ParserContext& context = conn->parser_context_;
+
+    const size_t bytes_before_parse = buff.readable_bytes();
 
     // The main loop processes every available byte in the buffer.
     while (buff.readable_bytes() > 0) {
@@ -79,7 +48,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
 
                 // Check for a valid uppercase letter to start the method.
                 if (ch < 'A' || ch > 'Z') {
-                    return codes::PARSE_ERROR;  // Invalid start to a request.
+                    return PARSE_ERROR;  // Invalid start to a request.
                 }
 
                 // First valid character found. Mark the start of the method.
@@ -93,7 +62,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
             case ReqLineState::METHOD:
                 if (buff.data() - context.method_start_ >
                     http_limits::MAX_METHOD_LENGTH) {
-                    return codes::PARSE_ERROR;
+                    return PARSE_ERROR;
                 }
 
                 if (ch == ' ') {
@@ -102,7 +71,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                     state = ReqLineState::SPACES_BEFORE_URI;
                 } else if (ch < 'A' || ch > 'Z') {
                     // Invalid character within the method.
-                    return codes::PARSE_ERROR;
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -120,7 +89,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                     continue;
                 } else {
                     // Invalid character after method.
-                    return codes::PARSE_ERROR;
+                    return PARSE_ERROR;
                 }
 
             case ReqLineState::URI_PATH:
@@ -139,7 +108,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                         context.return_state_ = state;
                         state = ReqLineState::URI_PERCENT_ENCODING_1;
                     } else {
-                        return codes::PARSE_ERROR;  // Invalid character
+                        return PARSE_ERROR;  // Invalid character
                     }
                 }
                 break;
@@ -149,7 +118,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (isxdigit(ch)) {
                     state = ReqLineState::URI_PERCENT_ENCODING_2;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid percent-encoding
+                    return PARSE_ERROR;  // Invalid percent-encoding
                 }
                 break;
 
@@ -159,7 +128,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                     // Valid percent-encoding, continue parsing the URI
                     state = context.return_state_;  // Back to last state
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid percent-encoding
+                    return PARSE_ERROR;  // Invalid percent-encoding
                 }
                 break;
 
@@ -175,7 +144,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                         context.return_state_ = state;
                         state = ReqLineState::URI_PERCENT_ENCODING_1;
                     } else {
-                        return codes::PARSE_ERROR;  // Invalid character
+                        return PARSE_ERROR;  // Invalid character
                     }
                 }
                 break;
@@ -193,7 +162,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == 'H') {
                     state = ReqLineState::HTTP_HT;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
@@ -201,7 +170,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == 'T') {
                     state = ReqLineState::HTTP_HTT;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
@@ -209,7 +178,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == 'T') {
                     state = ReqLineState::HTTP_HTTP;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
@@ -217,7 +186,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == 'P') {
                     state = ReqLineState::HTTP_SLASH;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
@@ -225,7 +194,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == '/') {
                     state = ReqLineState::HTTP_MAJOR_DIGIT;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
@@ -234,7 +203,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                     context.version_major_ = ch - '0';
                     state = ReqLineState::HTTP_DOT;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid major version digit
+                    return PARSE_ERROR;  // Invalid major version digit
                 }
                 break;
 
@@ -242,8 +211,8 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == '.') {
                     state = ReqLineState::HTTP_MINOR_DIGIT;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid character after major
-                                                // version digit
+                    return PARSE_ERROR;  // Invalid character after major
+                                         // version digit
                 }
                 break;
 
@@ -252,7 +221,7 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
                     context.version_minor_ = ch - '0';
                     state = ReqLineState::VERSION_DONE;
                 } else {
-                    return codes::PARSE_ERROR;  // Invalid minor version digit
+                    return PARSE_ERROR;  // Invalid minor version digit
                 }
                 break;
 
@@ -265,35 +234,41 @@ codes::ParseStatus RequestParser::parse_request_line(Connection* conn) {
             case ReqLineState::ALMOST_DONE:
                 if (ch == '\n') {
                     // Final Trigger: We found LF after CR.
-                    codes::ParseStatus status =
+                    ParseStatus status =
                         commit_request_line(conn->request_data_, context);
 
-                    buff.consume(1);           // Consume the final '\n'
-                    context.parser_state_ = 0;  // Reset parser state
+                    buff.consume(1);  // Consume the final '\n'
+                    context.granular_parser_state_ = 0;  // Reset parser state
 
                     return status;
                 }
-                return codes::PARSE_ERROR;  // Invalid character after
-                                            // CR.
+                return PARSE_ERROR;  // Invalid character after
+                                     // CR.
+        }
+
+        size_t bytes_processed_in_loop =
+            bytes_before_parse - buff.readable_bytes();
+        if (context.total_bytes_processed_ + bytes_processed_in_loop >
+            http_limits::MAX_REQUEST_LINE_LENGTH) {
+            log(LOG_WARNING, "Request line too long");
+            return PARSE_REQUEST_TOO_LONG;
         }
 
         // Consume the character and move to the next one in the buffer
         // for the next loop iteration.
         buff.consume(1);
-        if (conn->read_buffer_.processed_bytes() >
-            http_limits::MAX_REQUEST_LINE_LENGTH) {
-            log(LOG_WARNING, "Request line too long");
-            return codes::PARSE_REQUEST_TOO_LONG;
-        }
     }
+
+    context.total_bytes_processed_ +=
+        (bytes_before_parse - buff.readable_bytes());
 
     // If we exit the loop, it's because the buffer is empty. We need more
     // data.
-    return codes::PARSE_INCOMPLETE;
+    return PARSE_INCOMPLETE;
 }
 
-codes::ParseStatus RequestParser::commit_request_line(
-    HttpRequest* request, const ParserContext& context) {
+ParseStatus RequestParser::commit_request_line(HttpRequest* request,
+                                               const ParserContext& context) {
     // 1. Assign raw components from the parsed pointers.
     request->method_.assign(context.method_start_,
                             context.method_end_ - context.method_start_);
@@ -315,14 +290,14 @@ codes::ParseStatus RequestParser::commit_request_line(
         if (decoded_path.empty()) {
             log(LOG_WARNING, "Path decoding failed for: '%s'",
                 raw_path.c_str());
-            return codes::PARSE_INVALID_PATH;
+            return PARSE_INVALID_PATH;
         }
 
         request->path_ = normalize_path(decoded_path);
         if (request->path_.empty()) {
             log(LOG_WARNING, "Path normalization failed for: '%s'",
                 decoded_path.c_str());
-            return codes::PARSE_INVALID_PATH;
+            return PARSE_INVALID_PATH;
         }
     } else {
         log(LOG_FATAL,
@@ -340,13 +315,13 @@ codes::ParseStatus RequestParser::commit_request_line(
         if (request->query_string_.empty() && !raw_query.empty()) {
             log(LOG_WARNING, "Query string decoding failed for: '%s'",
                 raw_query.c_str());
-            return codes::PARSE_INVALID_QUERY_STRING;
+            return PARSE_INVALID_QUERY_STRING;
         }
     }
 
     log(LOG_DEBUG, "Parsed request line: %s %s %s", request->method_.c_str(),
         request->uri_.c_str(), request->version_.c_str());
-    return codes::PARSE_SUCCESS;
+    return PARSE_SUCCESS;
 }
 
 std::string RequestParser::decode_uri_path(const std::string& path) {
@@ -479,7 +454,7 @@ int RequestParser::hex_to_int(char c) {
     return -1;  // Should never reach here due to isxdigit check
 }
 
-codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
+ParseStatus RequestParser::parse_headers(Connection* conn) {
     log(LOG_DEBUG, "Parsing headers for connection: %i", conn->client_fd_);
 
     enum HeadParseState {
@@ -492,9 +467,10 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
     };
 
     Buffer& buff = conn->read_buffer_;
-    unsigned int& state = conn->parser_context_.parser_state_;
+    unsigned int& state = conn->parser_context_.granular_parser_state_;
     ParserContext& context = conn->parser_context_;
 
+    const size_t bytes_before_parse = buff.readable_bytes();
     // The main loop processes every available byte in the buffer.
     while (buff.readable_bytes() > 0) {
         // Look at the current character without consuming it yet.
@@ -511,7 +487,7 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
 
                 if (!is_token_char(ch)) {
                     // Invalid start to a header name.
-                    return codes::PARSE_ERROR;
+                    return PARSE_ERROR;
                 }
 
                 context.key_start_ = buff.data();
@@ -522,15 +498,15 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
             case HeadParseState::NAME:
                 if (ch == ':') {
                     if (buff.data() == context.key_start_) {
-                        return codes::PARSE_ERROR;  // Empty header name
+                        return PARSE_ERROR;  // Empty header name
                     }
                     context.key_end_ = buff.data();
                     state = HeadParseState::SPACE_BEFORE_VALUE;
                 } else if (!is_token_char(ch)) {
-                    return codes::PARSE_ERROR;
+                    return PARSE_ERROR;
                 } else if (buff.data() - context.key_start_ >=
                            http_limits::MAX_HEADER_NAME_LENGTH) {
-                    return codes::PARSE_ERROR;
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -563,12 +539,12 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
                 if (iscntrl(ch) && ch != '\t') {
                     // This correctly rejects NUL, CR, LF, and all other CTL
                     // chars.
-                    return codes::PARSE_ERROR;
+                    return PARSE_ERROR;
                 }
 
                 if (buff.data() - context.value_start_ >
                     http_limits::MAX_HEADER_VALUE_LENGTH) {
-                    return codes::PARSE_ERROR;  // Header value too long
+                    return PARSE_ERROR;  // Header value too long
                 }
                 // Any other character is part of the value.
                 break;
@@ -586,7 +562,7 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
                     state = HeadParseState::LINE_START;  // Ready for the
                                                          // next line
                 } else {
-                    return codes::PARSE_ERROR;  // Expected LF after CR
+                    return PARSE_ERROR;  // Expected LF after CR
                 }
                 break;
 
@@ -596,24 +572,30 @@ codes::ParseStatus RequestParser::parse_headers(Connection* conn) {
                     // are done. Now we can determine how to handle the
                     // body.
                     buff.consume(1);  // Consume last character
-                    conn->parser_context_.parser_state_ = 0;  // Reset state
-                    return codes::PARSE_SUCCESS;
+                    conn->parser_context_.granular_parser_state_ =
+                        0;  // Reset state
+                    return PARSE_SUCCESS;
                 } else {
-                    return codes::PARSE_ERROR;  // Expected LF after CR
+                    return PARSE_ERROR;  // Expected LF after CR
                 }
         }
 
-        buff.consume(1);  // Consume the character
-        if (conn->read_buffer_.processed_bytes() >
-            http_limits::MAX_REQUEST_HEAD_LENGTH) {
-            log(LOG_WARNING, "Request headers too long");
-            return codes::PARSE_HEADER_TOO_LONG;
+        size_t bytes_processed_in_loop =
+            bytes_before_parse - buff.readable_bytes();
+        if (context.total_bytes_processed_ + bytes_processed_in_loop >
+            http_limits::MAX_REQUEST_LINE_LENGTH) {
+            log(LOG_WARNING, "Request line too long");
+            return PARSE_REQUEST_TOO_LONG;
         }
+        buff.consume(1);  // Consume the character
     }
+
+    context.total_bytes_processed_ +=
+        (bytes_before_parse - buff.readable_bytes());
 
     // If we exit the loop, it's because the buffer is empty. We need more
     // data.
-    return codes::PARSE_INCOMPLETE;
+    return PARSE_INCOMPLETE;
 }
 
 // It checks if a character is a valid "tchar" according to RFC 7230.
@@ -640,14 +622,14 @@ void RequestParser::commit_header(HttpRequest* request,
     request->set_header(header_name, header_value);
 }
 
-codes::ParseStatus RequestParser::parse_body(Connection* conn) {
+ParseStatus RequestParser::parse_body(Connection* conn) {
     log(LOG_DEBUG, "Parsing body for connection: %i", conn->client_fd_);
 
     HttpRequest* req = conn->request_data_;
     Buffer& buff = conn->read_buffer_;
 
     if (req->content_length_ == 0) {
-        return codes::PARSE_SUCCESS;
+        return PARSE_SUCCESS;
     }
 
     // For efficiency, pre-reserve memory in the body vector to avoid
@@ -677,14 +659,14 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
     if (req->body_.size() == req->content_length_) {
         log(LOG_DEBUG, "Body parsing complete for connection: %i",
             conn->client_fd_);
-        return codes::PARSE_SUCCESS;
+        return PARSE_SUCCESS;
     }
 
     // If we reach here, it means we still need more data.
     log(LOG_DEBUG,
         "Body parsing incomplete for connection: %i, need %zu more bytes.",
         conn->client_fd_, req->content_length_ - req->body_.size());
-    return codes::PARSE_INCOMPLETE;
+    return PARSE_INCOMPLETE;
 }
 
 // TODO ----------------------------------------------------------
@@ -692,7 +674,7 @@ codes::ParseStatus RequestParser::parse_body(Connection* conn) {
 // Chunked transfer encoding sends HTTP message bodies in a series of
 // "chunks" without needing to know the total size in advance. Each chunk
 // has a size prefix in hexadecimal notation, followed by the chunk data.
-codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
+ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
     log(LOG_DEBUG, "Parsing chunked body for connection: %i", conn->client_fd_);
 
     enum ChunkParseState {
@@ -711,7 +693,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
     };
 
     Buffer& buff = conn->read_buffer_;
-    unsigned int& state = conn->parser_context_.parser_state_;
+    unsigned int& state = conn->parser_context_.granular_parser_state_;
     ParserContext& context = conn->parser_context_;
 
     // The main loop processes every available byte in the buffer.
@@ -727,7 +709,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                 }
 
                 if (!isxdigit(ch)) {
-                    return codes::PARSE_INVALID_CHUNK_SIZE;  // Invalid start
+                    return PARSE_INVALID_CHUNK_SIZE;  // Invalid start
                 }
 
                 context.value_start_ = buff.data();
@@ -745,7 +727,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     context.value_end_ = buff.data();
                     state = ChunkParseState::CHUNK_DATA;
                 } else if (!isxdigit(ch)) {
-                    return codes::PARSE_INVALID_CHUNK_SIZE;  // Invalid size
+                    return PARSE_INVALID_CHUNK_SIZE;  // Invalid size
                 }
                 break;
 
@@ -761,7 +743,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     // We have seen CRLF after the chunk size and extension.
                     state = ChunkParseState::CHUNK_DATA;
                 } else {
-                    return codes::PARSE_ERROR;  // Expected LF after CR
+                    return PARSE_ERROR;  // Expected LF after CR
                 }
                 break;
 
@@ -781,7 +763,7 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     // End of chunk data. Prepare to read the next chunk size.
                     state = ChunkParseState::AFTER_DATA_ALMOST_DONE;
                 } else {
-                    return codes::PARSE_ERROR;  // Expected CR after chunk data
+                    return PARSE_ERROR;  // Expected CR after chunk data
                 }
         }
     }
@@ -791,5 +773,10 @@ codes::ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
     log(LOG_DEBUG,
         "Chunked body parsing incomplete for connection: %i, need more data.",
         conn->client_fd_);
-    return codes::PARSE_INCOMPLETE;
+    return PARSE_INCOMPLETE;
+}
+
+ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
+    log(LOG_DEBUG, "Parsing multipart body for connection: %i",
+        conn->client_fd_);
 }

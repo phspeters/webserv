@@ -9,7 +9,7 @@ void CgiHandler::handle(Connection* conn) {
         conn->client_fd_);
 
     switch (conn->cgi_handler_state_) {
-        case codes::CGI_IDLE:
+        case CGI_IDLE:
             // Initial state, ready to start CGI execution
             if (!validate_cgi_request(conn)) {
                 // Validation failed, error response already generated
@@ -17,18 +17,18 @@ void CgiHandler::handle(Connection* conn) {
             }
             setup_cgi_execution(conn);
             break;
-        case codes::CGI_WRITING_TO_PIPE:
+        case CGI_WRITING_TO_PIPE:
             // Write request body to CGI's stdi, should not reach here
             handle_cgi_write(conn);
             break;
-        case codes::CGI_READING_FROM_PIPE:
-        case codes::CGI_HEADERS_PARSED:
+        case CGI_READING_FROM_PIPE:
+        case CGI_HEADERS_PARSED:
             // Read from CGI's stdout
             handle_cgi_read(conn);
             break;
-        case codes::CGI_COMPLETE:
-        case codes::CGI_ERROR:
-            conn->conn_state_ = codes::WRITING_RESPONSE;
+        case CGI_COMPLETE:
+        case CGI_ERROR:
+            conn->conn_state_ = CONN_WRITING_RESPONSE;
             break;
     }
 }
@@ -54,7 +54,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (request_method != "GET" && request_method != "POST") {
         log(LOG_ERROR, "Invalid request method '%s' for CGI script",
             request_method.c_str());
-        ErrorHandler::generate_error_response(conn, codes::METHOD_NOT_ALLOWED);
+        ErrorHandler::generate_error_response(conn, METHOD_NOT_ALLOWED);
         conn->response_data_->set_header("Allow", "GET, POST");
         return false;
     }
@@ -63,7 +63,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (!request_uri.empty() && request_uri[request_uri.length() - 1] == '/') {
         log(LOG_ERROR, "URI is a directory, cannot execute: %s",
             request_uri.c_str());
-        ErrorHandler::generate_error_response(conn, codes::BAD_REQUEST);
+        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
         return false;
     }
 
@@ -72,8 +72,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (conn->cgi_script_path_.empty()) {
         log(LOG_ERROR, "Failed to determine CGI script path for URI: %s",
             request_uri.c_str());
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return false;
     }
 
@@ -92,7 +91,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (!is_valid_extension) {
         log(LOG_ERROR, "Invalid CGI script extension '%s' for script '%s'",
             extension.c_str(), conn->cgi_script_path_.c_str());
-        ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+        ErrorHandler::generate_error_response(conn, FORBIDDEN);
         return false;
     }
 
@@ -102,12 +101,11 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
         if (errno == ENOENT) {
             log(LOG_ERROR, "CGI script '%s' not found",
                 conn->cgi_script_path_.c_str());
-            ErrorHandler::generate_error_response(conn, codes::NOT_FOUND);
+            ErrorHandler::generate_error_response(conn, NOT_FOUND);
         } else {
             log(LOG_ERROR, "Failed to access CGI script '%s': %s",
                 conn->cgi_script_path_.c_str(), strerror(errno));
-            ErrorHandler::generate_error_response(conn,
-                                                  codes::INTERNAL_SERVER_ERROR);
+            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         }
         return false;
     }
@@ -116,7 +114,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (!S_ISREG(file_info.st_mode)) {
         log(LOG_ERROR, "CGI script '%s' is not a regular file",
             conn->cgi_script_path_.c_str());
-        ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+        ErrorHandler::generate_error_response(conn, FORBIDDEN);
         return false;
     }
 
@@ -124,7 +122,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (!(file_info.st_mode & S_IXUSR)) {  // Check for user execute permission
         log(LOG_ERROR, "CGI script '%s' is not executable",
             conn->cgi_script_path_.c_str());
-        ErrorHandler::generate_error_response(conn, codes::FORBIDDEN);
+        ErrorHandler::generate_error_response(conn, FORBIDDEN);
         return false;
     }
 
@@ -154,8 +152,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
         close(cgi_to_server_pipe[1]);
 
         log(LOG_ERROR, "Fork error: %s", strerror(errno));
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return false;
     } else if (pid == 0) {
         // This code runs ONLY in the CHILD process
@@ -173,13 +170,13 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
         }
 
         if (request_method == "POST" && !conn->request_data_->body_.empty()) {
-            conn->cgi_handler_state_ = codes::CGI_WRITING_TO_PIPE;
+            conn->cgi_handler_state_ = CGI_WRITING_TO_PIPE;
 
             // Register this pipe with epoll for EPOLLOUT events
             if (!WebServer::register_epoll_events(conn->cgi_pipe_stdin_fd_,
                                                   EPOLLOUT)) {
                 log(LOG_ERROR, "Failed to register CGI stdin pipe with epoll");
-                finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
+                finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
                 return false;
             }
 
@@ -188,7 +185,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
                 "stdin_fd %d",
                 conn->client_fd_, conn->cgi_pipe_stdin_fd_);
         } else {
-            conn->cgi_handler_state_ = codes::CGI_READING_FROM_PIPE;
+            conn->cgi_handler_state_ = CGI_READING_FROM_PIPE;
 
             // If it's a GET request or an empty POST, we can close the stdin
             // pipe
@@ -206,7 +203,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
             if (!WebServer::register_epoll_events(conn->cgi_pipe_stdout_fd_,
                                                   EPOLLIN)) {
                 log(LOG_ERROR, "Failed to register CGI stdout pipe with epoll");
-                finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
+                finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
                 return false;
             }
 
@@ -228,8 +225,7 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
         // Pipe creation failure
         log(LOG_ERROR, "Pipe server_to_cgi_pipe creation error: %s",
             strerror(errno));
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return false;
     }
 
@@ -237,8 +233,7 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
         // Pipe creation failure
         log(LOG_ERROR, "Pipe cgi_to_server_pipe creation error: %s",
             strerror(errno));
-        ErrorHandler::generate_error_response(conn,
-                                              codes::INTERNAL_SERVER_ERROR);
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return false;
     }
 
@@ -404,7 +399,7 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
             "Failed to set CGI stdin pipe to non-blocking mode for "
             "client %d",
             conn->client_fd_);
-        finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
+        finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
         return false;
     }
 
@@ -414,7 +409,7 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
             "Failed to set CGI stdout pipe to non-blocking mode for "
             "client %d",
             conn->client_fd_);
-        finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
+        finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
         return false;
     }
 
@@ -436,7 +431,7 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
     if (bytes_written < 0) {
         log(LOG_ERROR, "Failed to write to CGI stdin pipe: %s",
             strerror(errno));
-        finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
+        finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
         return;
     }
 
@@ -450,13 +445,13 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
         close(conn->cgi_pipe_stdin_fd_);
         conn->cgi_pipe_stdin_fd_ = -1;  // Mark as closed
         conn->cgi_handler_state_ =
-            codes::CGI_READING_FROM_PIPE;  // Switch to reading state
+            CGI_READING_FROM_PIPE;  // Switch to reading state
 
         // Register the stdout pipe for reading
         if (!WebServer::register_epoll_events(conn->cgi_pipe_stdout_fd_,
                                               EPOLLIN)) {
             log(LOG_ERROR, "Failed to register CGI stdout pipe with epoll");
-            finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
+            finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
             return;
         }
 
@@ -477,7 +472,7 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
         log(LOG_FATAL,
             "CGI: Attempt to read from invalid pipe_stdout_fd for client %d.",
             conn->client_fd_);
-        finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
+        finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
         return;
     }
 
@@ -512,7 +507,7 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
     if (bytes_read < 0) {
         log(LOG_ERROR, "CGI: Failed to read from stdout pipe for client %d: %s",
             conn->client_fd_, strerror(errno));
-        finalize_cgi_error(conn, codes::BAD_GATEWAY);
+        finalize_cgi_error(conn, BAD_GATEWAY);
         return;
     }
 
@@ -526,7 +521,7 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
         parse_cgi_output(conn);  // This might change conn->cgi_handler_state_
     }
 
-    if (conn->cgi_handler_state_ == codes::CGI_ERROR) {
+    if (conn->cgi_handler_state_ == CGI_ERROR) {
         log(LOG_ERROR,
             "CGI: Error state reached for client %d, cleaning up resources",
             conn->client_fd_);
@@ -537,7 +532,7 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
         log(LOG_DEBUG, "CGI: EOF received from stdout for client %d.",
             conn->client_fd_);
 
-        if (conn->cgi_handler_state_ == codes::CGI_READING_FROM_PIPE) {
+        if (conn->cgi_handler_state_ == CGI_READING_FROM_PIPE) {
             // Headers not fully parsed before EOF - this is an error
             if (conn->cgi_read_buffer_.empty() &&
                 conn->response_data_->headers_.empty()) {
@@ -545,13 +540,13 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
                 log(LOG_WARNING,
                     "CGI: No output received from script for client %d",
                     conn->client_fd_);
-                finalize_cgi_error(conn, codes::INTERNAL_SERVER_ERROR);
+                finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
             } else {
                 // Partial data - malformed response
                 log(LOG_WARNING,
                     "CGI: Incomplete headers received for client %d",
                     conn->client_fd_);
-                finalize_cgi_error(conn, codes::BAD_GATEWAY);
+                finalize_cgi_error(conn, BAD_GATEWAY);
             }
             return;
         }
@@ -569,7 +564,7 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
                     "got %zu",
                     conn->client_fd_, expected_content_length,
                     conn->response_data_->body_.size());
-                finalize_cgi_error(conn, codes::BAD_GATEWAY);
+                finalize_cgi_error(conn, BAD_GATEWAY);
                 return;
             }
         }
@@ -589,7 +584,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
 
     // 1. Parse Headers
     std::vector<char>& buffer = conn->cgi_read_buffer_;
-    while ((conn->cgi_handler_state_ != codes::CGI_HEADERS_PARSED) &&
+    while ((conn->cgi_handler_state_ != CGI_HEADERS_PARSED) &&
            (!buffer.empty())) {
         std::vector<char>::iterator line_end_it =
             std::search(buffer.begin(), buffer.end(), CRLF, &CRLF[2]);
@@ -607,7 +602,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
             log(LOG_DEBUG, "CGI: End of headers found for client %d.",
                 conn->client_fd_);
             buffer.erase(buffer.begin(), buffer.begin() + 2);  // Consume CRLF
-            conn->cgi_handler_state_ = codes::CGI_HEADERS_PARSED;
+            conn->cgi_handler_state_ = CGI_HEADERS_PARSED;
             break;  // Move to body parsing
         }
 
@@ -619,8 +614,8 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
         if (colon_pos == std::string::npos || colon_pos == 0) {
             log(LOG_ERROR, "CGI: Invalid header line for client %d: '%s'",
                 conn->client_fd_, header_line.c_str());
-            finalize_cgi_error(
-                conn, codes::BAD_GATEWAY);  // Malformed response from CGI
+            finalize_cgi_error(conn,
+                               BAD_GATEWAY);  // Malformed response from CGI
             return;
         }
 
@@ -638,7 +633,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
             if (!(isalnum(c) || strchr("!#$%&'*+-.^_`|~", c))) {
                 log(LOG_ERROR, "Invalid character '%c' in CGI header name: %s",
                     static_cast<char>(c), header_name.c_str());
-                finalize_cgi_error(conn, codes::BAD_GATEWAY);
+                finalize_cgi_error(conn, BAD_GATEWAY);
                 return;
             }
 
@@ -657,7 +652,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
                      line_end_it + 2);  // Remove the line from the buffer
     }
 
-    if (conn->cgi_handler_state_ == codes::CGI_READING_FROM_PIPE) {
+    if (conn->cgi_handler_state_ == CGI_READING_FROM_PIPE) {
         log(LOG_DEBUG,
             "CGI headers not fully parsed yet, waiting for more data");
         return;
@@ -675,7 +670,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
             log(LOG_ERROR,
                 "Invalid Content-Length header value '%s' for client %d",
                 content_length_str.c_str(), conn->client_fd_);
-            finalize_cgi_error(conn, codes::BAD_GATEWAY);
+            finalize_cgi_error(conn, BAD_GATEWAY);
             return;
         }
         if (content_length > buffer.size()) {
@@ -710,7 +705,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
 
 void CgiHandler::finalize_cgi_response(Connection* conn) {
     if (!set_status_line(conn)) {
-        finalize_cgi_error(conn, codes::BAD_GATEWAY);
+        finalize_cgi_error(conn, BAD_GATEWAY);
         return;
     }
 
@@ -720,8 +715,8 @@ void CgiHandler::finalize_cgi_response(Connection* conn) {
     conn->response_data_->set_header("Content-Length", oss.str());
 
     // Change states
-    conn->cgi_handler_state_ = codes::CGI_COMPLETE;
-    conn->conn_state_ = codes::WRITING_RESPONSE;
+    conn->cgi_handler_state_ = CGI_COMPLETE;
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
 
     cleanup_cgi_resources(conn);
 
@@ -729,10 +724,9 @@ void CgiHandler::finalize_cgi_response(Connection* conn) {
         conn->client_fd_, conn->response_data_->status_code_);
 }
 
-void CgiHandler::finalize_cgi_error(Connection* conn,
-                                    codes::ResponseStatus status) {
+void CgiHandler::finalize_cgi_error(Connection* conn, ResponseStatus status) {
     ErrorHandler::generate_error_response(conn, status);
-    conn->cgi_handler_state_ = codes::CGI_ERROR;
+    conn->cgi_handler_state_ = CGI_ERROR;
 
     cleanup_cgi_resources(conn);
 }
@@ -751,7 +745,7 @@ bool CgiHandler::set_status_line(Connection* conn) {
         conn->response_data_->status_code_ = static_cast<int>(status);
     } else {
         // Default to 200 OK if no status header is provided
-        conn->response_data_->status_code_ = codes::OK;
+        conn->response_data_->status_code_ = OK;
     }
 
     conn->response_data_->status_message_ =
