@@ -1,10 +1,10 @@
 #include "webserv.hpp"
 
-CgiHandler::CgiHandler() {}
+CgiHandler::CgiHandler() : AHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
-void CgiHandler::handle_event(Connection* conn) {
+void CgiHandler::handle(Connection* conn) {
     log(LOG_DEBUG, "CgiHandler: Starting processing for client_fd %d",
         conn->client_fd_);
 

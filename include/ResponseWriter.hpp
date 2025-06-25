@@ -3,7 +3,6 @@
 
 #include "webserv.hpp"
 
-// Forward declarations
 struct Connection;
 struct HttpResponse;
 struct VirtualServer;
@@ -12,9 +11,6 @@ enum WriteStatus;
 // Utility class to help format HTTP responses.
 class ResponseWriter {
    public:
-    ResponseWriter();
-    ~ResponseWriter();
-
     WriteStatus write_response(Connection* conn);
 
     // Prepares the initial part of the response (status line + headers)
@@ -35,9 +31,9 @@ class ResponseWriter {
 };  // class ResponseWriter
 
 enum WriteStatus {
-    WRITE_SUCCESS,     // Response fully sent
-    WRITE_INCOMPLETE,  // Partial write, needs another EPOLLOUT event
-    WRITE_ERROR        // Error occurred during writing
+    WRITE_SUCCESS,
+    WRITE_INCOMPLETE,
+    WRITE_ERROR
 };
 
 #endif  // RESPONSEWRITER_HPP

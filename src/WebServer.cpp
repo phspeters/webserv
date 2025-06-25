@@ -46,7 +46,6 @@ WebServer::~WebServer() {
     log(LOG_INFO, "WebServer resources cleaned up");
 }
 
-// TODO: review initialization order and dependencies
 bool WebServer::init() {
     try {
         // Initialize components
@@ -219,7 +218,6 @@ void WebServer::event_loop() {
             log(LOG_INFO, "Closed '%i' timed out connections.", timed_out);
         }
 
-        // Based on fd type, we call a specific handle function
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
                                       http_limits::TIMEOUT);
         if (ready_events < 0) {
@@ -238,7 +236,7 @@ void WebServer::event_loop() {
         }
 
         for (int i = 0; i < ready_events; i++) {
-            // The pointer gives you ALL the context you need.
+            // The IOContext pointer gives us ALL the context we need.
             IOContext* ctx = static_cast<IOContext*>(events[i].data.ptr);
             uint32_t event_flags = events[i].events;
 
@@ -256,7 +254,7 @@ void WebServer::event_loop() {
                 continue;
             }
 
-            // Dispatch based on the context type, not the FD number.
+            // Based on fd type, we call a specific handle function
             switch (ctx->type_) {
                 case FD_LISTENER:
                     accept_new_connection(ctx->fd_);
@@ -285,6 +283,7 @@ void WebServer::event_loop() {
 void WebServer::close_client_connection(Connection* conn) {
     int fd = conn->client_fd_;
     std::map<int, Connection*>::iterator it = active_connections_.find(fd);
+    
     if (it != active_connections_.end()) {
         delete it->second;
         log(LOG_INFO, "Closed connection for client (fd: %i)", fd);
@@ -297,11 +296,9 @@ void WebServer::close_client_connection(Connection* conn) {
 bool WebServer::read_from_client_socket(Connection* conn) {
     log(LOG_DEBUG, "Reading from socket (fd: %i)", conn->client_fd_);
 
-    // Read data from the client socket
     ssize_t bytes_read = conn->read_buffer_.read_from(conn->client_fd_);
 
     if (bytes_read == 0) {
-        // Connection closed by client
         log(LOG_WARNING, "Client disconnected (fd: %i)", conn->client_fd_);
         return false;
     }
@@ -309,7 +306,7 @@ bool WebServer::read_from_client_socket(Connection* conn) {
     if (bytes_read == BUFFER_FULL) {
         log(LOG_DEBUG, "Buffer full while reading from socket (fd: %i)",
             conn->client_fd_);
-        return true;  // Buffer is full, cannot read more data
+        return true;
     }
 
     if (bytes_read < 0) {
@@ -318,7 +315,6 @@ bool WebServer::read_from_client_socket(Connection* conn) {
         return false;
     }
 
-    // Update the last activity timestamp
     conn->last_activity_ = time(NULL);
 
     log(LOG_DEBUG, "Read %zd bytes from socket (fd: %i)", bytes_read,
@@ -481,28 +477,25 @@ bool WebServer::set_non_blocking(int fd) {
 bool WebServer::remove_listener_context(IOContext* ctx) {
     log(LOG_DEBUG, "Removing listener socket '%i'", ctx->fd_);
 
-    // Remove from epoll
     if (!remove_context_from_epoll(ctx)) {
         log(LOG_ERROR, "Failed to remove listener socket '%i' from epoll",
             ctx->fd_);
         return false;
     }
 
-    // Close the socket
     if (close(ctx->fd_) < 0) {
         log(LOG_ERROR, "Failed to close listener socket '%i'", ctx->fd_);
         return false;
     }
 
-    // Clean up the context
     for (std::vector<IOContext*>::iterator it = listener_contexts_.begin();
          it != listener_contexts_.end(); ++it) {
         if ((*it)->fd_ == ctx->fd_) {
             log(LOG_INFO, "Listener socket '%i' removed successfully",
                 ctx->fd_);
-            delete ctx;  // Clean up the context
+            delete ctx;
             listener_contexts_.erase(it);
-            return true;  // Successfully removed
+            return true;
         }
     }
 

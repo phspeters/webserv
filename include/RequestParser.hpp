@@ -13,9 +13,6 @@ struct ParserContext;
 // Parses HTTP requests incrementally from a Connection's read buffer.
 class RequestParser {
    public:
-    RequestParser();
-    ~RequestParser();
-
     ParseStatus parse_request_line(Connection* conn);
     ParseStatus parse_headers(Connection* conn);
     ParseStatus process_request(Connection* conn);
@@ -42,14 +39,14 @@ class RequestParser {
 struct ParserContext {
     ParserContext() { reset(); }
 
-    ParserState parser_state_;
+    ParserState parser_state_;  // Main parser state
 
-    unsigned int granular_parser_state_;  // Current state of the request parser
-    unsigned int return_state_;           // State to return to after parsing
+    unsigned int
+        granular_parser_state_;  // Current state inside parser functions
+    unsigned int return_state_;  // State to return to after parsing
 
-    size_t
-        total_bytes_processed_;  // Total bytes processed in the current request
-    size_t chunk_remaining_bytes_;  // Remaining bytes in the current chunk
+    size_t total_bytes_processed_;
+    size_t chunk_remaining_bytes_;
 
     const char* method_start_;
     const char* method_end_;
@@ -91,36 +88,34 @@ struct ParserContext {
 };  // class ParserContext
 
 enum ParserState {
-    PARSER_READING_REQUEST_LINE,     // Parsing the request line (method, URI,
-                                     // version)
-    PARSER_READING_HEADERS,          // Parsing headers
-    PARSER_PROCESSING_REQUEST,       // Processing headers after parsing
-    PARSER_READING_CONTENT_BODY,     // Reading the body (if present)
-    PARSER_READING_CHUNKED_BODY,     // Reading chunked body
-    PARSER_DECODING_MULTIPART_BODY,  // Decoding multipart body
-    PARSER_COMPLETE,                 // Request parsing complete
-    PARSER_ERROR                     // An error occurred during parsing
+    PARSER_READING_REQUEST_LINE,
+    PARSER_READING_HEADERS,
+    PARSER_PROCESSING_REQUEST,
+    PARSER_READING_CONTENT_BODY,
+    PARSER_READING_CHUNKED_BODY,
+    PARSER_DECODING_MULTIPART_BODY,
+    PARSER_COMPLETE,
+    PARSER_ERROR
 };
 
 enum ParseStatus {
-    PARSE_INCOMPLETE,             // Need more data
-    PARSE_SUCCESS,                // Request fully parsed
-    PARSE_ERROR,                  // General parsing error
-    PARSE_INVALID_REQUEST_LINE,   // Invalid request line
-    PARSE_METHOD_NOT_ALLOWED,     // Unsupported HTTP method
-    PARSE_INVALID_PATH,           // Invalid path in URI
-    PARSE_INVALID_QUERY_STRING,   // Invalid query string in URI
-    PARSE_VERSION_NOT_SUPPORTED,  // Unsupported HTTP version
-    PARSE_REQUEST_TOO_LONG,       // Request exceeds maximum length
-    PARSE_MISSING_HOST_HEADER,    // Host header is missing on HTTP/1.1 requests
-    PARSE_HEADER_TOO_LONG,        // Header exceeds maximum length
-    PARSE_TOO_MANY_HEADERS,       // Too many headers
-    PARSE_MISSING_CONTENT_LENGTH,  // Content-Length or Transfer-encoding header
-                                   // is missing
-    PARSE_INVALID_CONTENT_LENGTH,  // Content-Length header is invalid
-    PARSE_CONTENT_TOO_LARGE,       // Content length exceeds maximum
-    PARSE_UNKNOWN_ENCODING,        // Unknown or unimplemented transfer encoding
-    PARSE_INVALID_CHUNK_SIZE       // Invalid chunk size in chunked encoding
+    PARSE_INCOMPLETE,
+    PARSE_SUCCESS,
+    PARSE_ERROR,
+    PARSE_INVALID_REQUEST_LINE,
+    PARSE_METHOD_NOT_ALLOWED,
+    PARSE_INVALID_PATH,
+    PARSE_INVALID_QUERY_STRING,
+    PARSE_VERSION_NOT_SUPPORTED,
+    PARSE_REQUEST_TOO_LONG,
+    PARSE_MISSING_HOST_HEADER,
+    PARSE_HEADER_TOO_LONG,
+    PARSE_TOO_MANY_HEADERS,
+    PARSE_MISSING_CONTENT_LENGTH,
+    PARSE_INVALID_CONTENT_LENGTH,
+    PARSE_CONTENT_TOO_LARGE,
+    PARSE_UNKNOWN_ENCODING,
+    PARSE_INVALID_CHUNK_SIZE
 };
 
 #endif  // REQUESTPARSER_HPP
