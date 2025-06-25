@@ -3,8 +3,7 @@
 
 #include "webserv.hpp"
 
-// TODO: Find way to tell apart read/write operations 0 bytes when full buffer
-// from empty fd
+static const ssize_t BUFFER_FULL = -2;
 
 // A fixed-size buffer designed for non-blocking I/O.
 // It encapsulates the read/write logic to provide a high-level interface
@@ -34,13 +33,10 @@ class Buffer {
     // Public State & Management
     //------------------------------------------------------------------
 
-    // How many bytes are available to be parsed/consumed.
     size_t readable_bytes() const { return last_ - pos_; }
 
-    // Check if there is no data to be read.
     bool empty() const { return pos_ == last_; }
 
-    // Resets the buffer for a new operation (e.g., keep-alive).
     void reset();
 
     // Prepares the buffer for a subsequent request in a keep-alive connection.
@@ -50,10 +46,8 @@ class Buffer {
 
     char peek() const;
 
-    // Returns a pointer to the start of the readable data.
     const char* data() const { return &buffer_[pos_]; }
 
-    // Informs the buffer that `bytes_parsed` have been processed by a parser.
     void consume(size_t bytes_parsed) { pos_ += bytes_parsed; }
 
    private:
@@ -64,13 +58,10 @@ class Buffer {
     // Slides unread data to the beginning to maximize writable space.
     void compact();
 
-    // How much space is left for writing new data.
     size_t writable_space() const { return buffer_.size() - last_; }
 
-    // A pointer to the start of the writable area.
     char* write_ptr() { return &buffer_[last_]; }
 
-    // Informs the buffer that `bytes_written` have been produced.
     void has_written(size_t bytes_written) { last_ += bytes_written; }
 
     std::vector<char> buffer_;

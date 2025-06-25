@@ -4,7 +4,7 @@ CgiHandler::CgiHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
-void CgiHandler::handle(Connection* conn) {
+void CgiHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "CgiHandler: Starting processing for client_fd %d",
         conn->client_fd_);
 

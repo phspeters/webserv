@@ -55,7 +55,6 @@ const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 
 #include "CgiHandler.hpp"
 #include "Connection.hpp"
-#include "ConnectionManager.hpp"
 #include "FileDeleteHandler.hpp"
 #include "FileUploadHandler.hpp"
 #include "HttpRequest.hpp"

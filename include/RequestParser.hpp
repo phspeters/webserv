@@ -16,7 +16,6 @@ class RequestParser {
     RequestParser();
     ~RequestParser();
 
-    bool read_from_socket(Connection* conn);
     ParseStatus parse_request_line(Connection* conn);
     ParseStatus parse_headers(Connection* conn);
     ParseStatus process_request(Connection* conn);
@@ -69,7 +68,7 @@ struct ParserContext {
 
     // TODO: Split states by when they should be reset
     void reset() {
-        parser_state_ = CONN_READING_REQUEST_LINE;
+        parser_state_ = PARSER_READING_REQUEST_LINE;
         granular_parser_state_ = 0;
         return_state_ = 0;
         chunk_remaining_bytes_ = 0;
@@ -92,15 +91,15 @@ struct ParserContext {
 };  // class ParserContext
 
 enum ParserState {
-    CONN_READING_REQUEST_LINE,  // Parsing the request line (method, URI,
-                                // version)
-    READING_HEADERS,            // Parsing headers
-    PROCESSING_REQUEST,         // Processing headers after parsing
-    READING_CONTENT_BODY,       // Reading the body (if present)
-    READING_CHUNKED_BODY,       // Reading chunked body
-    DECODING_MULTIPART_BODY,    // Decoding multipart body
-    PARSING_COMPLETE,           // Request parsing complete
-    PARSE_ERROR                 // An error occurred during parsing
+    PARSER_READING_REQUEST_LINE,     // Parsing the request line (method, URI,
+                                     // version)
+    PARSER_READING_HEADERS,          // Parsing headers
+    PARSER_PROCESSING_REQUEST,       // Processing headers after parsing
+    PARSER_READING_CONTENT_BODY,     // Reading the body (if present)
+    PARSER_READING_CHUNKED_BODY,     // Reading chunked body
+    PARSER_DECODING_MULTIPART_BODY,  // Decoding multipart body
+    PARSER_COMPLETE,                 // Request parsing complete
+    PARSER_ERROR                     // An error occurred during parsing
 };
 
 enum ParseStatus {

@@ -36,14 +36,12 @@ class WebServer {
     void shutdown();
 
     // Public interface for epoll management
-    void add_fd_to_epoll(IOContext* ctx, uint32_t events);
-    void update_fd_in_epoll(IOContext* ctx, uint32_t events);
-    void remove_fd_from_epoll(IOContext* ctx);
+    bool add_context_to_epoll(IOContext* ctx, uint32_t events);
+    bool update_context_in_epoll(IOContext* ctx, uint32_t events);
+    bool remove_context_from_epoll(IOContext* ctx);
 
     // Getter for instance
     static WebServer* get_instance() { return instance_; };
-    // Getter for the ConnectionManager
-    ConnectionManager* get_conn_manager() const { return conn_manager_; }
 
    private:
     //--------------------------------------
@@ -57,15 +55,13 @@ class WebServer {
     // WebServer State & Configuration
     //--------------------------------------
     std::list<VirtualServer> virtual_servers_;  // Loaded server configurations
-    std::map<int, IOContext*>
+    std::vector<IOContext*>
         listener_contexts_;  // FDs for the listening sockets
-    std::map<int, VirtualServer*> listener_to_default_server_;
-    std::map<int, std::map<std::string, std::vector<VirtualServer*> > >
-        port_to_hosts_;
-    volatile bool ready_;  // Flag for server readiness for event loop
+    std::map<int, std::vector<VirtualServer*> > listener_to_virtual_servers_;
     std::map<int, Connection*>
-        active_connections_;  // Storage for active connections, keyed by their
-                              // file descriptor.
+        active_connections_;  // Storage for active connections
+    volatile bool ready_;     // Flag for server readiness for event loop
+
     //--------------------------------------
     // Owned Components (Composition)
     //--------------------------------------
@@ -87,6 +83,7 @@ class WebServer {
     void accept_new_connection(int listener_fd);
     void close_client_connection(Connection* conn);
     int cleanup_timed_out_connections();
+    bool read_from_client_socket(Connection* conn);
 
     void handle_client_socket_event(Connection* conn, uint32_t event_flags);
     void handle_static_file_event(IOContext* ctx, uint32_t event_flags);
@@ -94,6 +91,20 @@ class WebServer {
     void handle_cgi_write_event(IOContext* ctx, uint32_t event_flags);
     void handle_file_upload_event(IOContext* ctx, uint32_t event_flags);
 
+    bool setup_listener_sockets();
+    int create_listener_socket(const std::string& host, int port);
+
+    bool set_non_blocking(int fd);
+    bool remove_listener_context(IOContext* ctx);
+
+    static bool setup_signal_handlers();
+    static void signal_handler(int signal);
+
+    // Prevent copying
+    WebServer(const WebServer&);
+    WebServer& operator=(const WebServer&);
+
+    //--- TODO: review these methods
     ParseStatus WebServer::process_request(Connection* conn);
     void match_host_header(Connection* conn);
     const Location* find_matching_location(const VirtualServer* virtual_server,
@@ -103,22 +114,7 @@ class WebServer {
     bool is_cgi_extension(const std::string& request_uri) const;
     std::string get_file_extension(const std::string& uri_path) const;
     AHandler* choose_handler(Connection* conn);
-    void close_client_connection(Connection* conn);
-
-    bool set_non_blocking(int fd);
-    bool setup_listener_sockets();
-    bool create_listener_socket(
-        const std::string& host, int port,
-        std::map<std::string, std::vector<VirtualServer*> >& hosts);
-    void remove_listener_socket(int fd);
-
-    static bool setup_signal_handlers();
-    static void signal_handler(int signal);
-
-    // Prevent copying
-    WebServer(const WebServer&);
-    WebServer& operator=(const WebServer&);
-
+    //-------
 };  // class WebServer
 
 struct IOContext {
@@ -126,8 +122,8 @@ struct IOContext {
     FdType type_;       // Type of file descriptor (e.g., client, pipe)
     int fd_;            // File descriptor for the I/O operation
 
-    IOContext(Connection* conn, FdType type, int fd)
-        : conn_(conn), type_(type), fd_(fd) {}
+    IOContext(int fd, FdType type, Connection* conn)
+        : fd_(fd), type_(type), conn_(conn) {}
 };
 
 enum FdType {

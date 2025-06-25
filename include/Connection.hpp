@@ -3,7 +3,6 @@
 
 #include "webserv.hpp"
 
-// Forward declarations
 class AHandler;
 struct HttpRequest;
 struct HttpResponse;
@@ -19,66 +18,54 @@ struct Connection {
     //--------------------------------------
     Connection(WebServer* owner, int fd,
                const VirtualServer* default_virtual_server);
-    ~Connection();  // Cleans up owned resources (Request, Response, FDs)
+    ~Connection();
 
     //--------------------------------------
     // Core Connection Identification & I/O
     //--------------------------------------
-    WebServer* const owner_server_;  // Pointer to the owning WebServer instance
-    int client_fd_;                  // File descriptor for the client socket
-    const VirtualServer* const
-        default_virtual_server_;           // Pointer to default virtual server
-    const VirtualServer* virtual_server_;  // Pointer to virtual server matching
-                                           // the Host header
-    time_t
-        last_activity_;  // Timestamp of last read/write activity (for timeouts)
+    WebServer* const owner_server_;
+    int client_fd_;
+    const VirtualServer* const default_virtual_server_;
+    const VirtualServer* virtual_server_;
+    time_t last_activity_;
 
     //--------------------------------------
     // Buffers
     //--------------------------------------
-    Buffer read_buffer_;   // Buffer for incoming data from client
-    Buffer write_buffer_;  // Buffer for outgoing data to client
-    Buffer*
-        decoded_buffer_;  // Buffer for decoded data (e.g., from chunked body)
+    Buffer read_buffer_;
+    Buffer write_buffer_;
+    Buffer* decoded_buffer_;
 
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)
     //--------------------------------------
-    HttpRequest* request_data_;  // Pointer to the parsed request info (NULL
-                                 // until allocated)
-    HttpResponse*
-        response_data_;  // Pointer to the response info (NULL until allocated)
+    HttpRequest* request_data_;
+    HttpResponse* response_data_;
 
     //--------------------------------------
     // State Management
     //--------------------------------------
-    ConnectionState conn_state_;    // Current state of the connection
-    ParserContext parser_context_;  // Context for parsing requests
-    std::vector<IOContext*>
-        io_contexts_;  // List of I/O contexts associated with this connection
+    ConnectionState conn_state_;
+    ParserContext parser_context_;
+    std::vector<IOContext*> io_contexts_;
 
     //--------------------------------------
     // Connection Management
     //--------------------------------------
-    void reset_for_keep_alive();  // Resets state for handling another request
-    bool is_keep_alive() const;   // Checks if the connection is keep-alive
-    void add_io_context(
-        IOContext* io_context);  // Adds an I/O context for this connection
-    void remove_io_context(
-        IOContext* io_context);  // Removes an I/O context for this connection
+    IOContext* add_io_context(int fd, FdType type, uint32_t events = EPOLLIN);
+    void remove_io_context(IOContext* io_context);
+    bool is_keep_alive() const;
+    void reset_for_keep_alive();
 
     //--------------------------------------
     // Handler-Specific Context
     //--------------------------------------
-    AHandler* active_handler_;        // Pointer to the currently active handler
-    const Location* location_match_;  // Best matching location for the request
+    AHandler* active_handler_;
+    const Location* location_match_;
 
-    StaticFileContext*
-        static_file_context_;  // Context for static file handling
-    FileUploadContext*
-        file_upload_context_;  // Context for file upload handling
-    CgiContext* cgi_context_;  // Context for CGI handling (if active_handler is
-                               // CgiHandler)
+    StaticFileContext* static_file_context_;
+    FileUploadContext* file_upload_context_;
+    CgiContext* cgi_context_;
 
    private:
     // Prevent copying
@@ -88,11 +75,11 @@ struct Connection {
 };  // struct Connection
 
 enum ConnectionState {
-    CONN_READING_REQUEST,      // Parsing the request
-    CONN_GENERATING_RESPONSE,  // Generating response headers and body
-    CONN_WRITING_RESPONSE,     // Writing response to the client
-    CONN_COMPLETE,             // Request processing complete (keep-alive ready)
-    CONN_ERROR                 // An error occurred during processing
+    CONN_READING_REQUEST,
+    CONN_GENERATING_RESPONSE,
+    CONN_WRITING_RESPONSE,
+    CONN_COMPLETE,
+    CONN_ERROR
 };
 
 #endif  // CONNECTION_HPP

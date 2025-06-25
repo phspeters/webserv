@@ -22,7 +22,10 @@ class StaticFileHandler : public AHandler {
     // - Opens file, prepares response headers (status, content-type, length).
     // - Sets up Connection state for sending (file FD, offset, bytes).
     // - Uses ResponseWriter to format headers into Connection write buffer.
+    virtual void check_permissions(Connection* conn);
+    virtual void setup_handler(Connection* conn);
     virtual void handle(Connection* conn);
+    virtual void cleanup_handler(Connection* conn);
 
     // Optional: Could override on_writable if complex chunked sending needed,
     // but often the main Server write loop can handle simple file sending.

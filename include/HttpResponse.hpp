@@ -12,14 +12,14 @@ struct HttpResponse {
     //--------------------------------------
     // Response Data Members
     //--------------------------------------
-    int status_code_;             // e.g., 200, 404
-    std::string status_message_;  // e.g., "OK", "Not Found"
+    int status_code_;
+    std::string status_message_;
     std::string
-        version_;  // e.g., "HTTP/1.1" (usually match request or default)
+        version_;
 
-    std::map<std::string, std::string> headers_;  // Response headers
+    std::map<std::string, std::string> headers_;
 
-    std::vector<char> body_;  // Response body content
+    std::vector<char> body_;
 
     // Often useful to store these explicitly for header generation
     size_t content_length_;
@@ -32,22 +32,19 @@ struct HttpResponse {
     ~HttpResponse();
 
     //--------------------------------------
-    // Helper Methods (declarations)
+    // Helper Methods
     //--------------------------------------
-    void set_header(const std::string& name, const std::string& value);
     void set_status(int code);
+    void set_header(const std::string& name, const std::string& value);
+    
     std::string get_header(const std::string& name) const;
-
-    // Method to generate the full status line + headers string
     std::string get_headers_string() const;
-
-    // Method to generate the status line only
     std::string get_status_line() const;
 
     void clear();
 
    private:
-    // Prevent copying if responses are managed by pointer in Connection
+    // Prevent copying
     HttpResponse(const HttpResponse&);
     HttpResponse& operator=(const HttpResponse&);
 

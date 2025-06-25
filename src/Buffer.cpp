@@ -8,8 +8,8 @@ ssize_t Buffer::read_from(int fd) {
         compact();
     }
     if (writable_space() == 0) {
-        // Buffer is genuinely full of unread data, cannot produce.
-        return 0;
+        // Buffer is genuinely full of unread data, cannot read more.
+        return BUFFER_FULL;
     }
     ssize_t bytes_read = read(fd, write_ptr(), writable_space());
     if (bytes_read > 0) {
