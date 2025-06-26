@@ -24,17 +24,13 @@ WebServer::~WebServer() {
     delete file_delete_handler_;
 
     // Close listener sockets if they are open
-    for (std::vector<IOContext*>::iterator it = listener_contexts_.begin();
-         it != listener_contexts_.end(); ++it) {
-        log(LOG_TRACE, "Closing listener socket: %d", (*it)->fd_);
-        remove_listener_context(*it);
+    while (!listener_contexts_.empty()) {
+        remove_listener_context(listener_contexts_.back());
     }
 
     // Close all active connections
-    for (std::map<int, Connection*>::iterator it = active_connections_.begin();
-         it != active_connections_.end(); ++it) {
-        log(LOG_TRACE, "Closing active connection: %d", it->first);
-        close_client_connection(it->second);
+    while (!active_connections_.empty()) {
+        close_client_connection(active_connections_.begin()->second);
     }
 
     // Close the epoll instance if it was created
@@ -283,7 +279,7 @@ void WebServer::event_loop() {
 void WebServer::close_client_connection(Connection* conn) {
     int fd = conn->client_fd_;
     std::map<int, Connection*>::iterator it = active_connections_.find(fd);
-    
+
     if (it != active_connections_.end()) {
         delete it->second;
         log(LOG_INFO, "Closed connection for client (fd: %i)", fd);
@@ -475,32 +471,31 @@ bool WebServer::set_non_blocking(int fd) {
 }
 
 bool WebServer::remove_listener_context(IOContext* ctx) {
-    log(LOG_DEBUG, "Removing listener socket '%i'", ctx->fd_);
-
-    if (!remove_context_from_epoll(ctx)) {
-        log(LOG_ERROR, "Failed to remove listener socket '%i' from epoll",
-            ctx->fd_);
+    if (!ctx) {
+        log(LOG_FATAL, "remove_listener_context: NULL context provided");
         return false;
     }
 
-    if (close(ctx->fd_) < 0) {
-        log(LOG_ERROR, "Failed to close listener socket '%i'", ctx->fd_);
+    std::vector<IOContext*>::iterator it =
+        std::find(listener_contexts_.begin(), listener_contexts_.end(), ctx);
+
+    if (it == listener_contexts_.end()) {
+        log(LOG_ERROR, "Listener socket '%i' not found in contexts", ctx->fd_);
+        // The context wasn't in our list, but we should still try to clean up
+        // the fd.
+        remove_context_from_epoll(ctx);
+        close(ctx->fd_);
         return false;
     }
 
-    for (std::vector<IOContext*>::iterator it = listener_contexts_.begin();
-         it != listener_contexts_.end(); ++it) {
-        if ((*it)->fd_ == ctx->fd_) {
-            log(LOG_INFO, "Listener socket '%i' removed successfully",
-                ctx->fd_);
-            delete ctx;
-            listener_contexts_.erase(it);
-            return true;
-        }
-    }
+    // Found it. Now perform the cleanup.
+    remove_context_from_epoll(*it);
+    close((*it)->fd_);
+    delete *it;
+    listener_contexts_.erase(it);
 
-    log(LOG_ERROR, "Listener socket '%i' not found in contexts", ctx->fd_);
-    return false;
+    log(LOG_INFO, "Listener socket '%i' removed successfully", ctx->fd_);
+    return true;
 }
 
 bool WebServer::setup_signal_handlers() {
@@ -575,9 +570,9 @@ void WebServer::accept_new_connection(int listener_fd) {
 
     // Find the default virtual server for this listener
     VirtualServer* default_server = NULL;
-    if (listener_to_default_server_.find(listener_fd) !=
-        listener_to_default_server_.end()) {
-        default_server = listener_to_default_server_[listener_fd];
+    if (listener_to_virtual_servers_.find(listener_fd) !=
+        listener_to_virtual_servers_.end()) {
+        default_server = listener_to_virtual_servers_[listener_fd];
     } else {
         log(LOG_FATAL, "No default server found for listener socket '%i'",
             listener_fd);

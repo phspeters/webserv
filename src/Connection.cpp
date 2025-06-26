@@ -40,10 +40,8 @@ Connection::~Connection() {
     }
 
     // Clean up I/O contexts
-    for (std::vector<IOContext*>::iterator it = io_contexts_.begin();
-         it != io_contexts_.end(); ++it) {
-        remove_io_context(*it);
-        delete *it;  // Clean up the IOContext
+    while (!io_contexts_.empty()) {
+        remove_io_context(io_contexts_.back());
     }
 
     // Close any open file descriptors

@@ -13,6 +13,9 @@ struct ParserContext;
 // Parses HTTP requests incrementally from a Connection's read buffer.
 class RequestParser {
    public:
+    RequestParser() {}
+    ~RequestParser() {}
+
     ParseStatus parse_request_line(Connection* conn);
     ParseStatus parse_headers(Connection* conn);
     ParseStatus process_request(Connection* conn);
