@@ -3,7 +3,6 @@
 
 #include "webserv.hpp"
 
-// Forward declarations of owned components and used types
 class CgiHandler;
 struct Connection;
 struct ConnectionManager;
@@ -20,13 +19,12 @@ enum FdType;
 class WebServer {
    public:
     WebServer();
-    ~WebServer();  // Cleans up owned components and sockets
+    ~WebServer();
 
-    // Initialize server components and network setup. Returns false on error.
+    // Initialize server components and network setup
     bool init();
 
-    // Load server configuration from the specified file. Returns false on
-    // error.
+    // Load server configuration from the specified file
     bool parse_config_file(const std::string& filename);
 
     // Start the server event loop. This will block until shutdown is called.
@@ -40,7 +38,7 @@ class WebServer {
     bool update_context_in_epoll(IOContext* ctx, uint32_t events);
     bool remove_context_from_epoll(IOContext* ctx);
 
-    // Getter for instance
+    // Getter for singleton instance
     static WebServer* get_instance() { return instance_; };
 
    private:
@@ -54,12 +52,12 @@ class WebServer {
     //--------------------------------------
     // WebServer State & Configuration
     //--------------------------------------
-    std::list<VirtualServer> virtual_servers_;  // Loaded server configurations
+    std::list<VirtualServer> virtual_servers_;
     std::vector<IOContext*>
-        listener_contexts_;  // FDs for the listening sockets
+        listener_contexts_;
     std::map<int, std::vector<VirtualServer*> > listener_to_virtual_servers_;
     std::map<int, Connection*>
-        active_connections_;  // Storage for active connections
+        active_connections_;
     volatile bool ready_;     // Flag for server readiness for event loop
 
     //--------------------------------------
@@ -81,6 +79,8 @@ class WebServer {
     //--------------------------------------
     void event_loop();
     void accept_new_connection(int listener_fd);
+    Connection* create_client_connection(
+        int client_fd, const VirtualServer* default_virtual_server);
     void close_client_connection(Connection* conn);
     int cleanup_timed_out_connections();
     bool read_from_client_socket(Connection* conn);
@@ -95,6 +95,7 @@ class WebServer {
     int create_listener_socket(const std::string& host, int port);
 
     bool set_non_blocking(int fd);
+    bool add_listener_context(int listener_fd);
     bool remove_listener_context(IOContext* ctx);
 
     static bool setup_signal_handlers();
@@ -114,25 +115,25 @@ class WebServer {
     bool is_cgi_extension(const std::string& request_uri) const;
     std::string get_file_extension(const std::string& uri_path) const;
     AHandler* choose_handler(Connection* conn);
-    //-------
+    //--- TODO: review these methods
 };  // class WebServer
 
 struct IOContext {
-    Connection* conn_;  // Pointer to the associated connection
-    FdType type_;       // Type of file descriptor (e.g., client, pipe)
-    int fd_;            // File descriptor for the I/O operation
+    Connection* conn_;
+    FdType type_;
+    int fd_;
 
     IOContext(int fd, FdType type, Connection* conn)
         : fd_(fd), type_(type), conn_(conn) {}
 };
 
 enum FdType {
-    FD_LISTENER,        // Listener socket file descriptor
-    FD_CLIENT_SOCKET,   // Client socket file descriptor
-    FD_CGI_PIPE_READ,   // Pipe file descriptor (e.g., for CGI)
-    FD_CGI_PIPE_WRITE,  // Pipe file descriptor (e.g., for CGI)
-    FD_FILE_UPLOAD,     // File descriptor for file upload
-    FD_STATIC_FILE,     // File descriptor for static file serving
+    FD_LISTENER,
+    FD_CLIENT_SOCKET,
+    FD_CGI_PIPE_READ,
+    FD_CGI_PIPE_WRITE,
+    FD_FILE_UPLOAD,
+    FD_STATIC_FILE,
 };
 
 #endif  // WEBSERVER_HPP

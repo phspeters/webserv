@@ -9,7 +9,6 @@ struct Location;
 // Server configuration
 struct VirtualServer {
     // Basic server properties
-    std::string host_name_;
     std::string host_;
     int port_;
     bool listen_specified_;

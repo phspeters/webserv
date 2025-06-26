@@ -322,56 +322,32 @@ bool WebServer::read_from_client_socket(Connection* conn) {
 }
 
 bool WebServer::setup_listener_sockets() {
-    typedef std::pair<std::string, int> HostPort;
-    std::map<HostPort, std::vector<VirtualServer*> > hostport_to_servers;
+    std::map<std::pair<std::string, int>, int> listener_fds;
 
-    // 1. Group virtual servers by host:port
     for (std::list<VirtualServer>::iterator it = virtual_servers_.begin();
          it != virtual_servers_.end(); ++it) {
-        HostPort key(it->host_, it->port_);
-        hostport_to_servers[key].push_back(&(*it));
-    }
+        // Get a pointer to the current VirtualServer object
+        VirtualServer* vs = &(*it);
+        std::pair<std::string, int> listen_addr(vs->host_, vs->port_);
 
-    // 2. Create listeners and manage context for each unique host:port
-    for (std::map<HostPort, std::vector<VirtualServer*> >::iterator it =
-             hostport_to_servers.begin();
-         it != hostport_to_servers.end(); ++it) {
-        const std::string& host = it->first.first;
-        int port = it->first.second;
-
-        int listener_fd = create_listener_socket(host, port);
-        if (listener_fd < 0) {
-            log(LOG_ERROR, "Failed to create listener for %s:%d", host.c_str(),
-                port);
-            return false;  // Fatal error if a listener can't be created
-        }
-
-        try {
-            IOContext* ctx = new IOContext(listener_fd, FD_LISTENER, NULL);
-
-            if (!add_context_to_epoll(ctx, EPOLLIN)) {
-                log(LOG_ERROR, "Failed to add listener socket '%i' to epoll",
-                    listener_fd);
-                delete ctx;
-                close(listener_fd);
-                return false;
+        // If we haven't created a listener for this address yet, do it now.
+        if (listener_fds.find(listen_addr) == listener_fds.end()) {
+            int fd = create_listener_socket(vs->host_, vs->port_);
+            if (fd < 0) {
+                return false;  // Abort server startup
             }
 
-            listener_contexts_.push_back(ctx);
-            listener_to_virtual_servers_[listener_fd] =
-                it->second;  // Associate the FD with its virtual servers
-            log(LOG_TRACE, "Associated listener fd %d with %zu virtual servers",
-                listener_fd, it->second.size());
+            if (!add_listener_context(fd)) {
+                return false;  // Abort server startup
+            }
 
-        } catch (const std::exception& e) {
-            log(LOG_ERROR,
-                "Failed to create IOContext for listener socket '%i': %s",
-                listener_fd, e.what());
-            close(listener_fd);
-            return false;
+            listener_fds[listen_addr] = fd;
+            log(LOG_INFO, "Listening on %s:%d (fd: %d)", vs->host_.c_str(),
+                vs->port_, fd);
         }
+        // Associate this virtual server with the listener fd
+        listener_to_virtual_servers_[listener_fds[listen_addr]].push_back(vs);
     }
-
     return true;
 }
 
@@ -379,43 +355,55 @@ int WebServer::create_listener_socket(const std::string& host, int port) {
     log(LOG_DEBUG, "Creating listener socket for host: %s on port: %i",
         host.c_str(), port);
 
-    int listener_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (listener_fd < 0) {
-        log(LOG_ERROR, "Failed to create listener socket on port: %i", port);
+    struct addrinfo filter, *results, *p;
+    int listener_fd = -1;
+    char port_str[6];  // max port is 65535 (5 digits) + null terminator
+    snprintf(port_str, sizeof(port_str), "%d", port);
+
+    memset(&filter, 0, sizeof(filter));
+    filter.ai_family = AF_INET;
+    filter.ai_socktype = SOCK_STREAM;
+    filter.ai_flags = AI_PASSIVE;  // Important for bind():
+    // if the host parameter is NULL or a wildcard string like "0.0.0.0", this
+    // flag makes getaddrinfo fill in the IP address field with the correct
+    // wildcard address (INADDR_ANY), which allows your server to accept
+    // connections on any available network interface.
+
+    // getaddrinfo does the DNS/hosts lookup
+    int status = getaddrinfo(host.c_str(), port_str, &filter, &results);
+    if (status != 0) {
+        log(LOG_ERROR, "getaddrinfo error for %s:%d: %s", host.c_str(), port,
+            gai_strerror(status));
         return -1;
     }
 
-    // Set SO_REUSEADDR option
-    int opt = 1;
-    if (setsockopt(listener_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
-        0) {
-        close(listener_fd);
-        log(LOG_ERROR, "Failed to set socket options for %s:%i", host.c_str(),
-            port);
-        return -1;
-    }
-
-    // Bind to specified host:port
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-
-    if (host == "0.0.0.0") {
-        addr.sin_addr.s_addr = INADDR_ANY;
-    } else {
-        addr.sin_addr.s_addr = inet_addr(host.c_str());
-        if (addr.sin_addr.s_addr == INADDR_NONE) {
-            close(listener_fd);
-            log(LOG_ERROR, "Invalid IP address: %s", host.c_str());
-            return -1;
+    // Loop through results and bind to the first one we can
+    for (p = results; p != NULL; p = p->ai_next) {
+        listener_fd = socket(p->ai_family, p->ai_socktype | SOCK_NONBLOCK,
+                             p->ai_protocol);
+        if (listener_fd < 0) {
+            continue;  // Try next address
         }
+
+        int opt = 1;
+        if (setsockopt(listener_fd, SOL_SOCKET, SO_REUSEADDR, &opt,
+                       sizeof(opt)) < 0) {
+            close(listener_fd);
+            continue;  // Try next address
+        }
+
+        if (bind(listener_fd, p->ai_addr, p->ai_addrlen) < 0) {
+            close(listener_fd);
+            continue;  // Try next address
+        }
+
+        break;  // Successfully bound
     }
 
-    if (bind(listener_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        close(listener_fd);
-        log(LOG_ERROR, "Failed to bind to %s:%i: %s", host.c_str(), port,
-            strerror(errno));
+    freeaddrinfo(results);  // Free the results linked list
+
+    if (p == NULL) {
+        log(LOG_ERROR, "Failed to bind to %s:%d", host.c_str(), port);
         return -1;
     }
 
@@ -425,8 +413,8 @@ int WebServer::create_listener_socket(const std::string& host, int port) {
         return -1;
     }
 
-    log(LOG_INFO, "Successfully created listener socket for %s:%i",
-        host.c_str(), port);
+    log(LOG_INFO, "Successfully created listener socket for %s:%i on fd %d",
+        host.c_str(), port, listener_fd);
     return listener_fd;
 }
 
@@ -470,33 +458,63 @@ bool WebServer::set_non_blocking(int fd) {
     return true;
 }
 
+bool WebServer::add_listener_context(int listener_fd) {
+    if (listener_fd < 0) {
+        log(LOG_FATAL, "add_listener_context: Invalid listener_fd '%i'",
+            listener_fd);
+        return false;
+    }
+
+    try {
+        IOContext* ctx = new IOContext(listener_fd, FD_LISTENER, NULL);
+        if (!add_context_to_epoll(ctx, EPOLLIN)) {
+            log(LOG_ERROR, "Failed to add listener socket '%i' to epoll",
+                ctx->fd_);
+            close(ctx->fd_);
+            delete ctx;
+            return false;
+        }
+
+        listener_contexts_.push_back(ctx);
+        log(LOG_INFO, "Listener socket '%i' added successfully", ctx->fd_);
+        return true;
+    } catch (const std::exception& e) {
+        log(LOG_ERROR,
+            "Failed to create IOContext for listener socket '%i': %s",
+            listener_fd, e.what());
+        close(listener_fd);
+        return false;
+    }
+}
+
 bool WebServer::remove_listener_context(IOContext* ctx) {
     if (!ctx) {
         log(LOG_FATAL, "remove_listener_context: NULL context provided");
         return false;
     }
 
+    remove_context_from_epoll(ctx);
+    close(ctx->fd_);
+
     std::vector<IOContext*>::iterator it =
         std::find(listener_contexts_.begin(), listener_contexts_.end(), ctx);
 
-    if (it == listener_contexts_.end()) {
-        log(LOG_ERROR, "Listener socket '%i' not found in contexts", ctx->fd_);
-        // The context wasn't in our list, but we should still try to clean up
-        // the fd.
-        remove_context_from_epoll(ctx);
-        close(ctx->fd_);
-        return false;
+    bool found = (it != listener_contexts_.end());
+    if (found) {
+        listener_contexts_.erase(it);
+    } else {
+        log(LOG_ERROR,
+            "Listener socket '%i' not found in managed contexts during removal",
+            ctx->fd_);
     }
 
-    // Found it. Now perform the cleanup.
-    remove_context_from_epoll(*it);
-    close((*it)->fd_);
-    delete *it;
-    listener_contexts_.erase(it);
+    delete ctx;
 
-    log(LOG_INFO, "Listener socket '%i' removed successfully", ctx->fd_);
-    return true;
+    log(LOG_INFO, "Listener socket '%i' removed and cleaned up successfully",
+        ctx->fd_);
+    return found; // Return true if it was a normal removal, false otherwise.
 }
+
 
 bool WebServer::setup_signal_handlers() {
     struct sigaction sa;
@@ -557,11 +575,6 @@ std::string WebServer::get_file_extension(const std::string& uri_path) const {
     return extension;
 }
 
-// -----------------------------------------------------------------------
-// ------------------------------ TODO -----------------------------------
-// -----------------------------------------------------------------------
-
-// TODO: review this function
 void WebServer::accept_new_connection(int listener_fd) {
     log(LOG_DEBUG,
         "accept_new_connection: Processing new connection on listener_fd "
@@ -572,7 +585,7 @@ void WebServer::accept_new_connection(int listener_fd) {
     VirtualServer* default_server = NULL;
     if (listener_to_virtual_servers_.find(listener_fd) !=
         listener_to_virtual_servers_.end()) {
-        default_server = listener_to_virtual_servers_[listener_fd];
+        default_server = listener_to_virtual_servers_[listener_fd].front();
     } else {
         log(LOG_FATAL, "No default server found for listener socket '%i'",
             listener_fd);
@@ -587,43 +600,35 @@ void WebServer::accept_new_connection(int listener_fd) {
         return;
     }
 
-    log(LOG_DEBUG,
-        "accept_new_connection: Accepted new client_fd %d from listener_fd "
-        "%d",
-        client_fd, listener_fd);
-
-    // Register with epoll for read events
-    if (!register_epoll_events(client_fd)) {
-        close(client_fd);
+    if (!create_client_connection(client_fd, default_server)) {
         return;
     }
+}
 
-    // Create connection with the default virtual server
+Connection* WebServer::create_client_connection(
+    int client_fd, const VirtualServer* default_virtual_server) {
+    log(LOG_DEBUG, "Creating new connection for client_fd %d", client_fd);
+
     try {
         Connection* conn =
-            conn_manager_->create_connection(client_fd, default_server);
-        if (!conn) {
-            close(client_fd);
-        }
-    } catch (const std::exception& e) {
-    }
-    /*Connection* ConnectionManager::create_connection(
-    int client_fd, const VirtualServer* default_virtual_server) {
-    // Create a new Connection object and store it in the map
-    try {
-        Connection* conn = new Connection(client_fd, default_virtual_server);
+            new Connection(this, client_fd, default_virtual_server);
+
         active_connections_[client_fd] = conn;
-        log(LOG_INFO, "Created new connection for client (fd: %i) on %s:%d",
-            client_fd, default_virtual_server->host_.c_str(),
-            default_virtual_server->port_);
+        log(LOG_INFO, "Accepted new connection from client (fd: %i)",
+            client_fd);
         return conn;
+
     } catch (const std::exception& e) {
-        log(LOG_ERROR, "Failed to create connection for client (fd: %i): %s",
-            client_fd, e.what());
+        log(LOG_ERROR, "Failed to create connection for fd %d: %s", client_fd,
+            e.what());
+        close(client_fd);
         return NULL;
     }
-}*/
 }
+
+// -----------------------------------------------------------------------
+// ------------------------------ TODO -----------------------------------
+// -----------------------------------------------------------------------
 
 void WebServer::handle_client_socket_event(Connection* conn,
                                            uint32_t event_flags) {

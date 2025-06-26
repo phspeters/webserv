@@ -157,7 +157,6 @@ bool VirtualServer::handle_server_directive(const std::string& key,
 }
 
 bool VirtualServer::parse_listen(const std::string& value) {
-    // Extract hostname/IP and port from the value
     std::string host_str;
     size_t colonPos = value.find(':');
 
@@ -166,58 +165,19 @@ bool VirtualServer::parse_listen(const std::string& value) {
         host_str = value.substr(0, colonPos);
         std::istringstream iss(value.substr(colonPos + 1));
         if (!(iss >> port_)) {
-            log(LOG_ERROR, "Invalid listen directive format: %s",
-                value.c_str());
+            log(LOG_ERROR, "Invalid port in listen directive: %s", value.c_str());
             return false;
         }
     } else {
-        // Just a port number
+        // Just a port number or just a hostname
         std::istringstream iss(value);
         if (!(iss >> port_)) {
-            log(LOG_ERROR, "Invalid listen directive format: %s",
-                value.c_str());
-            return false;
-        }
-        host_str = DEFAULT_HOST;  // Default to all interfaces
-    }
-
-    // Store the original hostname
-    host_name_ = host_str;
-
-    // Special case for "0.0.0.0" (INADDR_ANY) - no need to resolve
-    if (host_str == "0.0.0.0") {
-        host_ = host_str;
-    } else {
-        // Check if already a valid IP address
-        struct in_addr addr;
-        if (inet_pton(AF_INET, host_str.c_str(), &addr) == 1) {
-            // Already a valid IP, keep it
-            host_ = host_str;
-        } else {
-            // Resolve hostname to IP
-            struct addrinfo hints, *res;
-            memset(&hints, 0, sizeof(hints));
-            hints.ai_family = AF_INET;  // IPv4 only
-            hints.ai_socktype = SOCK_STREAM;
-
-            int status = getaddrinfo(host_str.c_str(), NULL, &hints, &res);
-            if (status != 0) {
-                log(LOG_ERROR, "Error resolving hostname '%s': %s",
-                    host_str.c_str(), gai_strerror(status));
-                return false;
-            }
-
-            // Convert the resolved address to string and store it
-            char ip_str[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &((struct sockaddr_in*)res->ai_addr)->sin_addr,
-                      ip_str, sizeof(ip_str));
-            host_ = ip_str;
-
-            // Free the linked list returned by getaddrinfo
-            freeaddrinfo(res);
+            host_str = value;
         }
     }
 
+    // Store the original hostname or IP string. WebServer will resolve it later.
+    host_ = host_str;
     return true;
 }
 
