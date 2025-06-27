@@ -618,7 +618,7 @@ void RequestParser::commit_header(HttpRequest* request,
     request->set_header(header_name, header_value);
 }
 
-ParseStatus RequestParser::parse_body(Connection* conn) {
+ParseStatus RequestParser::parse_content_body(Connection* conn) {
     log(LOG_DEBUG, "Parsing body for connection: %i", conn->client_fd_);
 
     HttpRequest* req = conn->request_data_;
@@ -773,7 +773,8 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
 }
 
 ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
-    log(LOG_DEBUG, "Parsing multipart body for connection: %i", conn->client_fd_);
+    log(LOG_DEBUG, "Parsing multipart body for connection: %i",
+        conn->client_fd_);
 
     if (!conn->file_upload_context_) {
         return PARSE_ERROR;
@@ -788,15 +789,17 @@ ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
 
     Buffer& buff = conn->read_buffer_;
     FileUploadContext* upload_ctx = conn->file_upload_context_;
-    std::string boundary = conn->multipart_boundary_; 
+    std::string boundary = conn->multipart_boundary_;
     if (boundary.empty()) {
-        log(LOG_ERROR, "No multipart boundary set for connection: %i", conn->client_fd_);
+        log(LOG_ERROR, "No multipart boundary set for connection: %i",
+            conn->client_fd_);
         return PARSE_ERROR;
     }
     std::string full_boundary = "--" + boundary;
     std::string end_boundary = full_boundary + "--";
 
-    MultipartState& state = reinterpret_cast<MultipartState&>(conn->parser_context_.granular_parser_state_);
+    MultipartState& state = reinterpret_cast<MultipartState&>(
+        conn->parser_context_.granular_parser_state_);
     static std::string headers;
     static bool file_part = false;
     static size_t file_data_start = 0;
@@ -843,7 +846,8 @@ ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
                     if (start != std::string::npos) {
                         end = headers.find('"', start + 1);
                         if (end != std::string::npos) {
-                            upload_ctx->filename_ = headers.substr(start + 1, end - start - 1);
+                            upload_ctx->filename_ =
+                                headers.substr(start + 1, end - start - 1);
                         }
                     }
                 } else {
@@ -867,13 +871,14 @@ ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
                     return PARSE_INCOMPLETE;
                 }
                 // Found boundary, write until it
-                if (file_part && bpos > 2) { // Remove CRLF before the boundary
+                if (file_part && bpos > 2) {  // Remove CRLF before the boundary
                     upload_ctx->upload_buffer_.append(data, bpos - 2);
                 }
                 buff.consume(bpos);
                 state = SEARCH_BOUNDARY;
                 // If it's the end boundary, upload complete
-                if (chunk_data.substr(bpos, end_boundary.length()) == end_boundary) {
+                if (chunk_data.substr(bpos, end_boundary.length()) ==
+                    end_boundary) {
                     upload_ctx->upload_complete = true;
                     buff.consume(end_boundary.length());
                     state = END_MULTIPART;

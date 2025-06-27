@@ -82,7 +82,7 @@ void ErrorHandler::generate_error_response(Connection* conn,
     conn->response_data_->set_header("server", "webserv/1.0");
     conn->response_data_->set_header("date", get_current_gmt_time());
 
-    // Update connection state to writing
+    // TODO: Update connection state to writing only write_buffer_ is not empty
     conn->conn_state_ = CONN_WRITING_RESPONSE;
 
     std::string status_msg = get_status_message(parse_status);

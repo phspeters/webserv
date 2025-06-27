@@ -20,7 +20,7 @@ class RequestParser {
     ParseStatus parse_headers(Connection* conn);
     ParseStatus process_request(Connection* conn);
     ConnectionState determine_body_handling_state(Connection* conn);
-    ParseStatus parse_body(Connection* conn);
+    ParseStatus parse_content_body(Connection* conn);
     ParseStatus parse_chunked_body(Connection* conn);
     ParseStatus parse_multipart_body(Connection* conn);
 

@@ -78,14 +78,17 @@ class WebServer {
     // Internal Methods
     //--------------------------------------
     void event_loop();
+    int cleanup_timed_out_connections();
+    
     void accept_new_connection(int listener_fd);
     Connection* create_client_connection(
         int client_fd, const VirtualServer* default_virtual_server);
     void close_client_connection(Connection* conn);
-    int cleanup_timed_out_connections();
-    bool read_from_client_socket(Connection* conn);
-
+    
     void handle_client_socket_event(Connection* conn, uint32_t event_flags);
+    bool read_from_client_socket(Connection* conn);
+    void process_request_data(Connection* conn);
+    
     void handle_static_file_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_read_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_write_event(IOContext* ctx, uint32_t event_flags);
@@ -93,10 +96,10 @@ class WebServer {
 
     bool setup_listener_sockets();
     int create_listener_socket(const std::string& host, int port);
-
-    bool set_non_blocking(int fd);
+    
     bool add_listener_context(int listener_fd);
     bool remove_listener_context(IOContext* ctx);
+    bool set_non_blocking(int fd);
 
     static bool setup_signal_handlers();
     static void signal_handler(int signal);
@@ -106,16 +109,16 @@ class WebServer {
     WebServer& operator=(const WebServer&);
 
     //--- TODO: review these methods
-    ParseStatus WebServer::process_request(Connection* conn);
+    ParseStatus process_request(Connection* conn);
     void match_host_header(Connection* conn);
     const Location* find_matching_location(const VirtualServer* virtual_server,
                                            const std::string& path) const;
     bool validate_request_location(Connection* conn);
-    ConnectionState determine_body_handling_state(Connection* conn);
+    ParserState determine_body_handling_state(Connection* conn);
     bool is_cgi_extension(const std::string& request_uri) const;
     std::string get_file_extension(const std::string& uri_path) const;
     AHandler* choose_handler(Connection* conn);
-    //--- TODO: review these methods
+    //------------------------------
 };  // class WebServer
 
 struct IOContext {
