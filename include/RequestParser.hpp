@@ -24,6 +24,9 @@ class RequestParser {
     ParseStatus parse_chunked_body(Connection* conn);
     ParseStatus parse_multipart_body(Connection* conn);
 
+    // Multipart parsing helpers
+    static std::string extract_boundary(const std::string& content_type);
+
    private:
     ParseStatus commit_request_line(HttpRequest* request,
                                     const ParserContext& context);

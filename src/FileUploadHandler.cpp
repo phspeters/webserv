@@ -6,34 +6,6 @@ FileUploadHandler::FileUploadHandler() : AHandler() {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
-void FileUploadHandler::handle(Connection* conn) {
-    log(LOG_DEBUG, "FileUploadHandler: Starting processing for client_fd %d",
-        conn->client_fd_);
-
-    if (process_location_redirect(conn) ||
-        process_trailing_slash_redirect(conn)) {
-        return;
-    }
-
-    if (!conn->location_match_) {
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return;
-    }
-
-    std::string boundary;
-    if (!validate_request(conn, boundary)) {
-        return;
-    }
-
-    if (parse_multipart_form_data(conn, boundary)) {
-        send_success_response(conn);
-    } else {
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-    }
-
-    conn->conn_state_ = CONN_WRITING_RESPONSE;
-}
-
 bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
     std::string uri = conn->request_data_->uri_;
     const Location* location = conn->location_match_;
@@ -77,7 +49,7 @@ bool FileUploadHandler::validate_request(Connection* conn,
         return false;
     }
 
-    boundary = extract_boundary(content_type);
+    boundary = RequestParser::extract_boundary(content_type);
     if (boundary.empty()) {
         ErrorHandler::generate_error_response(conn, BAD_REQUEST);
         return false;
@@ -96,173 +68,6 @@ void FileUploadHandler::send_success_response(Connection* conn) {
         "uploaded successfully.</p></body></html>";
     resp->body_.assign(body.begin(), body.end());
     resp->content_length_ = resp->body_.size();
-}
-
-bool FileUploadHandler::parse_multipart_form_data(Connection* conn,
-                                                  const std::string& boundary) {
-    std::string body(conn->request_data_->body_.begin(),
-                     conn->request_data_->body_.end());
-    std::string full_boundary = "--" + boundary;
-    std::string end_boundary = full_boundary + "--";
-
-    size_t pos = 0;
-    bool file_found = false;
-
-    while (pos < body.length()) {
-        pos = body.find(full_boundary, pos);
-        if (pos == std::string::npos) {
-            break;
-        }
-
-        pos += full_boundary.length();
-        if (pos >= body.length()) {
-            break;
-        }
-
-        // Skip CRLF after boundary
-        if (pos + 2 <= body.length() && body.substr(pos, 2) == "\r\n") {
-            pos += 2;
-        }
-
-        // Check for end boundary
-        if (pos + 2 <= body.length() && body.substr(pos, 2) == "--") {
-            break;
-        }
-
-        if (!process_part(conn, body, full_boundary, end_boundary, pos,
-                          file_found)) {
-            return false;
-        }
-
-        // Safety check to prevent infinite loops
-        if (pos >= body.length()) {
-            break;
-        }
-    }
-
-    return file_found;
-}
-
-bool FileUploadHandler::process_part(Connection* conn, const std::string& body,
-                                     const std::string& full_boundary,
-                                     const std::string& end_boundary,
-                                     size_t& pos, bool& file_found) {
-    // Extract headers
-    size_t headers_end;
-    std::string headers;
-
-    if (!extract_part_headers(body, pos, headers_end, headers)) {
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return false;
-    }
-
-    // Extract filename from headers
-    std::string filename;
-    if (!extract_filename(headers, filename)) {
-        // Not a file part, skip it
-        // Find the end of this part to update pos for next iteration
-        size_t content_end = body.find(full_boundary, pos);
-        if (content_end != std::string::npos) {
-            pos = content_end;
-        } else {
-            // Try end boundary
-            content_end = body.find(end_boundary, pos);
-            if (content_end != std::string::npos) {
-                pos = content_end;
-            } else {
-                // Can't find next boundary, something's wrong
-                ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-                return false;
-            }
-        }
-        return true;  // Skip this part but continue parsing
-    }
-
-    // Move to content start
-    pos = headers_end + 4;  // Skip "\r\n\r\n"
-
-    // Extract and process file content
-    return extract_file_content(conn, body, pos, pos, full_boundary,
-                                end_boundary, filename, file_found);
-}
-
-bool FileUploadHandler::extract_part_headers(const std::string& body,
-                                             size_t& pos, size_t& headers_end,
-                                             std::string& headers) {
-    // Find the end of the headers section (double newline)
-    headers_end = body.find("\r\n\r\n", pos);
-    if (headers_end == std::string::npos) {
-        return false;  // Invalid format
-    }
-
-    // Extract headers
-    headers = body.substr(pos, headers_end - pos);
-    return true;
-}
-
-bool FileUploadHandler::extract_filename(const std::string& headers,
-                                         std::string& filename) {
-    // Find Content-Disposition header
-    size_t content_disp_pos = headers.find("Content-Disposition:");
-    if (content_disp_pos == std::string::npos) {
-        return false;  // Not a content disposition part
-    }
-
-    // Extract filename
-    size_t filename_pos = headers.find("filename=\"", content_disp_pos);
-    if (filename_pos == std::string::npos) {
-        return false;  // No filename, not a file upload
-    }
-
-    filename_pos += 10;  // Length of 'filename="'
-    size_t filename_end = headers.find("\"", filename_pos);
-    if (filename_end == std::string::npos) {
-        return false;  // Invalid format
-    }
-
-    filename = headers.substr(filename_pos, filename_end - filename_pos);
-    return !filename
-                .empty();  // Return true only if we found a non-empty filename
-}
-
-bool FileUploadHandler::extract_file_content(
-    Connection* conn, const std::string& body, size_t pos, size_t& content_end,
-    const std::string& full_boundary, const std::string& end_boundary,
-    const std::string& filename, bool& file_found) {
-    // Find next boundary
-    content_end = body.find(full_boundary, pos);
-    if (content_end == std::string::npos) {
-        content_end = body.find(end_boundary, pos);
-        if (content_end == std::string::npos) {
-            ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-            return false;
-        }
-    }
-
-    // Bounds checking
-    if (pos >= content_end || content_end > body.length()) {
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return false;
-    }
-
-    // Remove trailing CRLF
-    content_end -= 2;
-
-    // Final validation after adjustment
-    if (pos >= content_end) {
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return false;
-    }
-
-    // Safe extraction
-    std::vector<char> file_data(body.begin() + pos, body.begin() + content_end);
-
-    if (!save_uploaded_file(conn, filename, file_data)) {
-        return false;
-    }
-
-    file_found = true;
-    return true;
 }
 
 std::string FileUploadHandler::get_upload_directory(Connection* conn) {
@@ -419,34 +224,110 @@ std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
     return safe_filename;
 }
 
-std::string FileUploadHandler::extract_boundary(
-    const std::string& content_type) {
-    size_t boundary_pos = content_type.find("boundary=");
-    if (boundary_pos == std::string::npos) {
-        return "";
+// Copia o arquivo temporário para o destino final usando apenas funções permitidas
+bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path, const std::string& final_path) {
+    int src_fd = open(temp_path.c_str(), O_RDONLY);
+    if (src_fd < 0) {
+        log(LOG_ERROR, "Failed to open temp file for reading: %s", strerror(errno));
+        return false;
     }
-
-    boundary_pos += 9;  // Length of "boundary="
-
-    // Add bounds checking
-    if (boundary_pos >= content_type.length()) {
-        return "";
+    int dst_fd = open(final_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (dst_fd < 0) {
+        log(LOG_ERROR, "Failed to open final file for writing: %s", strerror(errno));
+        close(src_fd);
+        return false;
     }
-
-    // Check if boundary is quoted
-    if (content_type[boundary_pos] == '"') {
-        boundary_pos++;  // Skip opening quote
-        size_t end_quote = content_type.find("\"", boundary_pos);
-        if (end_quote == std::string::npos) {
-            return "";
+    char buf[4096];
+    ssize_t bytes_read;
+    while ((bytes_read = read(src_fd, buf, sizeof(buf))) > 0) {
+        ssize_t total_written = 0;
+        while (total_written < bytes_read) {
+            ssize_t bytes_written = write(dst_fd, buf + total_written, bytes_read - total_written);
+            if (bytes_written < 0) {
+                log(LOG_ERROR, "Error writing to final file: %s", strerror(errno));
+                close(src_fd);
+                close(dst_fd);
+                return false;
+            }
+            total_written += bytes_written;
         }
-        return content_type.substr(boundary_pos, end_quote - boundary_pos);
-    } else {
-        // Unquoted boundary ends at semicolon or end of string
-        size_t end_pos = content_type.find(";", boundary_pos);
-        if (end_pos == std::string::npos) {
-            end_pos = content_type.length();
-        }
-        return content_type.substr(boundary_pos, end_pos - boundary_pos);
     }
+    if (bytes_read < 0) {
+        log(LOG_ERROR, "Error reading from temp file: %s", strerror(errno));
+        close(src_fd);
+        close(dst_fd);
+        return false;
+    }
+    close(src_fd);
+    close(dst_fd);
+    return true;
+}
+
+void FileUploadHandler::check_permissions(Connection* conn) {
+    std::string content_length = conn->request_data_->get_header("content-length");
+    if (content_length.empty()) {
+        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
+        return;
+    }
+    std::string content_type = conn->request_data_->get_header("content-type");
+    if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
+        ErrorHandler::generate_error_response(conn, UNSUPPORTED_MEDIA_TYPE);
+        return;
+    }
+    log(LOG_DEBUG, "FileUploadHandler: Permissions check passed for client_fd %d", conn->client_fd_);
+}
+
+void FileUploadHandler::setup_handler(Connection* conn) {
+    // Generate temporary file name
+    std::string upload_dir = get_upload_directory(conn);
+    if (!ensure_upload_directory_exists(conn, upload_dir)) {
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+        return;
+    }
+    std::string temp_filename = upload_dir + "upload_" + std::to_string(conn->client_fd_) + ".tmp";
+    int file_fd = open(temp_filename.c_str(), O_WRONLY | O_CREAT | O_NONBLOCK, 0644);
+    if (file_fd < 0) {
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+        return;
+    }
+    // Initialize context
+    conn->file_upload_context_ = new FileUploadContext();
+    conn->file_upload_context_->file_fd_ = file_fd;
+    conn->file_upload_context_->temp_path_ = temp_filename;
+    log(LOG_INFO, "FileUploadHandler: Setup complete for client_fd %d, file_fd %d", conn->client_fd_, file_fd);
+}
+
+void FileUploadHandler::handle_event(Connection* conn) {
+    // Consume from upload_buffer_ and write to temporary file
+    if (!conn->file_upload_context_) return;
+    Buffer& buffer = conn->file_upload_context_->upload_buffer_;
+    int file_fd = conn->file_upload_context_->file_fd_;
+    if (!buffer.empty()) {
+        ssize_t written = buffer.write_to(file_fd);
+        if (written < 0) {
+            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+            return;
+        }
+        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d", written, file_fd);
+    }
+}
+
+void FileUploadHandler::cleanup_handler(Connection* conn) {
+    if (!conn->file_upload_context_) return;
+    int file_fd = conn->file_upload_context_->file_fd_;
+    if (file_fd >= 0) close(file_fd);
+    // Copy temp file to final file
+    std::string filename = conn->file_upload_context_->filename_;
+    if (filename.empty()) {
+        filename = "upload_file";
+    }
+    filename = sanitize_filename(filename);
+    std::string final_path = get_upload_directory(conn) + filename;
+    if (!copy_temp_to_final_file(conn->file_upload_context_->temp_path_, final_path)) {
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+        return;
+    }
+    log(LOG_INFO, "FileUploadHandler: Copied temp file to final file '%s' for client_fd %d", final_path.c_str(), conn->client_fd_);
+    delete conn->file_upload_context_;
+    conn->file_upload_context_ = NULL;
 }

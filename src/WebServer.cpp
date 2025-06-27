@@ -1266,3 +1266,10 @@ void WebServer::match_host_header(Connection* conn) {
                 : conn->virtual_server_->server_names_[0].c_str());
     }
 }
+
+void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
+    Connection* conn = ctx->conn_;
+    if (conn && conn->active_handler_) {
+        conn->active_handler_->handle_event(conn);
+    }
+}

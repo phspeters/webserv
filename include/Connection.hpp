@@ -67,6 +67,8 @@ struct Connection {
     FileUploadContext* file_upload_context_;
     CgiContext* cgi_context_;
 
+    std::string multipart_boundary_;
+
    private:
     // Prevent copying
     Connection(const Connection&);

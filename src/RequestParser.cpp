@@ -773,6 +773,142 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
 }
 
 ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
-    log(LOG_DEBUG, "Parsing multipart body for connection: %i",
-        conn->client_fd_);
+    log(LOG_DEBUG, "Parsing multipart body for connection: %i", conn->client_fd_);
+
+    if (!conn->file_upload_context_) {
+        return PARSE_ERROR;
+    }
+
+    enum MultipartState {
+        SEARCH_BOUNDARY,
+        READ_HEADERS,
+        READ_FILE_DATA,
+        END_MULTIPART
+    };
+
+    Buffer& buff = conn->read_buffer_;
+    FileUploadContext* upload_ctx = conn->file_upload_context_;
+    std::string boundary = conn->multipart_boundary_; 
+    if (boundary.empty()) {
+        log(LOG_ERROR, "No multipart boundary set for connection: %i", conn->client_fd_);
+        return PARSE_ERROR;
+    }
+    std::string full_boundary = "--" + boundary;
+    std::string end_boundary = full_boundary + "--";
+
+    MultipartState& state = reinterpret_cast<MultipartState&>(conn->parser_context_.granular_parser_state_);
+    static std::string headers;
+    static bool file_part = false;
+    static size_t file_data_start = 0;
+
+    while (buff.readable_bytes() > 0) {
+        const char* data = buff.data();
+        size_t len = buff.readable_bytes();
+        std::string chunk(data, len);
+        size_t pos = 0;
+
+        switch (state) {
+            case SEARCH_BOUNDARY: {
+                size_t bpos = chunk.find(full_boundary);
+                if (bpos == std::string::npos) {
+                    // Boundary not found, consume all and wait for more data
+                    buff.consume(len);
+                    return PARSE_INCOMPLETE;
+                }
+                pos = bpos + full_boundary.length();
+                // There may be CRLF after the boundary
+                if (chunk.substr(pos, 2) == "\r\n") pos += 2;
+                buff.consume(pos);
+                state = READ_HEADERS;
+                headers.clear();
+                file_part = false;
+                break;
+            }
+            case READ_HEADERS: {
+                // Search for end of headers (\r\n\r\n)
+                std::string chunk_headers(data, len);
+                size_t hpos = chunk_headers.find("\r\n\r\n");
+                if (hpos == std::string::npos) {
+                    // Headers incomplete, wait for more data
+                    return PARSE_INCOMPLETE;
+                }
+                headers = chunk_headers.substr(0, hpos);
+                // Check if it's a file part and extract filename
+                size_t fnpos = headers.find("filename=");
+                if (fnpos != std::string::npos) {
+                    file_part = true;
+                    // Extract filename from headers
+                    size_t start = headers.find('"', fnpos);
+                    size_t end = std::string::npos;
+                    if (start != std::string::npos) {
+                        end = headers.find('"', start + 1);
+                        if (end != std::string::npos) {
+                            upload_ctx->filename_ = headers.substr(start + 1, end - start - 1);
+                        }
+                    }
+                } else {
+                    file_part = false;
+                }
+                buff.consume(hpos + 4);
+                state = READ_FILE_DATA;
+                file_data_start = 0;
+                break;
+            }
+            case READ_FILE_DATA: {
+                // Search for next boundary
+                std::string chunk_data(data, len);
+                size_t bpos = chunk_data.find(full_boundary);
+                if (bpos == std::string::npos) {
+                    // Boundary not found, if it's a file part, write everything
+                    if (file_part) {
+                        upload_ctx->upload_buffer_.append(data, len);
+                    }
+                    buff.consume(len);
+                    return PARSE_INCOMPLETE;
+                }
+                // Found boundary, write until it
+                if (file_part && bpos > 2) { // Remove CRLF before the boundary
+                    upload_ctx->upload_buffer_.append(data, bpos - 2);
+                }
+                buff.consume(bpos);
+                state = SEARCH_BOUNDARY;
+                // If it's the end boundary, upload complete
+                if (chunk_data.substr(bpos, end_boundary.length()) == end_boundary) {
+                    upload_ctx->upload_complete = true;
+                    buff.consume(end_boundary.length());
+                    state = END_MULTIPART;
+                    return PARSE_SUCCESS;
+                }
+                break;
+            }
+            case END_MULTIPART:
+                return PARSE_SUCCESS;
+        }
+    }
+    return PARSE_INCOMPLETE;
+}
+
+std::string RequestParser::extract_boundary(const std::string& content_type) {
+    size_t boundary_pos = content_type.find("boundary=");
+    if (boundary_pos == std::string::npos) {
+        return "";
+    }
+    boundary_pos += 9;  // Length of "boundary="
+    if (boundary_pos >= content_type.length()) {
+        return "";
+    }
+    if (content_type[boundary_pos] == '"') {
+        boundary_pos++;
+        size_t end_quote = content_type.find('"', boundary_pos);
+        if (end_quote == std::string::npos) {
+            return "";
+        }
+        return content_type.substr(boundary_pos, end_quote - boundary_pos);
+    } else {
+        size_t end_pos = content_type.find(";", boundary_pos);
+        if (end_pos == std::string::npos) {
+            end_pos = content_type.length();
+        }
+        return content_type.substr(boundary_pos, end_pos - boundary_pos);
+    }
 }

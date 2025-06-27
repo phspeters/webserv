@@ -13,7 +13,7 @@ class AHandler {
 
     virtual void check_permissions(Connection* conn) = 0;
     virtual void setup_handler(Connection* conn) = 0;
-    virtual void handle(Connection* conn) = 0; // TODO: Rename to handle_event
+    virtual void handle_event(Connection* conn) = 0;
     virtual void cleanup_handler(Connection* conn) = 0;
 
    protected:

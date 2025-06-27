@@ -16,7 +16,7 @@ class FileUploadHandler : public AHandler {
 
     virtual void check_permissions(Connection* conn);
     virtual void setup_handler(Connection* conn);
-    virtual void handle(Connection* conn);
+    virtual void handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
    private:
@@ -26,22 +26,6 @@ class FileUploadHandler : public AHandler {
 
     // Response generation
     void send_success_response(Connection* conn);
-
-    // Multipart form data parsing
-    bool parse_multipart_form_data(Connection* conn,
-                                   const std::string& boundary);
-    bool process_part(Connection* conn, const std::string& body,
-                      const std::string& full_boundary,
-                      const std::string& end_boundary, size_t& pos,
-                      bool& file_found);
-    bool extract_part_headers(const std::string& body, size_t& pos,
-                              size_t& headers_end, std::string& headers);
-    bool extract_filename(const std::string& headers, std::string& filename);
-    bool extract_file_content(Connection* conn, const std::string& body,
-                              size_t pos, size_t& content_end,
-                              const std::string& full_boundary,
-                              const std::string& end_boundary,
-                              const std::string& filename, bool& file_found);
 
     // File saving operations
     bool save_uploaded_file(Connection* conn, const std::string& filename,
@@ -56,7 +40,6 @@ class FileUploadHandler : public AHandler {
     bool create_directory_recursive(Connection* conn, const std::string& path);
 
     // Utility methods
-    std::string extract_boundary(const std::string& content_type);
     std::string sanitize_filename(const std::string& filename);
 
     // Prevent copying
@@ -68,9 +51,12 @@ struct FileUploadContext {
     // State for file upload handling
     int file_fd_;  // File descriptor for the opened uploaded file (-1 if none)
     Buffer upload_buffer_;  // Buffer for reading file data
+    std::string temp_path_; // Caminho do arquivo temporário
+    bool upload_complete;   // Indica se o upload terminou
+    std::string filename_;  // Nome do arquivo extraído do multipart
 
     FileUploadContext()
-        : file_fd_(-1) {
+        : file_fd_(-1), upload_complete(false) {
     }  // Initialize file_fd_ to -1 indicating no file opened
 };
 
