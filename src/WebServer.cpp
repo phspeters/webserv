@@ -651,7 +651,14 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
 
         if (conn->conn_state_ == CONN_READING_REQUEST ||
             conn->conn_state_ == CONN_GENERATING_RESPONSE) {
-            process_request_data(conn);
+            ParseStatus status = process_request_data(conn);
+            if (status >= PARSE_ERROR) {
+                ErrorHandler::generate_error_response(conn, status);
+                // TODO: ResponseWriter try to serialize response to
+                // write_buffer_
+                conn->conn_state_ = CONN_WRITING_RESPONSE;
+                return;  // Error processing request, send error response
+            }
             log_request(LOG_TRACE, conn);
         }
     }
@@ -721,7 +728,7 @@ bool WebServer::handle_keep_alive(Connection* conn) {
 }
 
 // TODO: insert multiform data at the end of parse body functions
-void WebServer::process_request_data(Connection* conn) {
+ParseStatus WebServer::process_request_data(Connection* conn) {
     ParseStatus status = PARSE_SUCCESS;
 
     // Loop to process as much data as possible from the buffer in one go.
@@ -775,7 +782,7 @@ void WebServer::process_request_data(Connection* conn) {
             case PARSER_COMPLETE:
                 log(LOG_DEBUG, "Request parsing complete for fd %d.",
                     conn->client_fd_);
-                return;  // Exit the processing loop
+                return PARSE_SUCCESS;  // Exit the processing loop
 
             default:
                 log(LOG_ERROR, "Unknown parser state for fd %d.",
@@ -788,16 +795,13 @@ void WebServer::process_request_data(Connection* conn) {
         if (status == PARSE_INCOMPLETE) {
             log(LOG_DEBUG, "Parser needs more data for fd %d. Waiting.",
                 conn->client_fd_);
-            return;  // Exit and wait for the next EPOLLIN event.
+            return status;  // Exit and wait for the next EPOLLIN event.
         }
 
         if (status >= PARSE_ERROR) {
             log(LOG_ERROR, "Parse error %d for fd %d.", status,
                 conn->client_fd_);
-            ErrorHandler::generate_error_response(conn, status);
-            // TODO: ResponseWriter try to serialize response to write_buffer_
-            // TODO: Transition to CONN_WRITING_RESPONSE and set EPOLLOUT
-            return;  // Exit the processing loop
+            return status;  // Exit the processing loop
         }
     }
 }

@@ -51,12 +51,10 @@ class WebServer {
     // WebServer State & Configuration
     //--------------------------------------
     std::list<VirtualServer> virtual_servers_;
-    std::vector<IOContext*>
-        listener_contexts_;
+    std::vector<IOContext*> listener_contexts_;
     std::map<int, std::vector<VirtualServer*> > listener_to_virtual_servers_;
-    std::map<int, Connection*>
-        active_connections_;
-    volatile bool ready_;     // Flag for server readiness for event loop
+    std::map<int, Connection*> active_connections_;
+    volatile bool ready_;  // Flag for server readiness for event loop
 
     //--------------------------------------
     // Owned Components (Composition)
@@ -77,17 +75,17 @@ class WebServer {
     //--------------------------------------
     void event_loop();
     int cleanup_timed_out_connections();
-    
+
     void accept_new_connection(int listener_fd);
     Connection* create_client_connection(
         int client_fd, const VirtualServer* default_virtual_server);
     void close_client_connection(Connection* conn);
-    
+
     void handle_client_socket_event(IOContext* ctx, uint32_t event_flags);
     bool read_from_client_socket(Connection* conn);
-    void process_request_data(Connection* conn);
+    ParseStatus process_request_data(Connection* conn);
     bool handle_keep_alive(Connection* conn);
-    
+
     void handle_static_file_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_read_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_write_event(IOContext* ctx, uint32_t event_flags);
@@ -95,7 +93,7 @@ class WebServer {
 
     bool setup_listener_sockets();
     int create_listener_socket(const std::string& host, int port);
-    
+
     bool add_listener_context(int listener_fd);
     bool remove_listener_context(IOContext* ctx);
     bool set_non_blocking(int fd);
