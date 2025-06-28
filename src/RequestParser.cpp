@@ -36,7 +36,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
         const char ch = *buff.data();
 
         switch (state) {
-            case ReqLineState::START:
+            case START:
                 if (ch == '\r' || ch == '\n') {
                     // Skip leading CRLF from some clients.
                     break;  // Character is consumed at the end of the loop.
@@ -49,13 +49,13 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
 
                 // First valid character found. Mark the start of the method.
                 context.method_start_ = buff.data();
-                state = ReqLineState::METHOD;
+                state = METHOD;
 
                 // Instead of falling through, continue the loop to re-evaluate
                 // the same character with the new state.
                 continue;  // This skips the buff.consume(1) at the end
 
-            case ReqLineState::METHOD:
+            case METHOD:
                 if (buff.data() - context.method_start_ >
                     http_limits::MAX_METHOD_LENGTH) {
                     return PARSE_ERROR;
@@ -64,14 +64,14 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == ' ') {
                     // Trigger: Space ends the method. Mark the end.
                     context.method_end_ = buff.data();
-                    state = ReqLineState::SPACES_BEFORE_URI;
+                    state = SPACES_BEFORE_URI;
                 } else if (ch < 'A' || ch > 'Z') {
                     // Invalid character within the method.
                     return PARSE_ERROR;
                 }
                 break;
 
-            case ReqLineState::SPACES_BEFORE_URI:
+            case SPACES_BEFORE_URI:
                 if (ch == ' ') {
                     // Continue skipping spaces.
                     break;  // Character is consumed at the end of the loop.
@@ -81,44 +81,44 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                     // Origin-Form
                     context.uri_start_ = buff.data();
                     context.path_start_ = buff.data();
-                    state = ReqLineState::URI_PATH;
+                    state = URI_PATH;
                     continue;
                 } else {
                     // Invalid character after method.
                     return PARSE_ERROR;
                 }
 
-            case ReqLineState::URI_PATH:
+            case URI_PATH:
                 if (ch == ' ') {
                     // Trigger: Space ends the URI. Mark the end.
                     context.uri_end_ = buff.data();
                     context.path_end_ = buff.data();
-                    state = ReqLineState::HTTP_H;
+                    state = HTTP_H;
                 } else if (ch == '?') {
                     // Query starts. Mark the end of the path.
                     context.path_end_ = buff.data();
-                    state = ReqLineState::URI_QUERY;
+                    state = URI_QUERY;
                 } else if (!isalnum(ch) && !strchr("/-._~:!$&'()*+,;=@", ch)) {
                     // The only other valid thing is a percent-encoding
                     if (ch == '%') {
                         context.return_state_ = state;
-                        state = ReqLineState::URI_PERCENT_ENCODING_1;
+                        state = URI_PERCENT_ENCODING_1;
                     } else {
                         return PARSE_ERROR;  // Invalid character
                     }
                 }
                 break;
 
-            case ReqLineState::URI_PERCENT_ENCODING_1:
+            case URI_PERCENT_ENCODING_1:
                 // Expecting a hex digit after '%'
                 if (isxdigit(ch)) {
-                    state = ReqLineState::URI_PERCENT_ENCODING_2;
+                    state = URI_PERCENT_ENCODING_2;
                 } else {
                     return PARSE_ERROR;  // Invalid percent-encoding
                 }
                 break;
 
-            case ReqLineState::URI_PERCENT_ENCODING_2:
+            case URI_PERCENT_ENCODING_2:
                 // Expecting a second hex digit after the first one
                 if (isxdigit(ch)) {
                     // Valid percent-encoding, continue parsing the URI
@@ -128,113 +128,113 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 }
                 break;
 
-            case ReqLineState::URI_QUERY:
+            case URI_QUERY:
                 if (ch == ' ') {
                     // Trigger: Space ends the URI. Mark the end.
                     context.uri_end_ = buff.data();
                     context.query_end_ = buff.data();
-                    state = ReqLineState::HTTP_H;
+                    state = HTTP_H;
                 } else if (!isalnum(ch) && !strchr("/-._~:!$&'()*+,;=@?", ch)) {
                     // The only other valid thing is a percent-encoding
                     if (ch == '%') {
                         context.return_state_ = state;
-                        state = ReqLineState::URI_PERCENT_ENCODING_1;
+                        state = URI_PERCENT_ENCODING_1;
                     } else {
                         return PARSE_ERROR;  // Invalid character
                     }
                 }
                 break;
 
-            case ReqLineState::SPACES_AFTER_URI:
+            case SPACES_AFTER_URI:
                 if (ch == ' ') {
                     // Continue skipping spaces.
                     break;  // Character is consumed at the end of the loop.
                 } else {
-                    state = ReqLineState::HTTP_H;
+                    state = HTTP_H;
                 }
                 break;
 
-            case ReqLineState::HTTP_H:
+            case HTTP_H:
                 if (ch == 'H') {
-                    state = ReqLineState::HTTP_HT;
+                    state = HTTP_HT;
                 } else {
                     return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
-            case ReqLineState::HTTP_HT:
+            case HTTP_HT:
                 if (ch == 'T') {
-                    state = ReqLineState::HTTP_HTT;
+                    state = HTTP_HTT;
                 } else {
                     return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
-            case ReqLineState::HTTP_HTT:
+            case HTTP_HTT:
                 if (ch == 'T') {
-                    state = ReqLineState::HTTP_HTTP;
+                    state = HTTP_HTTP;
                 } else {
                     return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
-            case ReqLineState::HTTP_HTTP:
+            case HTTP_HTTP:
                 if (ch == 'P') {
-                    state = ReqLineState::HTTP_SLASH;
+                    state = HTTP_SLASH;
                 } else {
                     return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
-            case ReqLineState::HTTP_SLASH:
+            case HTTP_SLASH:
                 if (ch == '/') {
-                    state = ReqLineState::HTTP_MAJOR_DIGIT;
+                    state = HTTP_MAJOR_DIGIT;
                 } else {
                     return PARSE_ERROR;  // Invalid HTTP version start
                 }
                 break;
 
-            case ReqLineState::HTTP_MAJOR_DIGIT:
+            case HTTP_MAJOR_DIGIT:
                 if (isdigit(ch)) {
                     context.version_major_ = ch - '0';
-                    state = ReqLineState::HTTP_DOT;
+                    state = HTTP_DOT;
                 } else {
                     return PARSE_ERROR;  // Invalid major version digit
                 }
                 break;
 
-            case ReqLineState::HTTP_DOT:
+            case HTTP_DOT:
                 if (ch == '.') {
-                    state = ReqLineState::HTTP_MINOR_DIGIT;
+                    state = HTTP_MINOR_DIGIT;
                 } else {
                     return PARSE_ERROR;  // Invalid character after major
                                          // version digit
                 }
                 break;
 
-            case ReqLineState::HTTP_MINOR_DIGIT:
+            case HTTP_MINOR_DIGIT:
                 if (isdigit(ch)) {
                     context.version_minor_ = ch - '0';
-                    state = ReqLineState::VERSION_DONE;
+                    state = VERSION_DONE;
                 } else {
                     return PARSE_ERROR;  // Invalid minor version digit
                 }
                 break;
 
-            case ReqLineState::VERSION_DONE:
+            case VERSION_DONE:
                 if (ch == '\r') {
-                    state = ReqLineState::ALMOST_DONE;
+                    state = ALMOST_DONE;
                 }
                 break;
 
-            case ReqLineState::ALMOST_DONE:
+            case ALMOST_DONE:
                 if (ch == '\n') {
                     // Final Trigger: We found LF after CR.
                     ParseStatus status =
                         commit_request_line(conn->request_data_, context);
 
                     buff.consume(1);  // Consume the final '\n'
-                    context.granular_parser_state_ = 0;  // Reset parser state
+                    state = 0;        // Reset parser state
 
                     return status;
                 }
@@ -473,11 +473,11 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
         const char ch = *buff.data();
 
         switch (state) {
-            case HeadParseState::LINE_START:
+            case LINE_START:
                 // The first character should be either the start of a header
                 // name or a CR.
                 if (ch == '\r') {
-                    state = HeadParseState::HEADERS_ALMOST_DONE;
+                    state = HEADERS_ALMOST_DONE;
                     break;
                 }
 
@@ -487,17 +487,17 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                 }
 
                 context.key_start_ = buff.data();
-                state = HeadParseState::NAME;
+                state = NAME;
                 continue;  // This skips the buff.consume(1) at the
                            // end of the loop
 
-            case HeadParseState::NAME:
+            case NAME:
                 if (ch == ':') {
                     if (buff.data() == context.key_start_) {
                         return PARSE_ERROR;  // Empty header name
                     }
                     context.key_end_ = buff.data();
-                    state = HeadParseState::SPACE_BEFORE_VALUE;
+                    state = SPACE_BEFORE_VALUE;
                 } else if (!is_token_char(ch)) {
                     return PARSE_ERROR;
                 } else if (buff.data() - context.key_start_ >=
@@ -506,7 +506,7 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                 }
                 break;
 
-            case HeadParseState::SPACE_BEFORE_VALUE:
+            case SPACE_BEFORE_VALUE:
                 // Skip optional whitespace (spaces and tabs) before the value.
                 if (ch == ' ' || ch == '\t') {
                     break;
@@ -515,18 +515,18 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                 if (ch == '\r') {
                     context.value_start_ = NULL;
                     context.value_end_ = NULL;
-                    state = HeadParseState::VALUE_ALMOST_DONE;
+                    state = VALUE_ALMOST_DONE;
                     break;
                 }
                 // The first non-space character marks the start of the value.
                 context.value_start_ = buff.data();
-                state = HeadParseState::VALUE;
+                state = VALUE;
                 continue;  // Re-evaluate this character in the new VALUE state.
 
-            case HeadParseState::VALUE:
+            case VALUE:
                 if (ch == '\r') {
                     context.value_end_ = buff.data();
-                    state = HeadParseState::VALUE_ALMOST_DONE;
+                    state = VALUE_ALMOST_DONE;
                 }
 
                 // A header value can contain any visible ASCII character,
@@ -545,7 +545,7 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                 // Any other character is part of the value.
                 break;
 
-            case HeadParseState::VALUE_ALMOST_DONE:
+            case VALUE_ALMOST_DONE:
                 if (ch == '\n') {
                     // We have seen CRLF. The header line is complete.
                     commit_header(conn->request_data_,
@@ -555,21 +555,20 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                     context.key_end_ = NULL;
                     context.value_start_ = NULL;  // Reset for the next header
                     context.value_end_ = NULL;
-                    state = HeadParseState::LINE_START;  // Ready for the
-                                                         // next line
+                    state = LINE_START;  // Ready for the
+                                         // next line
                 } else {
                     return PARSE_ERROR;  // Expected LF after CR
                 }
                 break;
 
-            case HeadParseState::HEADERS_ALMOST_DONE:
+            case HEADERS_ALMOST_DONE:
                 if (ch == '\n') {
                     // We have seen CRLF after the last header. Headers
                     // are done. Now we can determine how to handle the
                     // body.
                     buff.consume(1);  // Consume last character
-                    conn->parser_context_.granular_parser_state_ =
-                        0;  // Reset state
+                    state = 0;        // Reset state for the next parse function
                     return PARSE_SUCCESS;
                 } else {
                     return PARSE_ERROR;  // Expected LF after CR
@@ -618,6 +617,7 @@ void RequestParser::commit_header(HttpRequest* request,
     request->set_header(header_name, header_value);
 }
 
+// TODO: review this function
 ParseStatus RequestParser::parse_content_body(Connection* conn) {
     log(LOG_DEBUG, "Parsing body for connection: %i", conn->client_fd_);
 
@@ -698,7 +698,7 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
         const char ch = *buff.data();
 
         switch (state) {
-            case ChunkParseState::CHUNK_START:
+            case CHUNK_START:
                 if (ch == '\r') {
                     // Skip leading CRLF from some clients.
                     break;  // Character is consumed at the end of the loop.
@@ -709,44 +709,44 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                 }
 
                 context.value_start_ = buff.data();
-                state = ChunkParseState::CHUNK_SIZE;
+                state = CHUNK_SIZE;
                 continue;  // This skips the buff.consume(1) at the end of
                            // the loop
 
-            case ChunkParseState::CHUNK_SIZE:
+            case CHUNK_SIZE:
                 if (ch == ';') {
                     // Optional chunk extension starts.
                     context.value_end_ = buff.data();
-                    state = ChunkParseState::CHUNK_EXTENSION;
+                    state = CHUNK_EXTENSION;
                 } else if (ch == '\r') {
                     // End of chunk size. Prepare to read data.
                     context.value_end_ = buff.data();
-                    state = ChunkParseState::CHUNK_DATA;
+                    state = CHUNK_DATA;
                 } else if (!isxdigit(ch)) {
                     return PARSE_INVALID_CHUNK_SIZE;  // Invalid size
                 }
                 break;
 
-            case ChunkParseState::CHUNK_EXTENSION:
+            case CHUNK_EXTENSION:
                 if (ch == '\r') {
                     context.value_end_ = buff.data();
-                    state = ChunkParseState::CHUNK_EXTENSION_ALMOST_DONE;
+                    state = CHUNK_EXTENSION_ALMOST_DONE;
                 }
                 break;
 
-            case ChunkParseState::CHUNK_EXTENSION_ALMOST_DONE:
+            case CHUNK_EXTENSION_ALMOST_DONE:
                 if (ch == '\n') {
                     // We have seen CRLF after the chunk size and extension.
-                    state = ChunkParseState::CHUNK_DATA;
+                    state = CHUNK_DATA;
                 } else {
                     return PARSE_ERROR;  // Expected LF after CR
                 }
                 break;
 
-            case ChunkParseState::CHUNK_DATA:
+            case CHUNK_DATA:
                 if (context.chunk_remaining_bytes_ == 0) {
                     // We need to read the chunk size next.
-                    state = ChunkParseState::AFTER_DATA;
+                    state = AFTER_DATA;
                     continue;  // Re-evaluate this character in the new state.
                 }
 
@@ -754,10 +754,10 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                 context.chunk_remaining_bytes_--;
                 break;
 
-            case ChunkParseState::AFTER_DATA:
+            case AFTER_DATA:
                 if (ch == '\r') {
                     // End of chunk data. Prepare to read the next chunk size.
-                    state = ChunkParseState::AFTER_DATA_ALMOST_DONE;
+                    state = AFTER_DATA_ALMOST_DONE;
                 } else {
                     return PARSE_ERROR;  // Expected CR after chunk data
                 }

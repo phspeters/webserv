@@ -66,7 +66,6 @@ struct ParserContext {
     int version_major_;
     int version_minor_;
 
-    // TODO: Split states by when they should be reset
     void reset() {
         parser_state_ = PARSER_READING_REQUEST_LINE;
         granular_parser_state_ = 0;
