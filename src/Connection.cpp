@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 Connection::Connection(WebServer* owner, int fd,
                        const VirtualServer* default_virtual_server)

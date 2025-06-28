@@ -1,16 +1,13 @@
 #ifndef FILEUPLOADHANDLER_HPP
 #define FILEUPLOADHANDLER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
-// Forward declarations
 struct Connection;
 struct FileUploadContext;
 
-// Handles file upload requests
 class FileUploadHandler : public AHandler {
    public:
-    // Constructor takes dependencies
     FileUploadHandler();
     virtual ~FileUploadHandler();
 
@@ -48,16 +45,13 @@ class FileUploadHandler : public AHandler {
 };
 
 struct FileUploadContext {
-    // State for file upload handling
-    int file_fd_;  // File descriptor for the opened uploaded file (-1 if none)
-    Buffer upload_buffer_;  // Buffer for reading file data
-    std::string temp_path_; // Caminho do arquivo temporário
-    bool upload_complete;   // Indica se o upload terminou
-    std::string filename_;  // Nome do arquivo extraído do multipart
+    int file_fd_;
+    Buffer upload_buffer_;
+    std::string temp_path_;
+    bool upload_complete;
+    std::string filename_;
 
-    FileUploadContext()
-        : file_fd_(-1), upload_complete(false) {
-    }  // Initialize file_fd_ to -1 indicating no file opened
+    FileUploadContext() : file_fd_(-1), upload_complete(false) {}
 };
 
 #endif  // FILEUPLOADHANDLER_HPP

@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 bool AHandler::process_location_redirect(Connection* conn) {
     const Location* location = conn->location_match_;

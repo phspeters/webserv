@@ -1,19 +1,15 @@
 #ifndef CGIHANDLER_HPP
 #define CGIHANDLER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
-// Forward declarations
 struct Connection;
 class AHandler;
 struct HttpRequest;
-enum CgiHandlerState;
 struct CgiContext;
 
-// Handles requests by executing CGI scripts.
 class CgiHandler : public AHandler {
    public:
-    // Constructor takes dependencies
     CgiHandler();
     virtual ~CgiHandler();
 
@@ -66,15 +62,6 @@ struct CgiContext {
           cgi_pid_(-1),
           cgi_pipe_stdin_fd_(-1),
           cgi_pipe_stdout_fd_(-1) {}
-};
-
-enum CgiHandlerState {
-    CGI_IDLE,
-    CGI_WRITING_TO_PIPE,
-    CGI_READING_FROM_PIPE,
-    CGI_HEADERS_PARSED,
-    CGI_COMPLETE,
-    CGI_ERROR
 };
 
 #endif  // CGIHANDLER_HPP

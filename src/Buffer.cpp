@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 Buffer::Buffer(size_t size = DEFAULT_CHUNK_SIZE)
     : buffer_(size), pos_(0), last_(0) {}

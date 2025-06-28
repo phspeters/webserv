@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 HttpRequest::HttpRequest() : body_fd_(-1), content_length_(0) {}
 

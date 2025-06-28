@@ -1,14 +1,12 @@
 #ifndef RESPONSEWRITER_HPP
 #define RESPONSEWRITER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
 struct Connection;
 struct HttpResponse;
 struct VirtualServer;
-enum WriteStatus;
 
-// Utility class to help format HTTP responses.
 class ResponseWriter {
    public:
     ResponseWriter() {}
@@ -32,7 +30,5 @@ class ResponseWriter {
     ResponseWriter& operator=(const ResponseWriter&);
 
 };  // class ResponseWriter
-
-enum WriteStatus { WRITE_SUCCESS, WRITE_INCOMPLETE, WRITE_ERROR };
 
 #endif  // RESPONSEWRITER_HPP

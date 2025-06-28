@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 // Server defaults
 static const int DEFAULT_PORT = 80;

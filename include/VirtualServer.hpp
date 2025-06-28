@@ -1,12 +1,10 @@
 #ifndef VIRTUALSERVER_HPP
 #define VIRTUALSERVER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
-// Location configuration block
 struct Location;
 
-// Server configuration
 struct VirtualServer {
     // Basic server properties
     std::string host_;
@@ -44,9 +42,9 @@ struct VirtualServer {
     bool is_valid_port() const;
     bool has_valid_locations() const;
     bool has_valid_error_pages() const;
-};
+}; // struct VirtualServer
 
-// Location configuration block
+
 struct Location {
     std::string path_;
     std::string root_;
@@ -62,6 +60,6 @@ struct Location {
 
     // Validation method
     bool is_valid() const;
-};
+}; // struct Location
 
 #endif  // VIRTUALSERVER_HPP

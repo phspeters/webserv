@@ -1,13 +1,11 @@
 #ifndef ERRORHANDLER_HPP
 #define ERRORHANDLER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
 struct Connection;
 struct HttpResponse;
 struct VirtualServer;
-enum ParseStatus;
-enum ResponseStatus;
 
 // Centralized error handling for HTTP responses
 namespace ErrorHandler {

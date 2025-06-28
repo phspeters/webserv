@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 WebServer* WebServer::instance_ = NULL;
 

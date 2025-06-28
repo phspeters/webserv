@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 WriteStatus ResponseWriter::write_response(Connection* conn) {
     log(LOG_DEBUG, "handle_write: Writing response to client_fd %d",

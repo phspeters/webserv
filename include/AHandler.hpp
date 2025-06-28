@@ -1,7 +1,7 @@
 #ifndef AHANDLER_HPP
 #define AHANDLER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
 struct Connection;
 struct HttpRequest;

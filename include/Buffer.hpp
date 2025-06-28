@@ -1,7 +1,7 @@
 #ifndef BUFFER_HPP
 #define BUFFER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
 static const ssize_t BUFFER_FULL = -2;
 

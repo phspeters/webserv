@@ -1,15 +1,19 @@
 #ifndef CONNECTION_HPP
 #define CONNECTION_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
 class AHandler;
+class Buffer;
+class WebServer;
 struct HttpRequest;
 struct HttpResponse;
 struct VirtualServer;
+struct CgiContext;
 struct ParserContext;
-class Buffer;
-enum ConnectionState;
+struct FileUploadContext;
+struct StaticFileContext;
+struct IOContext;
 
 // Represents the state associated with a single client connection
 struct Connection {
@@ -76,12 +80,13 @@ struct Connection {
 
 };  // struct Connection
 
-enum ConnectionState {
-    CONN_READING_REQUEST,
-    CONN_GENERATING_RESPONSE,
-    CONN_WRITING_RESPONSE,
-    CONN_COMPLETE,
-    CONN_ERROR
+struct IOContext {
+    Connection* conn_;
+    FdType type_;
+    int fd_;
+
+    IOContext(int fd, FdType type, Connection* conn)
+        : conn_(conn), type_(type), fd_(fd) {}
 };
 
 #endif  // CONNECTION_HPP

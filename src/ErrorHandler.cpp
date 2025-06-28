@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 int ErrorHandler::get_parse_message_status(ParseStatus parse_status) {
     int status_code = 500;  // Default to Internal Server Error

@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 HttpResponse::HttpResponse() : status_code_(OK), content_length_(0) {
     version_ = "HTTP/1.1";

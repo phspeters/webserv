@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 FileDeleteHandler::FileDeleteHandler() : AHandler() {}
 

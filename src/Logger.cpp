@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 int log(log_level level, const char* msg, ...) {
     if (level < ACTIVE_LOG_LEVEL) {

@@ -1,16 +1,13 @@
 #ifndef REQUESTPARSER_HPP
 #define REQUESTPARSER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
 struct Connection;
 struct HttpRequest;
 struct VirtualServer;
-enum ParserState;
-enum ParseStatus;
 struct ParserContext;
 
-// Parses HTTP requests incrementally from a Connection's read buffer.
 class RequestParser {
    public:
     RequestParser() {}
@@ -91,37 +88,6 @@ struct ParserContext {
         version_minor_ = 0;
     }
 
-};  // class ParserContext
-
-enum ParserState {
-    PARSER_READING_REQUEST_LINE,
-    PARSER_READING_HEADERS,
-    PARSER_PROCESSING_REQUEST,
-    PARSER_READING_CONTENT_BODY,
-    PARSER_READING_CHUNKED_BODY,
-    PARSER_DECODING_MULTIPART_BODY,
-    PARSER_COMPLETE,
-    PARSER_ERROR
-};
-
-enum ParseStatus {
-    PARSE_INCOMPLETE,
-    PARSE_SUCCESS,
-    PARSE_ERROR,
-    PARSE_INVALID_REQUEST_LINE,
-    PARSE_METHOD_NOT_ALLOWED,
-    PARSE_INVALID_PATH,
-    PARSE_INVALID_QUERY_STRING,
-    PARSE_VERSION_NOT_SUPPORTED,
-    PARSE_REQUEST_TOO_LONG,
-    PARSE_MISSING_HOST_HEADER,
-    PARSE_HEADER_TOO_LONG,
-    PARSE_TOO_MANY_HEADERS,
-    PARSE_MISSING_CONTENT_LENGTH,
-    PARSE_INVALID_CONTENT_LENGTH,
-    PARSE_CONTENT_TOO_LARGE,
-    PARSE_UNKNOWN_ENCODING,
-    PARSE_INVALID_CHUNK_SIZE
-};
+};  // struct ParserContext
 
 #endif  // REQUESTPARSER_HPP

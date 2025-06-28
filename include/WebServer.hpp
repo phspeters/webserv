@@ -1,7 +1,7 @@
 #ifndef WEBSERVER_HPP
 #define WEBSERVER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
 class CgiHandler;
 struct Connection;
@@ -13,7 +13,6 @@ class StaticFileHandler;
 class FileUploadHandler;
 class FileDeleteHandler;
 struct IOContext;
-enum FdType;
 
 // Main server class - orchestrates setup and event loop
 class WebServer {
@@ -120,23 +119,5 @@ class WebServer {
     AHandler* choose_handler(Connection* conn);
     //------------------------------
 };  // class WebServer
-
-struct IOContext {
-    Connection* conn_;
-    FdType type_;
-    int fd_;
-
-    IOContext(int fd, FdType type, Connection* conn)
-        : fd_(fd), type_(type), conn_(conn) {}
-};
-
-enum FdType {
-    FD_LISTENER,
-    FD_CLIENT_SOCKET,
-    FD_CGI_PIPE_READ,
-    FD_CGI_PIPE_WRITE,
-    FD_FILE_UPLOAD,
-    FD_STATIC_FILE,
-};
 
 #endif  // WEBSERVER_HPP

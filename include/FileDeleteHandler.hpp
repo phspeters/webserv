@@ -1,12 +1,10 @@
 #ifndef FILEDELETEHANDLER_HPP
 #define FILEDELETEHANDLER_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
-// Forward declarations
 struct Connection;
 
-// Handles file deletion requests using DELETE method
 class FileDeleteHandler : public AHandler {
    public:
     FileDeleteHandler();

@@ -1,7 +1,7 @@
 #ifndef HTTP_REQUEST_HPP
 #define HTTP_REQUEST_HPP
 
-#include "webserv.hpp"
+#include "common.hpp"
 
 struct Location;
 

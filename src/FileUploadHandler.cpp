@@ -1,4 +1,4 @@
-#include "webserv.hpp"
+#include "common.hpp"
 
 // curl -v -F "file=@files/cutecat.png" http://localhost:8080/upload
 
