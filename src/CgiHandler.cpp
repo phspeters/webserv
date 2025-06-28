@@ -4,7 +4,7 @@ CgiHandler::CgiHandler() : AHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
-void CgiHandler::handle(Connection* conn) {
+void CgiHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "CgiHandler: Starting processing for client_fd %d",
         conn->client_fd_);
 
@@ -300,7 +300,7 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
     cgi_env_strings.push_back("SCRIPT_FILENAME=" + conn->cgi_script_path_);
     cgi_env_strings.push_back("GATEWAY_INTERFACE=CGI/1.1");
     cgi_env_strings.push_back("SERVER_NAME=" +
-                              conn->virtual_server_->host_name_);
+                              conn->virtual_server_->host_);
     std::ostringstream oss;
     oss << conn->virtual_server_->port_;
     cgi_env_strings.push_back("SERVER_PORT=" + oss.str());

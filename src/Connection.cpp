@@ -117,12 +117,20 @@ void Connection::remove_io_context(IOContext* io_context) {
 }
 
 bool Connection::is_keep_alive() const {
-    if (!request_data_) {
-        log(LOG_FATAL, "Request data is invalid for socket '%i'", client_fd_);
+    if (!request_data_ || !response_data_) {
+        log(LOG_FATAL, "Invalid request/response data for socket '%i'", client_fd_);
         return false;
     }
 
     log(LOG_TRACE, "Checking keep-alive for socket '%i'", client_fd_);
+
+    int status = response_data_->status_code_;
+    if (is_fatal_error_status(status)) {
+        log(LOG_DEBUG,
+            "Fatal error status %d detected for socket '%i', not keeping alive",
+            status, client_fd_);
+        return false;
+    }
 
     // For HTTP/1.0: requires explicit "Connection: keep-alive"
     if (request_data_->version_ == "HTTP/1.0") {
@@ -133,6 +141,11 @@ bool Connection::is_keep_alive() const {
     // For HTTP/1.1: keep-alive by default unless "Connection: close"
     std::string connection = request_data_->get_header("Connection");
     return connection.find("close") == std::string::npos;
+}
+
+bool Connection::is_fatal_error_status(int status) const {
+    return status == 400 || status == 408 || status == 413 || status == 414 ||
+           status == 431 || status >= 500;
 }
 
 void Connection::reset_for_keep_alive() {
@@ -179,6 +192,10 @@ void Connection::reset_for_keep_alive() {
 
     // Reset activity timer
     last_activity_ = time(NULL);
+
+    owner_server_->update_context_in_epoll(*(io_contexts_.begin()), EPOLLIN);
+    
+    conn_state_ = CONN_READING_REQUEST;
 
     log(LOG_DEBUG, "Connection reset for keep-alive on socket '%i'",
         client_fd_);

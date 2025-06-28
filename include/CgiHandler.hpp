@@ -15,7 +15,7 @@ class CgiHandler : public AHandler {
 
     virtual void check_permissions(Connection* conn);
     virtual void setup_handler(Connection* conn);
-    virtual void handle(Connection* conn);
+    virtual void handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
     void handle_cgi_read(

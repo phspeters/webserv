@@ -59,6 +59,7 @@ struct Connection {
     IOContext* add_io_context(int fd, FdType type, uint32_t events = EPOLLIN);
     void remove_io_context(IOContext* io_context);
     bool is_keep_alive() const;
+    bool is_fatal_error_status(int status) const;
     void reset_for_keep_alive();
 
     //--------------------------------------

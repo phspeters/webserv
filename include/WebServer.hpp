@@ -4,14 +4,13 @@
 #include "common.hpp"
 
 class CgiHandler;
-struct Connection;
-struct ConnectionManager;
 class RequestParser;
 class ResponseWriter;
-struct VirtualServer;
 class StaticFileHandler;
 class FileUploadHandler;
 class FileDeleteHandler;
+struct Connection;
+struct VirtualServer;
 struct IOContext;
 
 // Main server class - orchestrates setup and event loop
@@ -84,9 +83,10 @@ class WebServer {
         int client_fd, const VirtualServer* default_virtual_server);
     void close_client_connection(Connection* conn);
     
-    void handle_client_socket_event(Connection* conn, uint32_t event_flags);
+    void handle_client_socket_event(IOContext* ctx, uint32_t event_flags);
     bool read_from_client_socket(Connection* conn);
     void process_request_data(Connection* conn);
+    bool handle_keep_alive(Connection* conn);
     
     void handle_static_file_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_read_event(IOContext* ctx, uint32_t event_flags);

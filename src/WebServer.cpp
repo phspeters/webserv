@@ -256,7 +256,7 @@ void WebServer::event_loop() {
                     accept_new_connection(ctx->fd_);
                     break;
                 case FD_CLIENT_SOCKET:
-                    handle_client_socket_event(ctx->conn_, event_flags);
+                    handle_client_socket_event(ctx, event_flags);
                     break;
                 case FD_STATIC_FILE:
                     handle_static_file_event(ctx, event_flags);
@@ -625,24 +625,25 @@ Connection* WebServer::create_client_connection(
     }
 }
 
-// -----------------------------------------------------------------------
-// ------------------------------ TODO -----------------------------------
-// -----------------------------------------------------------------------
-
-void WebServer::handle_client_socket_event(Connection* conn,
+void WebServer::handle_client_socket_event(IOContext* ctx,
                                            uint32_t event_flags) {
-    if (!conn) {
-        log(LOG_FATAL, "handle_event: Connection pointer is NULL");
+    if (!ctx) {
+        log(LOG_FATAL,
+            "handle_client_socket_event: Connection pointer is NULL");
         return;
     }
 
-    log(LOG_DEBUG, "handle_event: Starting for client_fd %d with event %d",
+    Connection* conn = ctx->conn_;
+
+    log(LOG_DEBUG,
+        "handle_client_socket_event: Starting for client_fd %d with event %d",
         conn->client_fd_, event_flags);
 
     if (event_flags & EPOLLIN) {
         if (!read_from_client_socket(conn)) {
             log(LOG_ERROR,
-                "handle_event: Failed to read from socket for client_fd %d",
+                "handle_client_socket_event: Failed to read from socket for "
+                "client_fd %d",
                 conn->client_fd_);
             close_client_connection(conn);
             return;  // Error reading from socket, close connection
@@ -655,95 +656,67 @@ void WebServer::handle_client_socket_event(Connection* conn,
         }
     }
 
-    if (event_flags == EPOLLOUT) {
-        if (conn->conn_state_ == CONN_WRITING_RESPONSE) {
-            // Write the response to the client
-            WriteStatus status = response_writer_->write_response(conn);
-
-            // TODO - Remove switch state, call logs and handle_error before
-            // returning the status. Leave condition if(status ==
-            // WRITE_INCOMPLETE) { return; } because if it is incomplete,
-            // we should return and wait for the next call, and if it is an
-            // writing error, the connection should be closed inse
-            // write_response, never reaching this point. Only WRITE_SUCCESS
-            // will continue the flow.
-            switch (status) {
-                case WRITE_INCOMPLETE:
-                    log(LOG_DEBUG,
-                        "handle_write: Response writing incomplete for "
-                        "client_fd "
-                        "%d, "
-                        "will resume later",
-                        conn->client_fd_);
-                    update_epoll_events(conn->client_fd_, EPOLLOUT);
-                    return;
-                case WRITE_ERROR:
-                    log(LOG_ERROR,
-                        "handle_write: Error writing response to client_fd %d",
-                        conn->client_fd_);
-                    close_client_connection(conn);
-                    return;
-                case WRITE_SUCCESS:
-                    log(LOG_DEBUG,
-                        "handle_write: Response completely written to "
-                        "client_fd %d",
-                        conn->client_fd_);
-                    break;
+    if (event_flags & EPOLLOUT) {
+        if (conn->conn_state_ == CONN_WRITING_RESPONSE ||
+            conn->conn_state_ == CONN_FINISHING_WRITE) {
+            ssize_t bytes_sent = conn->write_buffer_.write_to(conn->client_fd_);
+            if (bytes_sent < 0) {
+                log(LOG_ERROR,
+                    "handle_client_socket_event: Error writing to socket for "
+                    "client_fd %d: %s",
+                    conn->client_fd_, strerror(errno));
+                close_client_connection(conn);
+                return;  // Error writing to socket, close connection
             }
 
-            // TODO - Wrap the code below in a function e.g. handle_keep_alive
-
-            // Check for error status codes that should close the connection
-            int status_code = conn->response_data_->status_code_;
             log(LOG_DEBUG,
-                "handle_write: Response status code %d for client_fd %d",
-                status_code, conn->client_fd_);
+                "handle_client_socket_event: Wrote %zd bytes to socket for "
+                "client_fd %d",
+                bytes_sent, conn->client_fd_);
 
-            // ADDED: Check if response explicitly sets connection: close
-            std::string response_connection =
-                conn->response_data_->get_header("connection");
-            bool should_close = false;
-
-            if (response_connection == "close") {
-                should_close = true;
+            if (!conn->write_buffer_.empty()) {
                 log(LOG_DEBUG,
-                    "handle_write: Response sets connection: close for "
-                    "client_fd "
-                    "%d",
-                    conn->client_fd_);
-            } else if (status_code == 400 || status_code == 413 ||
-                       status_code >= 500) {
-                // ADDED: Close connections for client and server errors
-                should_close = true;
-                log(LOG_INFO,
-                    "handle_write: Closing connection for error status %d on "
-                    "client_fd %d",
-                    status_code, conn->client_fd_);
+                    "handle_client_socket_event: Incomplete write for "
+                    "client_fd %d, remaining bytes: %zu",
+                    conn->client_fd_, conn->write_buffer_.readable_bytes());
+                return;  // Still data to write, wait for next EPOLLOUT event
             }
 
-            // ADDED: Proper connection handling logic
-            if (should_close) {
-                log(LOG_DEBUG,
-                    "handle_write: Closing connection for client_fd %d",
+            // Switch back to reading state
+            if (!update_context_in_epoll(ctx, EPOLLIN)) {
+                log(LOG_ERROR,
+                    "handle_client_socket_event: Failed to update epoll "
+                    "events for client_fd %d",
                     conn->client_fd_);
                 close_client_connection(conn);
-            } else if (conn->is_keep_alive()) {
-                log(LOG_DEBUG,
-                    "handle_write: Keep-alive enabled, resetting connection "
-                    "for "
-                    "client_fd %d",
-                    conn->client_fd_);
-                conn->reset_for_keep_alive();
-                update_epoll_events(conn->client_fd_, EPOLLIN);
-            } else {
-                log(LOG_DEBUG,
-                    "handle_write: No keep-alive, closing connection for "
-                    "client_fd "
-                    "%d",
-                    conn->client_fd_);
-                close_client_connection(conn);
+                return;  // Error updating epoll, close connection
             }
+
+            if (conn->conn_state_ == CONN_FINISHING_WRITE) {
+                handle_keep_alive(conn);
+            }
+
+        } else {
+            log(LOG_FATAL,
+                "handle_event: Unexpected state for client_fd %d: %d",
+                conn->client_fd_, conn->conn_state_);
+            close_client_connection(conn);
         }
+    }
+}
+
+bool WebServer::handle_keep_alive(Connection* conn) {
+    log(LOG_DEBUG, "Handling keep-alive for client_fd %d", conn->client_fd_);
+
+    // If the request was successful and keep-alive is enabled, reset the state
+    if (conn->is_keep_alive()) {
+        log(LOG_DEBUG, "Keep-alive enabled for client_fd %d", conn->client_fd_);
+        conn->reset_for_keep_alive();
+        return true;  // Keep-alive handled successfully
+    } else {
+        log(LOG_DEBUG, "Closing connection for client_fd %d", conn->client_fd_);
+        close_client_connection(conn);
+        return false;  // Connection closed
     }
 }
 

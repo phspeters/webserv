@@ -4,7 +4,7 @@ FileDeleteHandler::FileDeleteHandler() : AHandler() {}
 
 FileDeleteHandler::~FileDeleteHandler() {}
 
-void FileDeleteHandler::handle(Connection* conn) {
+void FileDeleteHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "FileDeleteHandler: Starting processing for client_fd %d",
         conn->client_fd_);
 

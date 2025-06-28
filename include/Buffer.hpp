@@ -33,6 +33,12 @@ class Buffer {
     // Public State & Management
     //------------------------------------------------------------------
 
+    char peek() const;
+
+    const char* data() const { return &buffer_[pos_]; }
+
+    void consume(size_t bytes_parsed) { pos_ += bytes_parsed; }
+    
     size_t readable_bytes() const { return last_ - pos_; }
 
     bool empty() const { return pos_ == last_; }
@@ -43,12 +49,6 @@ class Buffer {
     // If there is pipelined data, it is compacted. Otherwise, the buffer is
     // reset.
     void prepare_for_next_request();
-
-    char peek() const;
-
-    const char* data() const { return &buffer_[pos_]; }
-
-    void consume(size_t bytes_parsed) { pos_ += bytes_parsed; }
 
    private:
     //------------------------------------------------------------------

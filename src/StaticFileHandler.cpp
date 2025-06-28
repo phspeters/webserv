@@ -60,7 +60,7 @@ StaticFileHandler::StaticFileHandler() {}
 
 StaticFileHandler::~StaticFileHandler() {}
 
-void StaticFileHandler::handle(Connection* conn) {
+void StaticFileHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler::handle called for client_fd %d",
         conn->client_fd_);
     //--CHECK Check if the request has errors to return an error response
