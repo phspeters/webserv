@@ -33,27 +33,25 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
     // The main loop processes every available byte in the buffer.
     while (buff.readable_bytes() > 0) {
         // Look at the current character without consuming it yet.
-        const char ch = *buff.data();
+        const char ch = buff.peek();
 
         switch (state) {
             case START:
                 if (ch == '\r' || ch == '\n') {
                     // Skip leading CRLF from some clients.
-                    break;  // Character is consumed at the end of the loop.
+                    break;
                 }
 
-                // Check for a valid uppercase letter to start the method.
                 if (ch < 'A' || ch > 'Z') {
-                    return PARSE_ERROR;  // Invalid start to a request.
+                    return PARSE_ERROR;
                 }
 
-                // First valid character found. Mark the start of the method.
                 context.method_start_ = buff.data();
                 state = METHOD;
 
                 // Instead of falling through, continue the loop to re-evaluate
                 // the same character with the new state.
-                continue;  // This skips the buff.consume(1) at the end
+                continue;
 
             case METHOD:
                 if (buff.data() - context.method_start_ >
@@ -62,93 +60,80 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 }
 
                 if (ch == ' ') {
-                    // Trigger: Space ends the method. Mark the end.
                     context.method_end_ = buff.data();
                     state = SPACES_BEFORE_URI;
                 } else if (ch < 'A' || ch > 'Z') {
-                    // Invalid character within the method.
                     return PARSE_ERROR;
                 }
                 break;
 
             case SPACES_BEFORE_URI:
                 if (ch == ' ') {
-                    // Continue skipping spaces.
-                    break;  // Character is consumed at the end of the loop.
+                    break;
                 }
 
                 if (ch == '/') {
-                    // Origin-Form
+                    // Only Origin-Form accepted
                     context.uri_start_ = buff.data();
                     context.path_start_ = buff.data();
                     state = URI_PATH;
                     continue;
                 } else {
-                    // Invalid character after method.
                     return PARSE_ERROR;
                 }
 
             case URI_PATH:
                 if (ch == ' ') {
-                    // Trigger: Space ends the URI. Mark the end.
                     context.uri_end_ = buff.data();
                     context.path_end_ = buff.data();
                     state = HTTP_H;
                 } else if (ch == '?') {
-                    // Query starts. Mark the end of the path.
                     context.path_end_ = buff.data();
                     state = URI_QUERY;
                 } else if (!isalnum(ch) && !strchr("/-._~:!$&'()*+,;=@", ch)) {
-                    // The only other valid thing is a percent-encoding
                     if (ch == '%') {
                         context.return_state_ = state;
                         state = URI_PERCENT_ENCODING_1;
                     } else {
-                        return PARSE_ERROR;  // Invalid character
+                        return PARSE_ERROR;
                     }
                 }
                 break;
 
             case URI_PERCENT_ENCODING_1:
-                // Expecting a hex digit after '%'
                 if (isxdigit(ch)) {
                     state = URI_PERCENT_ENCODING_2;
                 } else {
-                    return PARSE_ERROR;  // Invalid percent-encoding
+                    return PARSE_ERROR;
                 }
                 break;
 
             case URI_PERCENT_ENCODING_2:
-                // Expecting a second hex digit after the first one
                 if (isxdigit(ch)) {
-                    // Valid percent-encoding, continue parsing the URI
-                    state = context.return_state_;  // Back to last state
+                    state = context.return_state_;
                 } else {
-                    return PARSE_ERROR;  // Invalid percent-encoding
+                    return PARSE_ERROR;
                 }
                 break;
 
             case URI_QUERY:
                 if (ch == ' ') {
-                    // Trigger: Space ends the URI. Mark the end.
                     context.uri_end_ = buff.data();
                     context.query_end_ = buff.data();
                     state = HTTP_H;
                 } else if (!isalnum(ch) && !strchr("/-._~:!$&'()*+,;=@?", ch)) {
-                    // The only other valid thing is a percent-encoding
                     if (ch == '%') {
                         context.return_state_ = state;
                         state = URI_PERCENT_ENCODING_1;
                     } else {
-                        return PARSE_ERROR;  // Invalid character
+                        return PARSE_ERROR;
                     }
                 }
                 break;
 
             case SPACES_AFTER_URI:
                 if (ch == ' ') {
-                    // Continue skipping spaces.
-                    break;  // Character is consumed at the end of the loop.
+                    break;
                 } else {
                     state = HTTP_H;
                 }
@@ -158,7 +143,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == 'H') {
                     state = HTTP_HT;
                 } else {
-                    return PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -166,7 +151,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == 'T') {
                     state = HTTP_HTT;
                 } else {
-                    return PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -174,7 +159,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == 'T') {
                     state = HTTP_HTTP;
                 } else {
-                    return PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -182,7 +167,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == 'P') {
                     state = HTTP_SLASH;
                 } else {
-                    return PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -190,7 +175,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == '/') {
                     state = HTTP_MAJOR_DIGIT;
                 } else {
-                    return PARSE_ERROR;  // Invalid HTTP version start
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -199,7 +184,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                     context.version_major_ = ch - '0';
                     state = HTTP_DOT;
                 } else {
-                    return PARSE_ERROR;  // Invalid major version digit
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -207,8 +192,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 if (ch == '.') {
                     state = HTTP_MINOR_DIGIT;
                 } else {
-                    return PARSE_ERROR;  // Invalid character after major
-                                         // version digit
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -217,7 +201,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                     context.version_minor_ = ch - '0';
                     state = VERSION_DONE;
                 } else {
-                    return PARSE_ERROR;  // Invalid minor version digit
+                    return PARSE_ERROR;
                 }
                 break;
 
@@ -229,17 +213,15 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
 
             case ALMOST_DONE:
                 if (ch == '\n') {
-                    // Final Trigger: We found LF after CR.
                     ParseStatus status =
                         commit_request_line(conn->request_data_, context);
 
-                    buff.consume(1);  // Consume the final '\n'
-                    state = 0;        // Reset parser state
+                    buff.consume(1);
+                    context.clear_for_next_state();
 
                     return status;
                 }
-                return PARSE_ERROR;  // Invalid character after
-                                     // CR.
+                return PARSE_ERROR;
         }
 
         size_t bytes_processed_in_loop =
@@ -322,28 +304,26 @@ ParseStatus RequestParser::commit_request_line(HttpRequest* request,
 
 std::string RequestParser::decode_uri_path(const std::string& path) {
     std::string decoded_path;
-    decoded_path.reserve(path.length());  // Performance optimization
+    decoded_path.reserve(path.length());
 
     for (size_t i = 0; i < path.length(); i++) {
         if (path[i] == '%') {
             if (i + 2 >= path.length()) {
-                return "";  // Invalid percent-encoding sequence
+                return "";
             }
 
             char hex1 = path[i + 1];
             char hex2 = path[i + 2];
 
-            // Convert and validate
             int value = (hex_to_int(hex1) << 4) | hex_to_int(hex2);
 
-            // Reject any non-printable ASCII characters.
             if (value < ' ' || value > '~') {
                 return "";
             }
 
             // Security: Reject double-encoded attempts
             if (value == '%') {
-                return "";  // Potential double-encoding attack
+                return "";
             }
 
             decoded_path += static_cast<char>(value);
@@ -359,7 +339,7 @@ std::string RequestParser::decode_uri_path(const std::string& path) {
 
 std::string RequestParser::normalize_path(const std::string& decoded_path) {
     if (decoded_path.empty() || decoded_path[0] != '/') {
-        return "";  // Invalid path
+        return "";
     }
 
     std::vector<std::string> segments;
@@ -396,21 +376,19 @@ std::string RequestParser::normalize_path(const std::string& decoded_path) {
 
 std::string RequestParser::decode_uri_query(const std::string& query) {
     std::string decoded_query;
-    decoded_query.reserve(query.length());  // Performance optimization
+    decoded_query.reserve(query.length());
 
     for (size_t i = 0; i < query.length(); i++) {
         if (query[i] == '%') {
             if (i + 2 >= query.length()) {
-                return "";  // Invalid encoding
+                return "";
             }
 
             char hex1 = query[i + 1];
             char hex2 = query[i + 2];
 
-            // Convert and validate
             int value = (hex_to_int(hex1) << 4) | hex_to_int(hex2);
 
-            // Reject any non-printable ASCII characters.
             if (value < ' ' || value > '~') {
                 return "";
             }
@@ -465,36 +443,31 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
     Buffer& buff = conn->read_buffer_;
     unsigned int& state = conn->parser_context_.granular_parser_state_;
     ParserContext& context = conn->parser_context_;
-
     const size_t bytes_before_parse = buff.readable_bytes();
-    // The main loop processes every available byte in the buffer.
+
     while (buff.readable_bytes() > 0) {
-        // Look at the current character without consuming it yet.
-        const char ch = *buff.data();
+        const char ch = buff.peek();
 
         switch (state) {
             case LINE_START:
-                // The first character should be either the start of a header
-                // name or a CR.
                 if (ch == '\r') {
                     state = HEADERS_ALMOST_DONE;
                     break;
                 }
 
                 if (!is_token_char(ch)) {
-                    // Invalid start to a header name.
                     return PARSE_ERROR;
                 }
 
                 context.key_start_ = buff.data();
                 state = NAME;
-                continue;  // This skips the buff.consume(1) at the
-                           // end of the loop
+                // Skip the buff.consume(1) at the end of the loop
+                continue;
 
             case NAME:
                 if (ch == ':') {
                     if (buff.data() == context.key_start_) {
-                        return PARSE_ERROR;  // Empty header name
+                        return PARSE_ERROR;
                     }
                     context.key_end_ = buff.data();
                     state = SPACE_BEFORE_VALUE;
@@ -507,18 +480,17 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                 break;
 
             case SPACE_BEFORE_VALUE:
-                // Skip optional whitespace (spaces and tabs) before the value.
                 if (ch == ' ' || ch == '\t') {
                     break;
                 }
-                // An empty header value is allowed (e.g., "Header:\r\n").
+
                 if (ch == '\r') {
                     context.value_start_ = NULL;
                     context.value_end_ = NULL;
                     state = VALUE_ALMOST_DONE;
                     break;
                 }
-                // The first non-space character marks the start of the value.
+
                 context.value_start_ = buff.data();
                 state = VALUE;
                 continue;  // Re-evaluate this character in the new VALUE state.
@@ -533,45 +505,35 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                 // spaces, and horizontal tabs. It MUST NOT contain other
                 // control characters. (RFC 7230, Section 3.2)
                 if (iscntrl(ch) && ch != '\t') {
-                    // This correctly rejects NUL, CR, LF, and all other CTL
-                    // chars.
                     return PARSE_ERROR;
                 }
 
                 if (buff.data() - context.value_start_ >
                     http_limits::MAX_HEADER_VALUE_LENGTH) {
-                    return PARSE_ERROR;  // Header value too long
+                    return PARSE_ERROR;
                 }
-                // Any other character is part of the value.
                 break;
 
             case VALUE_ALMOST_DONE:
                 if (ch == '\n') {
-                    // We have seen CRLF. The header line is complete.
-                    commit_header(conn->request_data_,
-                                  context);     // A helper to add the
-                                                // header to the map
-                    context.key_start_ = NULL;  // Reset for the next header
+                    commit_header(conn->request_data_, context);
+                    context.key_start_ = NULL;
                     context.key_end_ = NULL;
-                    context.value_start_ = NULL;  // Reset for the next header
+                    context.value_start_ = NULL;
                     context.value_end_ = NULL;
-                    state = LINE_START;  // Ready for the
-                                         // next line
+                    state = LINE_START;
                 } else {
-                    return PARSE_ERROR;  // Expected LF after CR
+                    return PARSE_ERROR;
                 }
                 break;
 
             case HEADERS_ALMOST_DONE:
                 if (ch == '\n') {
-                    // We have seen CRLF after the last header. Headers
-                    // are done. Now we can determine how to handle the
-                    // body.
-                    buff.consume(1);  // Consume last character
-                    state = 0;        // Reset state for the next parse function
+                    buff.consume(1);
+                    context.clear_for_next_state();
                     return PARSE_SUCCESS;
                 } else {
-                    return PARSE_ERROR;  // Expected LF after CR
+                    return PARSE_ERROR;
                 }
         }
 
@@ -582,7 +544,8 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
             log(LOG_WARNING, "Request line too long");
             return PARSE_REQUEST_TOO_LONG;
         }
-        buff.consume(1);  // Consume the character
+        // Consume the character and move to the next one in the buffer
+        buff.consume(1);
     }
 
     context.total_bytes_processed_ +=
@@ -649,8 +612,6 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
     return PARSE_INCOMPLETE;
 }
 
-// TODO ----------------------------------------------------------
-
 // Chunked transfer encoding sends HTTP message bodies in a series of
 // "chunks" without needing to know the total size in advance. Each chunk
 // has a size prefix in hexadecimal notation, followed by the chunk data.
@@ -658,95 +619,196 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
     log(LOG_DEBUG, "Parsing chunked body for connection: %i", conn->client_fd_);
 
     enum ChunkParseState {
-        CHUNK_START,
+        CHUNK_SIZE_START,
         CHUNK_SIZE,
+        CHUNK_SIZE_ALMOST_DONE,
         CHUNK_EXTENSION,
         CHUNK_EXTENSION_ALMOST_DONE,
         CHUNK_DATA,
         AFTER_DATA,
         AFTER_DATA_ALMOST_DONE,
         LAST_CHUNK,
-        TRAILER,
-        TRAILER_ALMOST_DONE,
-        TRAILER_HEADER,
-        TRAILER_HEADER_ALMOST_DONE
+        LAST_CHUNK_ALMOST_DONE,
+        CHECK_TRAILER_LINE_START,
+        TRAILER_LINE_CONSUME,
+        TRAILER_LINE_ALMOST_DONE,
+        BODY_ALMOST_DONE
     };
 
     Buffer& buff = conn->read_buffer_;
     unsigned int& state = conn->parser_context_.granular_parser_state_;
     ParserContext& context = conn->parser_context_;
 
-    // The main loop processes every available byte in the buffer.
     while (buff.readable_bytes() > 0) {
-        // Look at the current character without consuming it yet.
-        const char ch = *buff.data();
+        const char ch = buff.peek();
 
         switch (state) {
-            case CHUNK_START:
+            case CHUNK_SIZE_START:
                 if (!isxdigit(ch)) {
-                    return PARSE_INVALID_CHUNK_SIZE;  // Invalid start
+                    log(LOG_ERROR, "Invalid character in chunk size: '%c'", ch);
+                    return PARSE_ERROR;
                 }
-
-                context.value_start_ = buff.data();
+                context.chunk_remaining_bytes_ = hex_to_int(ch);
                 state = CHUNK_SIZE;
-                continue;  // This skips the buff.consume(1) at the end of
-                           // the loop
+                break;
 
             case CHUNK_SIZE:
-                if (ch == ';') {
-                    // Optional chunk extension starts.
-                    context.value_end_ = buff.data();
+                if (ch == '\r') {
+                    state = CHUNK_SIZE_ALMOST_DONE;
+                } else if (ch == ';') {
                     state = CHUNK_EXTENSION;
-                } else if (ch == '\r') {
-                    // End of chunk size. Prepare to read data.
-                    context.value_end_ = buff.data();
-                    state = CHUNK_DATA;
-                } else if (!isxdigit(ch)) {
-                    return PARSE_INVALID_CHUNK_SIZE;  // Invalid size
+                } else if (isxdigit(ch)) {
+                    context.chunk_remaining_bytes_ =
+                        (context.chunk_remaining_bytes_ << 4) + hex_to_int(ch);
+                } else {
+                    log(LOG_ERROR, "Invalid character in chunk size: '%c'", ch);
+                    return PARSE_ERROR;
+                }
+                break;
+
+            case CHUNK_SIZE_ALMOST_DONE:
+                if (ch == '\n') {
+                    if (context.chunk_remaining_bytes_ == 0) {
+                        state = LAST_CHUNK;
+                    } else {
+                        state = CHUNK_DATA;
+                    }
+                } else {
+                    log(LOG_ERROR, "Expected LF after CR in chunk size.");
+                    return PARSE_ERROR;
                 }
                 break;
 
             case CHUNK_EXTENSION:
                 if (ch == '\r') {
-                    context.value_end_ = buff.data();
                     state = CHUNK_EXTENSION_ALMOST_DONE;
                 }
                 break;
 
             case CHUNK_EXTENSION_ALMOST_DONE:
                 if (ch == '\n') {
-                    // We have seen CRLF after the chunk size and extension.
-                    state = CHUNK_DATA;
+                    if (context.chunk_remaining_bytes_ == 0) {
+                        state = LAST_CHUNK;
+                    } else {
+                        state = CHUNK_DATA;
+                    }
                 } else {
-                    return PARSE_ERROR;  // Expected LF after CR
+                    log(LOG_ERROR, "Expected LF after CR in chunk extension.");
+                    return PARSE_ERROR;
                 }
                 break;
 
-            case CHUNK_DATA:
+            case CHUNK_DATA: {
+                size_t bytes_to_process = std::min(
+                    buff.readable_bytes(), context.chunk_remaining_bytes_);
+
+                if (bytes_to_process > 0) {
+                    conn->request_data_->body_buffer_.insert(
+                        conn->request_data_->body_buffer_.end(), buff.data(),
+                        buff.data() + bytes_to_process);
+
+                    buff.consume(bytes_to_process);
+                    context.chunk_remaining_bytes_ -= bytes_to_process;
+                }
+
                 if (context.chunk_remaining_bytes_ == 0) {
-                    // We need to read the chunk size next.
                     state = AFTER_DATA;
-                    continue;  // Re-evaluate this character in the new state.
                 }
-
-                conn->request_data_->body_buffer_.push_back(ch);
-                context.chunk_remaining_bytes_--;
-                break;
+                // Skip the buff.consume(1) at the end of the loop as we already
+                // consumed bytes above.
+                continue;
+            }
 
             case AFTER_DATA:
                 if (ch == '\r') {
-                    // End of chunk data. Prepare to read the next chunk size.
                     state = AFTER_DATA_ALMOST_DONE;
                 } else {
-                    return PARSE_ERROR;  // Expected CR after chunk data
+                    log(LOG_ERROR, "Expected CR after chunk data, got '%c'",
+                        ch);
+                    return PARSE_ERROR;
                 }
+                break;
+
+            case AFTER_DATA_ALMOST_DONE:
+                if (ch == '\n') {
+                    state = CHUNK_SIZE_START;
+                } else {
+                    log(LOG_ERROR,
+                        "Expected LF after CR in chunk data, got '%c'", ch);
+                    return PARSE_ERROR;
+                }
+                break;
+
+            case LAST_CHUNK:
+                if (ch == '\r') {
+                    state = LAST_CHUNK_ALMOST_DONE;
+                } else {
+                    log(LOG_ERROR, "Expected CR before last chunk, got '%c'",
+                        ch);
+                    return PARSE_ERROR;
+                }
+                break;
+
+            case LAST_CHUNK_ALMOST_DONE:
+                if (ch == '\n') {
+                    state = CHECK_TRAILER_LINE_START;
+                } else {
+                    log(LOG_ERROR,
+                        "Expected LF after CR in last chunk, got '%c'", ch);
+                    return PARSE_ERROR;
+                }
+                break;
+
+            case CHECK_TRAILER_LINE_START:
+                if (ch == '\r') {
+                    state = BODY_ALMOST_DONE;
+                } else {
+                    state = TRAILER_LINE_CONSUME;
+                }
+                break;
+
+            case TRAILER_LINE_CONSUME:
+                if (ch == '\r') {
+                    state = TRAILER_LINE_ALMOST_DONE;
+                }
+                break;
+
+            case TRAILER_LINE_ALMOST_DONE:
+                if (ch == '\n') {
+                    state = CHECK_TRAILER_LINE_START;
+                } else {
+                    log(LOG_ERROR, "Invalid character in trailer line: '%c'",
+                        ch);
+                    return PARSE_ERROR;
+                }
+                break;
+
+            case BODY_ALMOST_DONE:
+                if (ch == '\n') {
+                    buff.consume(1);
+                    context.clear_for_next_state();
+                    conn->request_data_->body_fully_parsed_ = true;
+                    log(LOG_DEBUG,
+                        "Chunked body parsing complete for connection: "
+                        "%i",
+                        conn->client_fd_);
+                    return PARSE_SUCCESS;
+                } else {
+                    log(LOG_ERROR, "Expected LF after CR in chunked body.");
+                    return PARSE_ERROR;
+                }
+                break;
         }
+
+        // Consume the character and move to the next one in the buffer
+        buff.consume(1);
     }
 
     // If we exit the loop, it's because the buffer is empty. We need more
     // data.
     log(LOG_DEBUG,
-        "Chunked body parsing incomplete for connection: %i, need more data.",
+        "Chunked body parsing incomplete for connection: %i, need more "
+        "data.",
         conn->client_fd_);
     return PARSE_INCOMPLETE;
 }
@@ -793,7 +855,8 @@ ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
             case SEARCH_BOUNDARY: {
                 size_t bpos = chunk.find(full_boundary);
                 if (bpos == std::string::npos) {
-                    // Boundary not found, consume all and wait for more data
+                    // Boundary not found, consume all and wait for more
+                    // data
                     buff.consume(len);
                     return PARSE_INCOMPLETE;
                 }
@@ -842,7 +905,8 @@ ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
                 std::string chunk_data(data, len);
                 size_t bpos = chunk_data.find(full_boundary);
                 if (bpos == std::string::npos) {
-                    // Boundary not found, if it's a file part, write everything
+                    // Boundary not found, if it's a file part, write
+                    // everything
                     if (file_part) {
                         upload_ctx->upload_buffer_.append(data, len);
                     }

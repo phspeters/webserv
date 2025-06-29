@@ -17,7 +17,6 @@ class RequestParser {
     ParseStatus parse_request_line(Connection* conn);
     ParseStatus parse_headers(Connection* conn);
     ParseStatus process_request(Connection* conn);
-    ConnectionState determine_body_handling_state(Connection* conn);
     ParseStatus parse_content_body(Connection* conn);
     ParseStatus parse_chunked_body(Connection* conn);
     ParseStatus parse_multipart_body(Connection* conn);
@@ -33,6 +32,7 @@ class RequestParser {
     std::string decode_uri_query(const std::string& uri);
     inline int hex_to_int(char c);
     void commit_header(HttpRequest* request, const ParserContext& context);
+    ConnectionState determine_body_handling_state(Connection* conn);
 
     // Prevent copying
     RequestParser(const RequestParser&);
@@ -73,13 +73,15 @@ struct ParserContext {
 
     void reset() {
         parser_state_ = PARSER_READING_REQUEST_LINE;
+        clear_for_next_state();
+    }
+
+    void clear_for_next_state() {
         granular_parser_state_ = 0;
         return_state_ = 0;
         total_bytes_processed_ = 0;
         body_remaining_bytes_ = 0;
         chunk_remaining_bytes_ = 0;
-        multipart_boundary_.clear();
-        multipart_boundary_len_ = 0;
         method_start_ = NULL;
         method_end_ = NULL;
         uri_start_ = NULL;
@@ -94,6 +96,9 @@ struct ParserContext {
         value_end_ = NULL;
         version_major_ = 0;
         version_minor_ = 0;
+
+        multipart_boundary_.clear();
+        multipart_boundary_len_ = 0;
     }
 
 };  // struct ParserContext

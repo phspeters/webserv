@@ -949,6 +949,8 @@ ParserState WebServer::determine_body_handling_state(Connection* conn) {
     log(LOG_DEBUG, "Determining body handling state for connection: %i",
         conn->client_fd_);
 
+    conn->parser_context_.clear_for_next_state();
+
     // Check for request body
     HttpRequest* request = conn->request_data_;
     if (request->method_ == "POST" || request->method_ == "PUT") {
@@ -976,6 +978,7 @@ ParserState WebServer::determine_body_handling_state(Connection* conn) {
     }
 
     // No body needed or zero-length body
+    conn->request_data_->body_fully_parsed_ = true;
     return PARSER_COMPLETE;
 }
 
