@@ -42,8 +42,7 @@ struct VirtualServer {
     bool is_valid_port() const;
     bool has_valid_locations() const;
     bool has_valid_error_pages() const;
-}; // struct VirtualServer
-
+};  // struct VirtualServer
 
 struct Location {
     std::string path_;
@@ -60,6 +59,6 @@ struct Location {
 
     // Validation method
     bool is_valid() const;
-}; // struct Location
+};  // struct Location
 
 #endif  // VIRTUALSERVER_HPP

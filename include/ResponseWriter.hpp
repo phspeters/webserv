@@ -4,8 +4,6 @@
 #include "common.hpp"
 
 struct Connection;
-struct HttpResponse;
-struct VirtualServer;
 
 class ResponseWriter {
    public:

@@ -3,9 +3,8 @@
 
 #include "common.hpp"
 
-struct Connection;
 class AHandler;
-struct HttpRequest;
+struct Connection;
 struct CgiContext;
 
 class CgiHandler : public AHandler {
@@ -18,10 +17,8 @@ class CgiHandler : public AHandler {
     virtual void handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
-    void handle_cgi_read(
-        Connection* conn);
-    void handle_cgi_write(
-        Connection* conn);
+    void handle_cgi_read(Connection* conn);
+    void handle_cgi_write(Connection* conn);
 
    private:
     bool validate_cgi_request(Connection* conn);
@@ -34,8 +31,7 @@ class CgiHandler : public AHandler {
     void execute_cgi_script(Connection* conn, char** envp);
     bool handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2],
                              int cgi_to_server_pipe[2]);
-    void parse_cgi_output(
-        Connection* conn);
+    void parse_cgi_output(Connection* conn);
     void finalize_cgi_response(Connection* conn);
     void finalize_cgi_error(Connection* conn, ResponseStatus status);
     bool set_status_line(Connection* conn);

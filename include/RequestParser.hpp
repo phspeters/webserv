@@ -5,7 +5,6 @@
 
 struct Connection;
 struct HttpRequest;
-struct VirtualServer;
 struct ParserContext;
 
 // TODO: Split RequestParser and MultipartParser into separate files

@@ -4,7 +4,6 @@
 #include "common.hpp"
 
 struct Connection;
-struct VirtualServer;
 struct StaticFileContext;
 
 class StaticFileHandler : public AHandler {
