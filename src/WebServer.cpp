@@ -689,6 +689,11 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
                 return;  // Still data to write, wait for next EPOLLOUT event
             }
 
+            if (conn->conn_state_ == CONN_FINISHING_WRITE) {
+                handle_keep_alive(conn);
+                return;  // Successfully finished writing response
+            }
+
             // Switch back to reading state
             if (!update_context_in_epoll(ctx, EPOLLIN)) {
                 log(LOG_ERROR,
@@ -698,11 +703,8 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
                 close_client_connection(conn);
                 return;  // Error updating epoll, close connection
             }
-
-            if (conn->conn_state_ == CONN_FINISHING_WRITE) {
-                handle_keep_alive(conn);
-            }
-
+            conn->conn_state_ = CONN_GENERATING_RESPONSE;
+            return;  // Successfully wrote response, switch to reading state
         } else {
             log(LOG_FATAL,
                 "handle_event: Unexpected state for client_fd %d: %d",
@@ -727,7 +729,6 @@ bool WebServer::handle_keep_alive(Connection* conn) {
     }
 }
 
-// TODO: insert multiform data at the end of parse body functions
 ParseStatus WebServer::process_request_data(Connection* conn) {
     ParseStatus status = PARSE_SUCCESS;
 
@@ -753,7 +754,7 @@ ParseStatus WebServer::process_request_data(Connection* conn) {
             case PARSER_PROCESSING_REQUEST:
                 status = process_request(conn);  // Validate headers, etc.
                 if (status == PARSE_SUCCESS) {
-                    // Determine if we need to read a body
+                    // Determine if we need to read a body a how
                     state = determine_body_handling_state(conn);
                 }
                 break;
@@ -767,13 +768,6 @@ ParseStatus WebServer::process_request_data(Connection* conn) {
 
             case PARSER_READING_CHUNKED_BODY:
                 status = request_parser_->parse_chunked_body(conn);
-                if (status == PARSE_SUCCESS) {
-                    state = PARSER_COMPLETE;
-                }
-                break;
-
-            case PARSER_DECODING_MULTIPART_BODY:
-                status = request_parser_->parse_multipart_body(conn);
                 if (status == PARSE_SUCCESS) {
                     state = PARSER_COMPLETE;
                 }
@@ -952,26 +946,31 @@ AHandler* WebServer::choose_handler(Connection* conn) {
 }
 
 ParserState WebServer::determine_body_handling_state(Connection* conn) {
-    HttpRequest* request = conn->request_data_;
+    log(LOG_DEBUG, "Determining body handling state for connection: %i",
+        conn->client_fd_);
+
     // Check for request body
+    HttpRequest* request = conn->request_data_;
     if (request->method_ == "POST" || request->method_ == "PUT") {
         // Check for Transfer-Encoding header
         std::string transfer_encoding =
             request->get_header("transfer-encoding");
         if (!transfer_encoding.empty() &&
             transfer_encoding.find("chunked") != std::string::npos) {
-            return PARSER_READING_CONTENT_BODY;
+            return PARSER_READING_CHUNKED_BODY;
         }
 
         // Check for Content-Length header
         std::string content_length = request->get_header("content-length");
         if (!content_length.empty()) {
             char* end_ptr;
-            size_t body_size =
+            request->content_length_ =
                 std::strtoul(content_length.c_str(), &end_ptr, 10);
+            conn->parser_context_.body_remaining_bytes_ =
+                request->content_length_;
 
-            if (body_size > 0) {
-                return PARSER_READING_CHUNKED_BODY;
+            if (request->content_length_ > 0) {
+                return PARSER_READING_CONTENT_BODY;
             }
         }
     }
@@ -1070,7 +1069,7 @@ bool WebServer::validate_request_location(Connection* conn) {
                 "Connection '%i', Host '%s': Method not allowed: %s, "
                 "Allowed "
                 "methods: %s",
-                conn->client_fd_, conn->virtual_server_->host_name_.c_str(),
+                conn->client_fd_, conn->virtual_server_->host_.c_str(),
                 request_method.c_str(), allowed_methods_str.c_str());
 
             // Apply 405 error directly to the response
@@ -1091,7 +1090,7 @@ bool WebServer::validate_request_location(Connection* conn) {
         "Connection '%i', Host '%s': Request method '%s' is allowed for "
         "path "
         "'%s'",
-        conn->client_fd_, conn->virtual_server_->host_name_.c_str(),
+        conn->client_fd_, conn->virtual_server_->host_.c_str(),
         request_method.c_str(), matching_location->path_.c_str());
     return true;
 }
@@ -1199,7 +1198,7 @@ void WebServer::match_host_header(Connection* conn) {
             "on %s:%d",
             request_host_header_val.c_str(),
             matched_vs->server_names_.empty()
-                ? matched_vs->host_name_.c_str()
+                ? matched_vs->host_.c_str()
                 : matched_vs->server_names_[0].c_str(),
             matched_vs->host_.c_str(), matched_vs->port_);
         conn->virtual_server_ = matched_vs;
@@ -1213,7 +1212,7 @@ void WebServer::match_host_header(Connection* conn) {
             request_host_header_val.c_str(),
             conn->virtual_server_->host_.c_str(), conn->virtual_server_->port_,
             conn->virtual_server_->server_names_.empty()
-                ? conn->virtual_server_->host_name_.c_str()
+                ? conn->virtual_server_->host_.c_str()
                 : conn->virtual_server_->server_names_[0].c_str());
     }
 }

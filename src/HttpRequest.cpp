@@ -1,6 +1,8 @@
 #include "common.hpp"
 
-HttpRequest::HttpRequest() : body_fd_(-1), content_length_(0) {}
+HttpRequest::HttpRequest() : body_fully_parsed_(false), content_length_(0) {
+    body_buffer_.reserve(DEFAULT_CHUNK_SIZE);
+}
 
 HttpRequest::~HttpRequest() {}
 
@@ -40,8 +42,8 @@ void HttpRequest::clear() {
     uri_.clear();
     version_.clear();
     headers_.clear();
-    body_.clear();
-    body_fd_ = -1;
+    body_buffer_.clear();
+    body_fully_parsed_ = false;
     content_length_ = 0;
     path_.clear();
     query_string_.clear();

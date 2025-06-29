@@ -38,7 +38,6 @@ struct Connection {
     //--------------------------------------
     Buffer read_buffer_;
     Buffer write_buffer_;
-    Buffer* decoded_buffer_;
 
     //--------------------------------------
     // Request/Response Data Pointers (Owned by Connection)

@@ -29,6 +29,12 @@ class Buffer {
     // Returns the result of the underlying send() call.
     ssize_t send_to(int fd);
 
+    // Unloads data from this buffer, appending it to the destination vector,
+    // respecting the vector's capacity. Returns the number of bytes actually
+    // unloaded.
+    size_t unload_to(std::vector<char>& dest,
+                     size_t max_bytes = DEFAULT_CHUNK_SIZE);
+
     //------------------------------------------------------------------
     // Public State & Management
     //------------------------------------------------------------------
@@ -38,7 +44,7 @@ class Buffer {
     const char* data() const { return &buffer_[pos_]; }
 
     void consume(size_t bytes_parsed) { pos_ += bytes_parsed; }
-    
+
     size_t readable_bytes() const { return last_ - pos_; }
 
     bool empty() const { return pos_ == last_; }

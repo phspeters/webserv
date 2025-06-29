@@ -40,6 +40,23 @@ ssize_t Buffer::send_to(int fd) {
     return bytes_sent;
 }
 
+size_t Buffer::unload_to(std::vector<char>& dest, size_t max_bytes) {
+    size_t available_space = dest.capacity() - dest.size();
+
+    size_t bytes_to_move = std::min(readable_bytes(), available_space);
+    bytes_to_move = std::min(bytes_to_move, max_bytes);
+
+    if (bytes_to_move == 0) {
+        return 0;
+    }
+
+    dest.insert(dest.end(), data(), data() + bytes_to_move);
+
+    consume(bytes_to_move);
+
+    return bytes_to_move;
+}
+
 void Buffer::reset() {
     pos_ = 0;
     last_ = 0;
@@ -47,7 +64,7 @@ void Buffer::reset() {
 
 void Buffer::prepare_for_next_request() {
     if (readable_bytes() > 0) {
-        compact();  // Call the private implementation detail
+        compact();
     } else {
         reset();
     }
@@ -64,7 +81,8 @@ char Buffer::peek() const {
 void Buffer::compact() {
     if (pos_ == 0) {
         return;
-    }  // Nothing to compact.
+    }
+
     size_t len = readable_bytes();
     if (len > 0) {
         std::memmove(&buffer_[0], &buffer_[pos_], len);

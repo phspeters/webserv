@@ -8,6 +8,7 @@ struct HttpRequest;
 struct VirtualServer;
 struct ParserContext;
 
+// TODO: Split RequestParser and MultipartParser into separate files
 class RequestParser {
    public:
     RequestParser() {}
@@ -49,7 +50,11 @@ struct ParserContext {
     unsigned int return_state_;  // State to return to after parsing
 
     size_t total_bytes_processed_;
+    size_t body_remaining_bytes_;
     size_t chunk_remaining_bytes_;
+
+    std::string multipart_boundary_;
+    size_t multipart_boundary_len_;
 
     const char* method_start_;
     const char* method_end_;
@@ -70,7 +75,11 @@ struct ParserContext {
         parser_state_ = PARSER_READING_REQUEST_LINE;
         granular_parser_state_ = 0;
         return_state_ = 0;
+        total_bytes_processed_ = 0;
+        body_remaining_bytes_ = 0;
         chunk_remaining_bytes_ = 0;
+        multipart_boundary_.clear();
+        multipart_boundary_len_ = 0;
         method_start_ = NULL;
         method_end_ = NULL;
         uri_start_ = NULL;

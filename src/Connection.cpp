@@ -7,7 +7,6 @@ Connection::Connection(WebServer* owner, int fd,
       default_virtual_server_(default_virtual_server),
       virtual_server_(default_virtual_server),
       last_activity_(time(NULL)),
-      decoded_buffer_(NULL),
       request_data_(new HttpRequest()),
       response_data_(new HttpResponse()),
       conn_state_(CONN_READING_REQUEST),
@@ -27,10 +26,6 @@ Connection::Connection(WebServer* owner, int fd,
 
 Connection::~Connection() {
     // Clean up owned resources
-    if (decoded_buffer_) {
-        delete decoded_buffer_;
-    }
-
     if (request_data_) {
         delete request_data_;
     }
@@ -118,7 +113,8 @@ void Connection::remove_io_context(IOContext* io_context) {
 
 bool Connection::is_keep_alive() const {
     if (!request_data_ || !response_data_) {
-        log(LOG_FATAL, "Invalid request/response data for socket '%i'", client_fd_);
+        log(LOG_FATAL, "Invalid request/response data for socket '%i'",
+            client_fd_);
         return false;
     }
 
@@ -156,11 +152,6 @@ void Connection::reset_for_keep_alive() {
     read_buffer_.prepare_for_next_request();
     write_buffer_.reset();
 
-    if (decoded_buffer_) {
-        delete decoded_buffer_;
-        decoded_buffer_ = NULL;
-    }
-
     // Reset request/response
     if (request_data_) {
         request_data_->clear();
@@ -194,7 +185,7 @@ void Connection::reset_for_keep_alive() {
     last_activity_ = time(NULL);
 
     owner_server_->update_context_in_epoll(*(io_contexts_.begin()), EPOLLIN);
-    
+
     conn_state_ = CONN_READING_REQUEST;
 
     log(LOG_DEBUG, "Connection reset for keep-alive on socket '%i'",

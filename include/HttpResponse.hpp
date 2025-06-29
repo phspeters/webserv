@@ -12,8 +12,7 @@ struct HttpResponse {
     //--------------------------------------
     int status_code_;
     std::string status_message_;
-    std::string
-        version_;
+    std::string version_;
 
     std::map<std::string, std::string> headers_;
 
@@ -34,7 +33,7 @@ struct HttpResponse {
     //--------------------------------------
     void set_status(int code);
     void set_header(const std::string& name, const std::string& value);
-    
+
     std::string get_header(const std::string& name) const;
     std::string get_headers_string() const;
     std::string get_status_line() const;

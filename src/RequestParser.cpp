@@ -617,51 +617,35 @@ void RequestParser::commit_header(HttpRequest* request,
     request->set_header(header_name, header_value);
 }
 
-// TODO: review this function
 ParseStatus RequestParser::parse_content_body(Connection* conn) {
     log(LOG_DEBUG, "Parsing body for connection: %i", conn->client_fd_);
 
     HttpRequest* req = conn->request_data_;
     Buffer& buff = conn->read_buffer_;
+    size_t& body_remaining_bytes = conn->parser_context_.body_remaining_bytes_;
 
     if (req->content_length_ == 0) {
         return PARSE_SUCCESS;
     }
 
-    // For efficiency, pre-reserve memory in the body vector to avoid
-    // multiple reallocations
-    if (req->body_.capacity() < req->content_length_) {
-        req->body_.reserve(req->content_length_);
-    }
+    size_t unloaded_bytes =
+        buff.unload_to(req->body_buffer_, body_remaining_bytes);
 
-    // Determine how many bytes we can and should move.
-    size_t bytes_needed = req->content_length_ - req->body_.size();
-    size_t bytes_available = buff.readable_bytes();
-    size_t bytes_to_move = std::min(bytes_needed, bytes_available);
+    log(LOG_DEBUG, "Unloaded %zu bytes to body buffer for connection: %i",
+        unloaded_bytes, conn->client_fd_);
 
-    if (bytes_to_move > 0) {
-        // Append the data from the read buffer to the body vector.
-        req->body_.insert(req->body_.end(), buff.data(),
-                          buff.data() + bytes_to_move);
+    body_remaining_bytes -= unloaded_bytes;
 
-        // Correctly consume only the bytes that were moved from the read
-        // buffer.
-        buff.consume(bytes_to_move);
-        log(LOG_TRACE, "Moved %zu bytes from read buffer to request body.",
-            bytes_to_move);
-    }
-
-    // Check if we have now read the entire body.
-    if (req->body_.size() == req->content_length_) {
+    if (body_remaining_bytes == 0) {
+        req->body_fully_parsed_ = true;
         log(LOG_DEBUG, "Body parsing complete for connection: %i",
             conn->client_fd_);
         return PARSE_SUCCESS;
     }
 
-    // If we reach here, it means we still need more data.
     log(LOG_DEBUG,
         "Body parsing incomplete for connection: %i, need %zu more bytes.",
-        conn->client_fd_, req->content_length_ - req->body_.size());
+        conn->client_fd_, req->content_length_ - req->body_buffer_.size());
     return PARSE_INCOMPLETE;
 }
 
@@ -699,11 +683,6 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
 
         switch (state) {
             case CHUNK_START:
-                if (ch == '\r') {
-                    // Skip leading CRLF from some clients.
-                    break;  // Character is consumed at the end of the loop.
-                }
-
                 if (!isxdigit(ch)) {
                     return PARSE_INVALID_CHUNK_SIZE;  // Invalid start
                 }
@@ -750,7 +729,7 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     continue;  // Re-evaluate this character in the new state.
                 }
 
-                conn->request_data_->body_.push_back(ch);
+                conn->request_data_->body_buffer_.push_back(ch);
                 context.chunk_remaining_bytes_--;
                 break;
 

@@ -76,8 +76,8 @@ void log_request(log_level level, const Connection* conn) {
         std::cerr << "  " << it->first << ": " << it->second << std::endl;
     }
     std::cerr << "body: " << std::endl;
-    std::cerr.write(conn->request_data_->body_.data(),
-                    conn->request_data_->body_.size());
+    std::cerr.write(conn->request_data_->body_buffer_.data(),
+                    conn->request_data_->body_buffer_.size());
     std::cerr << "\n====================================\n"
               << RESET << std::endl;
 }
@@ -196,7 +196,6 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
     std::cerr << timestamp;
 
     std::cout << "=========== VIRTUAL SERVER ==========" << std::endl;
-    std::cout << "Host Name: " << virtual_server.host_name_ << std::endl;
     std::cout << "Host: " << virtual_server.host_ << std::endl;
     std::cout << "Port: " << virtual_server.port_ << std::endl;
 

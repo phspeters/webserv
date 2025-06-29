@@ -16,12 +16,13 @@ struct HttpRequest {
     std::string uri_;
     std::string version_;
 
-    std::map<std::string, std::string>
-        headers_;
+    std::map<std::string, std::string> headers_;
 
-    std::vector<char> body_;
-    int body_fd_;
+    std::vector<char> body_buffer_;  // Reserved to DEFAUL_CHUNK_SIZE
+    bool body_fully_parsed_;
+
     size_t content_length_;
+    // std::string content_type_; // TODO: Debate if we need this
 
     std::string path_;
     std::string query_string_;
