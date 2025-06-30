@@ -130,9 +130,6 @@ bool WebServer::parse_config_file(const std::string& filename) {
 
                 // Add to main list
                 virtual_servers_.push_back(virtual_server);
-
-                // Store pointer to the newly added server
-                VirtualServer* server_ptr = &virtual_servers_.back();
             }
 
             log_virtual_server(LOG_TRACE, virtual_server);
@@ -430,8 +427,8 @@ int WebServer::cleanup_timed_out_connections() {
                 "Connection (fd: %d) timed out after %ld seconds, closing",
                 conn->client_fd_, http_limits::TIMEOUT);
             close_client_connection(conn);
-            // Erase returns the next valid iterator
-            it = active_connections_.erase(it);
+            // Erase increments the iterator so that we can safely continue
+            active_connections_.erase(it++);
             closed++;
         } else {
             ++it;
@@ -870,7 +867,8 @@ ParseStatus WebServer::process_request(Connection* conn) {
                 return PARSE_INVALID_CONTENT_LENGTH;
             }
 
-            if (body_size > conn->virtual_server_->client_max_body_size_) {
+            if (static_cast<ssize_t>(body_size) >
+                conn->virtual_server_->client_max_body_size_) {
                 log(LOG_ERROR, "Content-Length exceeds maximum size: %zu",
                     body_size);
                 // Translates to response status 413
@@ -1126,12 +1124,13 @@ void WebServer::match_host_header(Connection* conn) {
 
     // The connection's default_virtual_server_ tells us the port and listen
     // IP this connection is associated with.
-    int listener_port = conn->default_virtual_server_->port_;
+    // int listener_port = conn->default_virtual_server_->port_;
     std::string listener_host_ip =
         conn->default_virtual_server_->host_;  // IP from 'listen' directive
 
-    VirtualServer* matched_vs = NULL;
+    // VirtualServer* matched_vs = NULL;
 
+    /*
     // 1. Check servers listening on the specific IP:Port of the connection
     std::map<int, std::map<std::string, std::vector<VirtualServer*> > >::
         const_iterator port_it = port_to_hosts_.find(listener_port);
@@ -1217,12 +1216,34 @@ void WebServer::match_host_header(Connection* conn) {
             conn->virtual_server_->server_names_.empty()
                 ? conn->virtual_server_->host_.c_str()
                 : conn->virtual_server_->server_names_[0].c_str());
-    }
+    }*/
 }
 
 void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
     Connection* conn = ctx->conn_;
-    if (conn && conn->active_handler_) {
-        conn->active_handler_->handle_event(conn);
+    if (event_flags & EPOLLOUT) {
+        if (conn && conn->active_handler_) {
+            conn->active_handler_->handle_event(conn);
+        }
+    } else {
+        log(LOG_FATAL,
+            "handle_file_upload_event: Invalid event flags for file upload "
+            "event: %u",
+            event_flags);
     }
+}
+
+void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
+    (void)ctx;
+    (void)event_flags;
+}
+
+void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
+    (void)ctx;
+    (void)event_flags;
+}
+
+void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
+    (void)ctx;
+    (void)event_flags;
 }

@@ -54,7 +54,7 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                 continue;
 
             case METHOD:
-                if (buff.data() - context.method_start_ >
+                if (static_cast<size_t>(buff.data() - context.method_start_) >
                     http_limits::MAX_METHOD_LENGTH) {
                     return PARSE_ERROR;
                 }
@@ -473,7 +473,8 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                     state = SPACE_BEFORE_VALUE;
                 } else if (!is_token_char(ch)) {
                     return PARSE_ERROR;
-                } else if (buff.data() - context.key_start_ >=
+                } else if (static_cast<size_t>(buff.data() -
+                                               context.key_start_) >=
                            http_limits::MAX_HEADER_NAME_LENGTH) {
                     return PARSE_ERROR;
                 }
@@ -508,7 +509,7 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                     return PARSE_ERROR;
                 }
 
-                if (buff.data() - context.value_start_ >
+                if (static_cast<size_t>(buff.data() - context.value_start_) >
                     http_limits::MAX_HEADER_VALUE_LENGTH) {
                     return PARSE_ERROR;
                 }
@@ -557,7 +558,7 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
 }
 
 // It checks if a character is a valid "tchar" according to RFC 7230.
-bool is_token_char(char c) {
+bool RequestParser::is_token_char(char c) {
     // Check for alphanumeric characters
     if (isalnum(c)) {
         return true;
@@ -843,7 +844,6 @@ ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
         conn->parser_context_.granular_parser_state_);
     static std::string headers;
     static bool file_part = false;
-    static size_t file_data_start = 0;
 
     while (buff.readable_bytes() > 0) {
         const char* data = buff.data();
@@ -897,7 +897,6 @@ ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
                 }
                 buff.consume(hpos + 4);
                 state = READ_FILE_DATA;
-                file_data_start = 0;
                 break;
             }
             case READ_FILE_DATA: {
@@ -908,14 +907,18 @@ ParseStatus RequestParser::parse_multipart_body(Connection* conn) {
                     // Boundary not found, if it's a file part, write
                     // everything
                     if (file_part) {
-                        upload_ctx->upload_buffer_.append(data, len);
+                        upload_ctx->upload_buffer_.append(
+                            data,
+                            len);  // TODO: check append function for errors
                     }
                     buff.consume(len);
                     return PARSE_INCOMPLETE;
                 }
                 // Found boundary, write until it
                 if (file_part && bpos > 2) {  // Remove CRLF before the boundary
-                    upload_ctx->upload_buffer_.append(data, bpos - 2);
+                    upload_ctx->upload_buffer_.append(
+                        data,
+                        bpos - 2);  // TODO: check append function for errors
                 }
                 buff.consume(bpos);
                 state = SEARCH_BOUNDARY;

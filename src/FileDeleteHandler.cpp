@@ -38,6 +38,12 @@ void FileDeleteHandler::handle_event(Connection* conn) {
     conn->conn_state_ = CONN_WRITING_RESPONSE;
 }
 
+void FileDeleteHandler::check_permissions(Connection* conn) { (void)conn; }
+
+void FileDeleteHandler::setup_handler(Connection* conn) { (void)conn; }
+
+void FileDeleteHandler::cleanup_handler(Connection* conn) { (void)conn; }
+
 bool FileDeleteHandler::validate_delete_request(Connection* conn) {
     // 1. Basic connection validation
     if (!conn->request_data_ || !conn->response_data_) {

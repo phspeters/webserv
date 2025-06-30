@@ -224,16 +224,20 @@ std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
     return safe_filename;
 }
 
-// Copia o arquivo temporário para o destino final usando apenas funções permitidas
-bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path, const std::string& final_path) {
+// Copia o arquivo temporário para o destino final usando apenas funções
+// permitidas
+bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
+                                                const std::string& final_path) {
     int src_fd = open(temp_path.c_str(), O_RDONLY);
     if (src_fd < 0) {
-        log(LOG_ERROR, "Failed to open temp file for reading: %s", strerror(errno));
+        log(LOG_ERROR, "Failed to open temp file for reading: %s",
+            strerror(errno));
         return false;
     }
     int dst_fd = open(final_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (dst_fd < 0) {
-        log(LOG_ERROR, "Failed to open final file for writing: %s", strerror(errno));
+        log(LOG_ERROR, "Failed to open final file for writing: %s",
+            strerror(errno));
         close(src_fd);
         return false;
     }
@@ -242,9 +246,11 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path, co
     while ((bytes_read = read(src_fd, buf, sizeof(buf))) > 0) {
         ssize_t total_written = 0;
         while (total_written < bytes_read) {
-            ssize_t bytes_written = write(dst_fd, buf + total_written, bytes_read - total_written);
+            ssize_t bytes_written =
+                write(dst_fd, buf + total_written, bytes_read - total_written);
             if (bytes_written < 0) {
-                log(LOG_ERROR, "Error writing to final file: %s", strerror(errno));
+                log(LOG_ERROR, "Error writing to final file: %s",
+                    strerror(errno));
                 close(src_fd);
                 close(dst_fd);
                 return false;
@@ -264,7 +270,8 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path, co
 }
 
 void FileUploadHandler::check_permissions(Connection* conn) {
-    std::string content_length = conn->request_data_->get_header("content-length");
+    std::string content_length =
+        conn->request_data_->get_header("content-length");
     if (content_length.empty()) {
         ErrorHandler::generate_error_response(conn, BAD_REQUEST);
         return;
@@ -274,7 +281,9 @@ void FileUploadHandler::check_permissions(Connection* conn) {
         ErrorHandler::generate_error_response(conn, UNSUPPORTED_MEDIA_TYPE);
         return;
     }
-    log(LOG_DEBUG, "FileUploadHandler: Permissions check passed for client_fd %d", conn->client_fd_);
+    log(LOG_DEBUG,
+        "FileUploadHandler: Permissions check passed for client_fd %d",
+        conn->client_fd_);
 }
 
 void FileUploadHandler::setup_handler(Connection* conn) {
@@ -284,22 +293,31 @@ void FileUploadHandler::setup_handler(Connection* conn) {
         ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return;
     }
-    std::string temp_filename = upload_dir + "upload_" + std::to_string(conn->client_fd_) + ".tmp";
-    int file_fd = open(temp_filename.c_str(), O_WRONLY | O_CREAT | O_NONBLOCK, 0644);
+
+    std::stringstream ss;
+    ss << conn->client_fd_;
+    std::string temp_filename = upload_dir + "upload_" + ss.str() + ".tmp";
+    int file_fd =
+        open(temp_filename.c_str(), O_WRONLY | O_CREAT | O_NONBLOCK, 0644);
     if (file_fd < 0) {
         ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return;
     }
+
     // Initialize context
     conn->file_upload_context_ = new FileUploadContext();
     conn->file_upload_context_->file_fd_ = file_fd;
     conn->file_upload_context_->temp_path_ = temp_filename;
-    log(LOG_INFO, "FileUploadHandler: Setup complete for client_fd %d, file_fd %d", conn->client_fd_, file_fd);
+    log(LOG_INFO,
+        "FileUploadHandler: Setup complete for client_fd %d, file_fd %d",
+        conn->client_fd_, file_fd);
 }
 
 void FileUploadHandler::handle_event(Connection* conn) {
     // Consume from upload_buffer_ and write to temporary file
-    if (!conn->file_upload_context_) return;
+    if (!conn->file_upload_context_) {
+        return;
+    }
     Buffer& buffer = conn->file_upload_context_->upload_buffer_;
     int file_fd = conn->file_upload_context_->file_fd_;
     if (!buffer.empty()) {
@@ -308,7 +326,8 @@ void FileUploadHandler::handle_event(Connection* conn) {
             ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
             return;
         }
-        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d", written, file_fd);
+        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d",
+            written, file_fd);
     }
 }
 
@@ -323,11 +342,15 @@ void FileUploadHandler::cleanup_handler(Connection* conn) {
     }
     filename = sanitize_filename(filename);
     std::string final_path = get_upload_directory(conn) + filename;
-    if (!copy_temp_to_final_file(conn->file_upload_context_->temp_path_, final_path)) {
+    if (!copy_temp_to_final_file(conn->file_upload_context_->temp_path_,
+                                 final_path)) {
         ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return;
     }
-    log(LOG_INFO, "FileUploadHandler: Copied temp file to final file '%s' for client_fd %d", final_path.c_str(), conn->client_fd_);
+    log(LOG_INFO,
+        "FileUploadHandler: Copied temp file to final file '%s' for client_fd "
+        "%d",
+        final_path.c_str(), conn->client_fd_);
     delete conn->file_upload_context_;
     conn->file_upload_context_ = NULL;
 }

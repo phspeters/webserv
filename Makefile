@@ -7,10 +7,12 @@ INCLUDES = -I include
 VPATH = src
 FILES = main.cpp \
 		AHandler.cpp \
+		Buffer.cpp \
 		CgiHandler.cpp \
+		common.cpp \
 		Connection.cpp \
-		ConnectionManager.cpp \
 		ErrorHandler.cpp \
+		FileDeleteHandler.cpp \
 		FileUploadHandler.cpp \
 		HttpRequest.cpp \
 		HttpResponse.cpp \
@@ -18,7 +20,6 @@ FILES = main.cpp \
 		RequestParser.cpp \
 		ResponseWriter.cpp \
 		StaticFileHandler.cpp \
-		FileDeleteHandler.cpp \
 		VirtualServer.cpp \
 		WebServer.cpp \
 

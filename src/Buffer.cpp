@@ -1,6 +1,6 @@
 #include "common.hpp"
 
-Buffer::Buffer(size_t size = DEFAULT_CHUNK_SIZE)
+Buffer::Buffer(size_t size)
     : buffer_(size), pos_(0), last_(0) {}
 
 ssize_t Buffer::read_from(int fd) {
@@ -55,6 +55,25 @@ size_t Buffer::unload_to(std::vector<char>& dest, size_t max_bytes) {
     consume(bytes_to_move);
 
     return bytes_to_move;
+}
+
+size_t Buffer::append(const char* data, size_t size) {
+    if (size == 0){
+        return 0;
+    }
+
+    if (writable_space() == 0) {
+        compact();
+    }
+    if (writable_space() == 0) {
+        return BUFFER_FULL;
+    }
+
+    size_t bytes_to_append = std::min(size, writable_space());
+    std::memcpy(write_ptr(), data, bytes_to_append);
+    has_written(bytes_to_append);
+
+    return bytes_to_append;
 }
 
 void Buffer::reset() {

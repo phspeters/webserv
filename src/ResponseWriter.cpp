@@ -1,75 +1,81 @@
 #include "common.hpp"
 
-WriteStatus ResponseWriter::write_response(Connection* conn) {
-    log(LOG_DEBUG, "handle_write: Writing response to client_fd %d",
-        conn->client_fd_);
-
-    // Validate connection
-    if (!conn || conn->client_fd_ < 0) {
+WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
+    if (!conn || !conn->response_data_) {
         return WRITE_ERROR;
-    }
-
-    // If buffer is empty, prepare the response data first
-    if (conn->write_buffer_.empty()) {
-        // Write headers
-        if (!write_headers(conn)) {
-            return WRITE_ERROR;
-        }
-
-        // Write body
-        if (!write_body(conn)) {
-            return WRITE_ERROR;
-        }
-    }
-
-    // Nothing to send
-    if (conn->write_buffer_.empty()) {
-        return WRITE_SUCCESS;
-    }
-
-    // Send the response
-    ssize_t bytes_written =
-        send(conn->client_fd_,
-             conn->write_buffer_.data() + conn->write_buffer_offset_,
-             conn->write_buffer_.size() - conn->write_buffer_offset_,
-             MSG_NOSIGNAL);  // Prevents SIGPIPE
-
-    // Check for errors (any non positive return is an error)
-    if (bytes_written <= 0) {
-        // With level-triggered epoll, if we're here, it's a real error
-        // No need to check errno specifically
-        return WRITE_ERROR;
-    }
-
-    // Update the offset instead of erasing
-    conn->write_buffer_offset_ += bytes_written;
-
-    // Update the last activity timestamp
-    conn->last_activity_ = time(NULL);
-
-    // Check if we've written everything
-    if (conn->write_buffer_offset_ == conn->write_buffer_.size()) {
-        return WRITE_SUCCESS;
-    }
-
-    // More data to send
-    return WRITE_INCOMPLETE;
-}
-
-bool ResponseWriter::write_headers(Connection* conn) {
-    if (!conn) {
-        return false;
     }
 
     HttpResponse* resp = conn->response_data_;
+    WriterContext& context = conn->writer_context_;
+    WriteStatus status = WRITE_SUCCESS;
 
-    // Format the response status line and headers
+    while (context.response_writer_state_ != WRITER_DONE) {
+        switch (context.response_writer_state_) {
+            case WRITER_START: {
+                context.formatted_headers_ = get_response_head_string(resp);
+                context.response_writer_state_ = WRITER_WRITING_HEADERS;
+                continue;
+            }
+
+            case WRITER_WRITING_HEADERS: {
+                if (context.formatted_headers_.empty()) {
+                    context.response_writer_state_ = WRITER_DECIDE_BODY_SOURCE;
+                }
+                status = write_response_head(conn);
+                if (status == WRITE_SUCCESS) {
+                    context.response_writer_state_ = WRITER_DECIDE_BODY_SOURCE;
+                } else {
+                    return status;
+                }
+                continue;
+            }
+
+            case WRITER_DECIDE_BODY_SOURCE: {
+                if (resp->body_fd_ != -1) {
+                    context.response_writer_state_ =
+                        WRITER_WRITING_BODY_FROM_FD;
+                } else if (!resp->body_.empty()) {
+                    context.response_writer_state_ =
+                        WRITER_WRITING_BODY_FROM_BUFFER;
+                } else {
+                    context.response_writer_state_ = WRITER_DONE;
+                }
+                continue;
+            }
+
+            case WRITER_WRITING_BODY_FROM_BUFFER: {
+                status = write_response_body_from_buffer(conn);
+                if (status == WRITE_SUCCESS) {
+                    context.response_writer_state_ = WRITER_DONE;
+                } else {
+                    return status;
+                }
+                continue;
+            }
+
+            case WRITER_WRITING_BODY_FROM_FD: {
+                status = write_response_body_from_fd(conn);
+                if (status == WRITE_SUCCESS) {
+                    context.response_writer_state_ = WRITER_DONE;
+                } else {
+                    return status;
+                }
+                continue;
+            }
+
+            case WRITER_DONE:
+                break;
+        }
+    }
+
+    return WRITE_SUCCESS;
+}
+
+std::string ResponseWriter::get_response_head_string(HttpResponse* resp) {
     std::stringstream headers;
-
     headers << resp->version_ << " " << resp->status_code_ << " "
             << get_status_message(resp->status_code_) << "\r\n";
 
-    // Add custom headers first
     for (std::map<std::string, std::string>::const_iterator it =
              resp->headers_.begin();
          it != resp->headers_.end(); ++it) {
@@ -82,7 +88,7 @@ bool ResponseWriter::write_headers(Connection* conn) {
     }
 
     if (resp->headers_.find("server") == resp->headers_.end()) {
-        headers << "Server: Webserv/1.0\r\n";
+        headers << "Server: Webserv/4.2\r\n";
     }
 
     if (resp->headers_.find("content-type") == resp->headers_.end() &&
@@ -94,45 +100,72 @@ bool ResponseWriter::write_headers(Connection* conn) {
         headers << "Content-Length: " << resp->content_length_ << "\r\n";
     }
 
-    // End headers section
-    headers << "\r\n";
-
-    // Convert to string and add to write buffer
-    std::string headers_str = headers.str();
-    conn->write_buffer_.insert(conn->write_buffer_.end(), headers_str.begin(),
-                               headers_str.end());
-
-    return true;
-}
-
-bool ResponseWriter::write_body(Connection* conn) {
-    if (!conn || !conn->response_data_) {
-        return false;
+    if (resp->headers_.find("connection") == resp->headers_.end()) {
+        headers << "Connection: "
+                << (resp->get_header("Connection") == "close" ? "close"
+                                                              : "keep-alive")
+                << "\r\n";
     }
 
-    // Add body content to write buffer if it exists
-    if (!conn->response_data_->body_.empty()) {
-        // Insert body content into write buffer (vector<char>)
-        conn->write_buffer_.insert(conn->write_buffer_.end(),
-                                   conn->response_data_->body_.begin(),
-                                   conn->response_data_->body_.end());
+    headers << "\r\n";  // End of headers
 
-        log(LOG_DEBUG,
-            "Added %zu bytes of body content to write buffer for client_fd %d",
-            conn->response_data_->body_.size(), conn->client_fd_);
-    } else {
-        log(LOG_WARNING, "Response body is empty for client_fd %d",
-            conn->client_fd_);
-    }
-
-    return true;
+    return headers.str();
 }
 
-std::string ResponseWriter::get_current_gmt_time() const {
-    char buffer[100];
-    time_t now = time(NULL);
-    struct tm* tm_info = gmtime(&now);
+WriteStatus ResponseWriter::write_response_head(Connection* conn) {
+    WriterContext& context = conn->writer_context_;
 
-    strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT", tm_info);
-    return std::string(buffer);
+    size_t bytes_to_write = context.formatted_headers_.size();
+    size_t bytes_written = conn->write_buffer_.append(
+        context.formatted_headers_.c_str(), bytes_to_write);
+
+    if (bytes_written < bytes_to_write) {
+        // Buffer is full, store remaining and return
+        context.formatted_headers_.erase(0, bytes_written);
+        return WRITE_INCOMPLETE;
+    }
+
+    context.formatted_headers_.clear();
+    return WRITE_SUCCESS;
+}
+
+WriteStatus ResponseWriter::write_response_body_from_buffer(Connection* conn) {
+    HttpResponse* resp = conn->response_data_;
+    Buffer& buffer = conn->write_buffer_;
+
+    size_t bytes_to_write =
+        resp->body_.size() - conn->writer_context_.body_bytes_written_;
+    if (bytes_to_write == 0) {
+        return WRITE_SUCCESS;
+    }
+
+    size_t bytes_written = buffer.append(
+        resp->body_.data() + conn->writer_context_.body_bytes_written_,
+        bytes_to_write);
+
+    if (bytes_written < bytes_to_write) {
+        // Buffer is full, store remaining and return
+        conn->writer_context_.body_bytes_written_ += bytes_written;
+        return WRITE_INCOMPLETE;
+    }
+
+    // All body data written
+    conn->writer_context_.body_bytes_written_ += bytes_written;
+    return WRITE_SUCCESS;
+}
+
+WriteStatus ResponseWriter::write_response_body_from_fd(Connection* conn) {
+    HttpResponse* resp = conn->response_data_;
+    Buffer& buffer = conn->write_buffer_;
+
+    ssize_t bytes_written = buffer.read_from(resp->body_fd_);
+    if (bytes_written < 0) {
+        return WRITE_ERROR;
+    } else if (bytes_written == 0) {
+        // EOF reached, no more data to write
+        return WRITE_SUCCESS;
+    }
+
+    conn->writer_context_.body_bytes_written_ += bytes_written;
+    return WRITE_INCOMPLETE;
 }

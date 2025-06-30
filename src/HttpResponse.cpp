@@ -1,6 +1,6 @@
 #include "common.hpp"
 
-HttpResponse::HttpResponse() : status_code_(OK), content_length_(0) {
+HttpResponse::HttpResponse() : status_code_(OK), body_fd_(-1), content_length_(0) {
     version_ = "HTTP/1.1";
 }
 
@@ -88,11 +88,12 @@ std::string HttpResponse::get_headers_string() const {
 }
 
 void HttpResponse::clear() {
-    status_code_ = 0;
+    status_code_ = OK;
     status_message_.clear();
     version_ = "HTTP/1.1";
     headers_.clear();
     body_.clear();
+    body_fd_ = -1;
     content_length_ = 0;
     content_type_.clear();
 

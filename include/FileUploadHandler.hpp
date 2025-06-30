@@ -25,6 +25,8 @@ class FileUploadHandler : public AHandler {
     void send_success_response(Connection* conn);
 
     // File saving operations
+    bool copy_temp_to_final_file(const std::string& temp_path,
+                                 const std::string& final_path);
     bool save_uploaded_file(Connection* conn, const std::string& filename,
                             const std::vector<char>& data);
     bool write_file_to_disk(Connection* conn, const std::string& file_path,

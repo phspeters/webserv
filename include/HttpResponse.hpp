@@ -17,6 +17,8 @@ struct HttpResponse {
     std::map<std::string, std::string> headers_;
 
     std::vector<char> body_;
+    int body_fd_;  // File descriptor for file-based responses (e.g., static
+                   // files, cgi scripts)
 
     // Often useful to store these explicitly for header generation
     size_t content_length_;

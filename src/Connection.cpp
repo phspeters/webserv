@@ -162,6 +162,7 @@ void Connection::reset_for_keep_alive() {
 
     // Reset state variables
     parser_context_.reset();
+    writer_context_.reset();
     location_match_ = NULL;
     active_handler_ = NULL;
 

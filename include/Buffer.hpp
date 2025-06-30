@@ -35,6 +35,9 @@ class Buffer {
     size_t unload_to(std::vector<char>& dest,
                      size_t max_bytes = DEFAULT_CHUNK_SIZE);
 
+    // Appends data to the buffer, up to the available writable space.
+    size_t append(const char* data, size_t size);
+
     //------------------------------------------------------------------
     // Public State & Management
     //------------------------------------------------------------------

@@ -83,6 +83,15 @@ enum CgiHandlerState {
     CGI_ERROR
 };
 
+enum WriterState {
+    WRITER_START,
+    WRITER_WRITING_HEADERS,
+    WRITER_DECIDE_BODY_SOURCE, // New decider state
+    WRITER_WRITING_BODY_FROM_BUFFER,
+    WRITER_WRITING_BODY_FROM_FD,
+    WRITER_DONE
+};
+
 enum ParseStatus {
     PARSE_INCOMPLETE,
     PARSE_SUCCESS,
@@ -153,6 +162,7 @@ enum FdType {
 #include "Buffer.hpp"
 #include "ErrorHandler.hpp"
 #include "RequestParser.hpp"
+#include "ResponseWriter.hpp"
 #include "VirtualServer.hpp"
 
 #include "CgiHandler.hpp"
@@ -162,7 +172,6 @@ enum FdType {
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
 #include "Logger.hpp"
-#include "ResponseWriter.hpp"
 #include "StaticFileHandler.hpp"
 #include "WebServer.hpp"
 

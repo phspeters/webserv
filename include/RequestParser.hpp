@@ -30,6 +30,7 @@ class RequestParser {
     std::string normalize_path(const std::string& decoded_path);
     std::string decode_uri_query(const std::string& uri);
     inline int hex_to_int(char c);
+    bool is_token_char(char c);
     void commit_header(HttpRequest* request, const ParserContext& context);
     ConnectionState determine_body_handling_state(Connection* conn);
 

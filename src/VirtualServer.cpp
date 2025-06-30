@@ -436,6 +436,13 @@ bool VirtualServer::has_valid_error_pages() const {
         // Check if the error page file exists and is readable
         struct stat file_stat;
 
+        // Call stat() to initialize the file_stat struct.
+        if (stat(error_page_path.c_str(), &file_stat) != 0) {
+            log(LOG_ERROR, "Error page file does not exist or cannot be stat'd: %s",
+                error_page_path.c_str());
+            return false;
+        }
+
         if (!S_ISREG(file_stat.st_mode)) {
             log(LOG_ERROR, "Error page path is not a regular file: %s",
                 error_page_path.c_str());

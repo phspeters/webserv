@@ -11,6 +11,7 @@ struct HttpResponse;
 struct VirtualServer;
 struct CgiContext;
 struct ParserContext;
+struct WriterContext;
 struct FileUploadContext;
 struct StaticFileContext;
 struct IOContext;
@@ -50,6 +51,7 @@ struct Connection {
     //--------------------------------------
     ConnectionState conn_state_;
     ParserContext parser_context_;
+    WriterContext writer_context_;
     std::vector<IOContext*> io_contexts_;
 
     //--------------------------------------

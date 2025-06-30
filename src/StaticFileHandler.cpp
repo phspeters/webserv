@@ -248,3 +248,9 @@ void StaticFileHandler::handle_event(Connection* conn) {
         "StaticFileHandler::handle: File served successfully for client_fd %d",
         conn->client_fd_);
 }
+
+void StaticFileHandler::check_permissions(Connection* conn) { (void)conn; }
+
+void StaticFileHandler::setup_handler(Connection* conn) { (void)conn; }
+
+void StaticFileHandler::cleanup_handler(Connection* conn) { (void)conn; }
