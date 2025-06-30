@@ -157,27 +157,29 @@ bool VirtualServer::handle_server_directive(const std::string& key,
 }
 
 bool VirtualServer::parse_listen(const std::string& value) {
-    std::string host_str;
     size_t colonPos = value.find(':');
-
     if (colonPos != std::string::npos) {
         // Format: hostname:port or ip:port
-        host_str = value.substr(0, colonPos);
+        std::string host_str = value.substr(0, colonPos);
         std::istringstream iss(value.substr(colonPos + 1));
         if (!(iss >> port_)) {
-            log(LOG_ERROR, "Invalid port in listen directive: %s", value.c_str());
+            log(LOG_ERROR, "Invalid port in listen directive: %s",
+                value.c_str());
             return false;
         }
     } else {
-        // Just a port number or just a hostname
+        // Just a port number OR just a hostname
         std::istringstream iss(value);
-        if (!(iss >> port_)) {
-            host_str = value;
+        int temp_port;
+
+        if (iss >> temp_port && iss.eof()) {
+            port_ = temp_port;
+            // host_ keeps its default value.
+        } else {
+            host_ = value;
+            // port_ keeps its default value.
         }
     }
-
-    // Store the original hostname or IP string. WebServer will resolve it later.
-    host_ = host_str;
     return true;
 }
 
@@ -438,7 +440,8 @@ bool VirtualServer::has_valid_error_pages() const {
 
         // Call stat() to initialize the file_stat struct.
         if (stat(error_page_path.c_str(), &file_stat) != 0) {
-            log(LOG_ERROR, "Error page file does not exist or cannot be stat'd: %s",
+            log(LOG_ERROR,
+                "Error page file does not exist or cannot be stat'd: %s",
                 error_page_path.c_str());
             return false;
         }

@@ -4,8 +4,8 @@
 #include "common.hpp"
 
 #define RESET "\x1B[0m"
-#define RED "\x1B[31m"
-#define LIGHT_RED "\x1B[91m"
+#define LIGHT_RED "\x1B[31m"
+#define RED "\x1B[91m"
 #define WHITE "\x1B[37m"
 #define BLINK "\x1b[5m"
 #define YELLOW "\x1B[33m"
