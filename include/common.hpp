@@ -35,7 +35,7 @@
 #define ACTIVE_LOG_LEVEL LOG_DEBUG
 
 namespace http_limits {
-const time_t TIMEOUT = 60;                    // Timeout in seconds
+const time_t TIMEOUT = 30;                    // Timeout in seconds
 const size_t MAX_METHOD_LENGTH = 8;           // HTTP method length
 const size_t MAX_REQUEST_LINE_LENGTH = 1024;  // 1KB
 const size_t MAX_REQUEST_HEAD_LENGTH = 4096;  // 4KB

@@ -500,6 +500,7 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                 if (ch == '\r') {
                     context.value_end_ = buff.data();
                     state = VALUE_ALMOST_DONE;
+                    break;
                 }
 
                 // A header value can contain any visible ASCII character,

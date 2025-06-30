@@ -102,9 +102,9 @@ void Connection::remove_io_context(IOContext* io_context) {
     std::vector<IOContext*>::iterator it =
         std::find(io_contexts_.begin(), io_contexts_.end(), io_context);
     if (it != io_contexts_.end()) {
+        log(LOG_DEBUG, "I/O context removed for socket '%i'", io_context->fd_);
         delete *it;  // Clean up the IOContext
         io_contexts_.erase(it);
-        log(LOG_DEBUG, "I/O context removed for socket '%i'", io_context->fd_);
     } else {
         log(LOG_WARNING, "I/O context not found for socket '%i'",
             io_context->fd_);

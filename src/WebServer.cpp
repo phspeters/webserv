@@ -427,9 +427,11 @@ int WebServer::cleanup_timed_out_connections() {
             log(LOG_WARNING,
                 "Connection (fd: %d) timed out after %ld seconds, closing",
                 conn->client_fd_, http_limits::TIMEOUT);
-            close_client_connection(conn);
-            // Erase increments the iterator so that we can safely continue
-            active_connections_.erase(it++);
+
+            std::map<int, Connection*>::iterator to_erase = it;
+            ++it;
+
+            close_client_connection(to_erase->second);
             closed++;
         } else {
             ++it;
