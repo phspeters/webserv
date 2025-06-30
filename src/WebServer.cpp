@@ -158,6 +158,7 @@ void WebServer::run() {
 
 void WebServer::shutdown() {
     ready_ = false;
+    std::cout << std::endl;
     log(LOG_INFO, "WebServer shutdown initiated");
 }
 
@@ -505,10 +506,10 @@ bool WebServer::remove_listener_context(IOContext* ctx) {
             ctx->fd_);
     }
 
-    delete ctx;
-
     log(LOG_INFO, "Listener socket '%i' removed and cleaned up successfully",
         ctx->fd_);
+    delete ctx;
+
     return found;  // Return true if it was a normal removal, false otherwise.
 }
 
