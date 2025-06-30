@@ -82,3 +82,12 @@ std::string get_status_message(int code) {
             return "Unknown Status";
     }
 }
+
+std::string get_current_gmt_time() {
+    char buffer[100];
+    time_t now = time(NULL);
+    struct tm* tm_info = gmtime(&now);
+
+    strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S: ", tm_info);
+    return std::string(buffer);
+}

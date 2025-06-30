@@ -177,5 +177,6 @@ enum FdType {
 
 std::string trim(const std::string& str);
 std::string get_status_message(int code);
+std::string get_current_gmt_time();
 
 #endif

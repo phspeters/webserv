@@ -275,12 +275,3 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
 
     std::cout << "================================" << RESET << std::endl;
 }
-
-std::string get_current_gmt_time() {
-    char buffer[100];
-    time_t now = time(NULL);
-    struct tm* tm_info = gmtime(&now);
-
-    strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S: ", tm_info);
-    return std::string(buffer);
-}
