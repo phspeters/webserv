@@ -160,7 +160,7 @@ bool VirtualServer::parse_listen(const std::string& value) {
     size_t colonPos = value.find(':');
     if (colonPos != std::string::npos) {
         // Format: hostname:port or ip:port
-        std::string host_str = value.substr(0, colonPos);
+        host_ = value.substr(0, colonPos);
         std::istringstream iss(value.substr(colonPos + 1));
         if (!(iss >> port_)) {
             log(LOG_ERROR, "Invalid port in listen directive: %s",
@@ -357,8 +357,16 @@ bool VirtualServer::parse_directive(const std::string& line, std::string& key,
     return !value.empty();
 }
 
+// TODO: remove this function and let bind() handle the error
 // Implementation of validation methods
 bool VirtualServer::is_valid_host() const {
+    return true;
+
+    // Allow localhost as a valid host
+    if (host_ == "localhost") {
+        return true;
+    }
+
     // Check if the host is valid IP address format
     std::string::size_type start = 0;
     int octets = 0;
