@@ -398,12 +398,13 @@ int WebServer::create_listener_socket(const std::string& host, int port) {
         break;  // Successfully bound
     }
 
-    freeaddrinfo(results);  // Free the results linked list
-
     if (p == NULL) {
         log(LOG_ERROR, "Failed to bind to %s:%d", host.c_str(), port);
+        freeaddrinfo(results);  // Free the results linked list
         return -1;
     }
+
+    freeaddrinfo(results);  // Free the results linked list
 
     if (listen(listener_fd, SOMAXCONN) < 0) {
         close(listener_fd);
