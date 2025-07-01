@@ -108,13 +108,15 @@ class WebServer {
     //--- TODO: review these methods
     ParseStatus process_request(Connection* conn);
     void match_host_header(Connection* conn);
-    const Location* find_matching_location(const VirtualServer* virtual_server,
-                                           const std::string& path) const;
-    bool validate_request_location(Connection* conn);
+    const Location* match_location(const VirtualServer* virtual_server,
+                                   const std::string& path) const;
+    ParseStatus validate_version(Connection* conn);
+    ParseStatus validate_method(Connection* conn);
+    ParseStatus validate_body_handling(Connection* conn);
+    AHandler* choose_handler(Connection* conn);
     ParserState determine_body_handling_state(Connection* conn);
     bool is_cgi_extension(const std::string& request_uri) const;
     std::string get_file_extension(const std::string& uri_path) const;
-    AHandler* choose_handler(Connection* conn);
     //------------------------------
 };  // class WebServer
 

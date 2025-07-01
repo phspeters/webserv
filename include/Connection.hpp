@@ -52,7 +52,7 @@ struct Connection {
     ConnectionState conn_state_;
     ParserContext parser_context_;
     WriterContext writer_context_;
-    std::vector<IOContext*> io_contexts_;
+    std::vector<IOContext*> io_contexts_; //TODO: change to map<FdType, IOContext*> ??
 
     //--------------------------------------
     // Connection Management

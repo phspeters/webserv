@@ -33,6 +33,7 @@ int ErrorHandler::get_parse_message_status(ParseStatus parse_status) {
             status_code = LENGTH_REQUIRED;
             break;
         case PARSE_UNKNOWN_ENCODING:
+        case PARSE_METHOD_NOT_IMPLEMENTED:
             status_code = NOT_IMPLEMENTED;
             break;
         default:
@@ -97,7 +98,9 @@ void ErrorHandler::handle_error(HttpResponse* resp, int response_status,
         return;
     }
 
-    // Clear any existing response data
+    // TODO: create an error_headers that are not cleared and are only populated
+    // on error, this function translates them to normal headers afterwards
+
     resp->headers_.clear();
     resp->body_.clear();
 

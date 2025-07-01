@@ -357,15 +357,10 @@ bool VirtualServer::parse_directive(const std::string& line, std::string& key,
     return !value.empty();
 }
 
-// TODO: remove this function and let bind() handle the error
-// Implementation of validation methods
+// TODO: implement new rules for host validation (forbid non printable only?)
 bool VirtualServer::is_valid_host() const {
+    // TEMP
     return true;
-
-    // Allow localhost as a valid host
-    if (host_ == "localhost") {
-        return true;
-    }
 
     // Check if the host is valid IP address format
     std::string::size_type start = 0;

@@ -59,20 +59,17 @@ bool WebServer::init() {
         return false;
     }
 
-    // Set up signal handlers
     if (!setup_signal_handlers()) {
         log(LOG_ERROR, "Failed to set up signal handlers");
         return false;
     }
 
-    // Create epoll instance
     epoll_fd_ = epoll_create1(0);
     if (epoll_fd_ < 0) {
         log(LOG_ERROR, "Failed to create epoll instance");
         return false;
     }
 
-    // Set up the listener sockets
     if (!setup_listener_sockets()) {
         return false;
     }
@@ -83,29 +80,24 @@ bool WebServer::init() {
 }
 
 bool WebServer::parse_config_file(const std::string& filename) {
-    // Parse the configuration file and return a vector of VirtualServer objects
-
-    // Check file extension
     std::string::size_type pos = filename.find_last_of(".");
     if (pos == std::string::npos || filename.substr(pos) != ".conf") {
         log(LOG_ERROR, "Error: Invalid configuration file extension: %s",
             filename.c_str());
-        return false;  // Invalid file extension
+        return false;
     }
 
-    // Open the configuration file
     std::ifstream file(filename.c_str());
     if (!file.is_open()) {
         log(LOG_ERROR, "Error: Could not open configuration file: %s",
             filename.c_str());
-        return false;  // File open error
+        return false;
     }
 
     std::string line;
     while (std::getline(file, line)) {
         line = trim(line);
 
-        // Skip empty lines and comments
         if (line.empty() || line[0] == '#') {
             continue;
         }
@@ -113,14 +105,12 @@ bool WebServer::parse_config_file(const std::string& filename) {
         // Look for server block
         if (line == "server {" ||
             (line.find("server") == 0 && line.find("{") != std::string::npos)) {
-            // Create a new virtual server
             VirtualServer virtual_server;
-            // Parse the server block
             if (virtual_server.parse_server_block(file)) {
                 if (!virtual_server.is_valid()) {
                     log(LOG_ERROR,
                         "Error: Invalid virtual server configuration");
-                    return false;  // Validation error
+                    return false;
                 }
 
                 log(LOG_DEBUG,
@@ -128,7 +118,6 @@ bool WebServer::parse_config_file(const std::string& filename) {
                     "port: %d",
                     virtual_server.host_.c_str(), virtual_server.port_);
 
-                // Add to main list
                 virtual_servers_.push_back(virtual_server);
             }
 
@@ -136,11 +125,10 @@ bool WebServer::parse_config_file(const std::string& filename) {
 
         } else {
             log(LOG_ERROR, "Error parsing server block");
-            return false;  // Parsing error
+            return false;
         }
     }
 
-    // Close the file
     file.close();
 
     log(LOG_INFO, "Parsed %zu virtual servers from configuration file",
@@ -151,7 +139,6 @@ bool WebServer::parse_config_file(const std::string& filename) {
 void WebServer::run() {
     ready_ = true;
 
-    // Start the event loop
     log(LOG_INFO, "WebServer is ready and waiting for connections");
     event_loop();
 }
@@ -234,7 +221,6 @@ void WebServer::event_loop() {
             IOContext* ctx = static_cast<IOContext*>(events[i].data.ptr);
             uint32_t event_flags = events[i].events;
 
-            // Check for errors first. This applies to ALL context types.
             if (event_flags & (EPOLLERR | EPOLLHUP)) {
                 log(LOG_ERROR, "Epoll error or hangup on fd %d (type: %d)",
                     ctx->fd_, ctx->type_);
@@ -244,7 +230,7 @@ void WebServer::event_loop() {
                 } else {
                     close_client_connection(ctx->conn_);
                 }
-                // Skip further processing for this event.
+
                 continue;
             }
 
@@ -324,7 +310,6 @@ bool WebServer::setup_listener_sockets() {
 
     for (std::list<VirtualServer>::iterator it = virtual_servers_.begin();
          it != virtual_servers_.end(); ++it) {
-        // Get a pointer to the current VirtualServer object
         VirtualServer* vs = &(*it);
         std::pair<std::string, int> listen_addr(vs->host_, vs->port_);
 
@@ -332,11 +317,11 @@ bool WebServer::setup_listener_sockets() {
         if (listener_fds.find(listen_addr) == listener_fds.end()) {
             int fd = create_listener_socket(vs->host_, vs->port_);
             if (fd < 0) {
-                return false;  // Abort server startup
+                return false;
             }
 
             if (!add_listener_context(fd)) {
-                return false;  // Abort server startup
+                return false;
             }
 
             listener_fds[listen_addr] = fd;
@@ -400,11 +385,11 @@ int WebServer::create_listener_socket(const std::string& host, int port) {
 
     if (p == NULL) {
         log(LOG_ERROR, "Failed to bind to %s:%d", host.c_str(), port);
-        freeaddrinfo(results);  // Free the results linked list
+        freeaddrinfo(results);
         return -1;
     }
 
-    freeaddrinfo(results);  // Free the results linked list
+    freeaddrinfo(results);
 
     if (listen(listener_fd, SOMAXCONN) < 0) {
         close(listener_fd);
@@ -513,7 +498,7 @@ bool WebServer::remove_listener_context(IOContext* ctx) {
         ctx->fd_);
     delete ctx;
 
-    return found;  // Return true if it was a normal removal, false otherwise.
+    return found;
 }
 
 bool WebServer::setup_signal_handlers() {
@@ -532,6 +517,7 @@ bool WebServer::setup_signal_handlers() {
         return false;
     }
 
+    // TODO: Remove this handler and only use sockets and send?
     if (sigaction(SIGPIPE, &sa, NULL) < 0) {
         log(LOG_ERROR, "Failed to set up SIGPIPE handler");
         return false;
@@ -564,7 +550,7 @@ bool WebServer::is_cgi_extension(const std::string& request_uri) const {
 std::string WebServer::get_file_extension(const std::string& uri_path) const {
     size_t dot_pos = uri_path.find_last_of('.');
     if (dot_pos == std::string::npos) {
-        return "";  // No extension found
+        return "";
     }
     std::string extension = uri_path.substr(dot_pos);
     // Convert to lowercase for case-insensitive comparison
@@ -581,7 +567,6 @@ void WebServer::accept_new_connection(int listener_fd) {
         "%d",
         listener_fd);
 
-    // Find the default virtual server for this listener
     VirtualServer* default_server = NULL;
     if (listener_to_virtual_servers_.find(listener_fd) !=
         listener_to_virtual_servers_.end()) {
@@ -592,7 +577,6 @@ void WebServer::accept_new_connection(int listener_fd) {
         return;
     }
 
-    // Accept a new connection and set it to non-blocking mode
     int client_fd = accept4(listener_fd, NULL, NULL, SOCK_NONBLOCK);
     if (client_fd < 0) {
         log(LOG_ERROR, "Failed to accept new connection listener socket '%i'",
@@ -647,7 +631,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
                 "client_fd %d",
                 conn->client_fd_);
             close_client_connection(conn);
-            return;  // Error reading from socket, close connection
+            return;
         }
 
         if (conn->conn_state_ == CONN_READING_REQUEST ||
@@ -658,7 +642,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
                 // TODO: ResponseWriter try to serialize response to
                 // write_buffer_
                 conn->conn_state_ = CONN_WRITING_RESPONSE;
-                return;  // Error processing request, send error response
+                return;
             }
             log_request(LOG_TRACE, conn);
         }
@@ -674,7 +658,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
                     "client_fd %d: %s",
                     conn->client_fd_, strerror(errno));
                 close_client_connection(conn);
-                return;  // Error writing to socket, close connection
+                return;
             }
 
             log(LOG_DEBUG,
@@ -691,6 +675,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
             }
 
             if (conn->conn_state_ == CONN_FINISHING_WRITE) {
+                conn->active_handler_->cleanup_handler(conn);
                 handle_keep_alive(conn);
                 return;  // Successfully finished writing response
             }
@@ -702,10 +687,10 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
                     "events for client_fd %d",
                     conn->client_fd_);
                 close_client_connection(conn);
-                return;  // Error updating epoll, close connection
+                return;
             }
             conn->conn_state_ = CONN_GENERATING_RESPONSE;
-            return;  // Successfully wrote response, switch to reading state
+            return;
         } else {
             log(LOG_FATAL,
                 "handle_event: Unexpected state for client_fd %d: %d",
@@ -718,22 +703,20 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
 bool WebServer::handle_keep_alive(Connection* conn) {
     log(LOG_DEBUG, "Handling keep-alive for client_fd %d", conn->client_fd_);
 
-    // If the request was successful and keep-alive is enabled, reset the state
     if (conn->is_keep_alive()) {
         log(LOG_DEBUG, "Keep-alive enabled for client_fd %d", conn->client_fd_);
         conn->reset_for_keep_alive();
-        return true;  // Keep-alive handled successfully
+        return true;
     } else {
         log(LOG_DEBUG, "Closing connection for client_fd %d", conn->client_fd_);
         close_client_connection(conn);
-        return false;  // Connection closed
+        return false;
     }
 }
 
 ParseStatus WebServer::process_request_data(Connection* conn) {
     ParseStatus status = PARSE_SUCCESS;
 
-    // Loop to process as much data as possible from the buffer in one go.
     while (true) {
         ParserState& state = conn->parser_context_.parser_state_;
 
@@ -755,7 +738,7 @@ ParseStatus WebServer::process_request_data(Connection* conn) {
             case PARSER_PROCESSING_REQUEST:
                 status = process_request(conn);  // Validate headers, etc.
                 if (status == PARSE_SUCCESS) {
-                    // Determine if we need to read a body a how
+                    // Determine if we need to read a body and how
                     state = determine_body_handling_state(conn);
                 }
                 break;
@@ -777,7 +760,7 @@ ParseStatus WebServer::process_request_data(Connection* conn) {
             case PARSER_COMPLETE:
                 log(LOG_DEBUG, "Request parsing complete for fd %d.",
                     conn->client_fd_);
-                return PARSE_SUCCESS;  // Exit the processing loop
+                return PARSE_SUCCESS;
 
             default:
                 log(LOG_ERROR, "Unknown parser state for fd %d.",
@@ -796,7 +779,7 @@ ParseStatus WebServer::process_request_data(Connection* conn) {
         if (status >= PARSE_ERROR) {
             log(LOG_ERROR, "Parse error %d for fd %d.", status,
                 conn->client_fd_);
-            return status;  // Exit the processing loop
+            return status;
         }
     }
 }
@@ -805,37 +788,124 @@ ParseStatus WebServer::process_request_data(Connection* conn) {
 // ------------------------- PROCESS REQUEST BUNDLE ----------------------------
 // -----------------------------------------------------------------------------
 
-// Dentro de handle_client_socket_event
 ParseStatus WebServer::process_request(Connection* conn) {
     log(LOG_DEBUG, "Processing request for connection: %i", conn->client_fd_);
-    // Phase 1: Estabilish context
-    // a. Match host header with virtual server
-    // b. Match best location block within virtual server
-    // Phase 2: Validate request
-    // c. Validate version (and host header for HTTP/1.1)
-    // d. Validate request method is valid and allowed
-    // e. Validate content length or transfer encoding: chunked
-    // Phase 3: Choose handler and validate permissions
-    // f. Choose handler based on request method and location
-    // (choose_handler function) g. Validate permissions
-    // (active_handler_->validate_permissions(conn))
-    // Phase 4: Prepare for body handling and execution
-    // h. Determine if body is needed and what kind
 
-    // after that: parse_content_body (if needed) and setup_next_event_state
+    match_host_header(conn);
+    conn->location_match_ =
+        match_location(conn->virtual_server_, conn->request_data_->path_);
 
-    // REFACTOR AND DELETE
-    // Host header required for HTTP/1.1
-    HttpRequest* request = conn->request_data_;
-    if (request->version_ == "HTTP/1.1" &&
-        request->get_header("host").empty()) {
-        // Translates to response status 400
-        log(LOG_ERROR,
-            "Missing Host header in HTTP/1.1 request for connection: %i",
+    ParseStatus status = validate_version(conn);
+    if (status != PARSE_SUCCESS) {
+        log(LOG_ERROR, "Invalid HTTP version in request for connection: %i",
             conn->client_fd_);
-        return PARSE_MISSING_HOST_HEADER;
+        return status;
     }
 
+    status = validate_method(conn);
+    if (status != PARSE_SUCCESS) {
+        log(LOG_ERROR,
+            "Invalid or unsupported method in request for connection: %i",
+            conn->client_fd_);
+        return status;
+    }
+
+    status = validate_body_handling(conn);
+    if (status != PARSE_SUCCESS) {
+        log(LOG_ERROR, "Invalid body handling in request for connection: %i",
+            conn->client_fd_);
+        return status;
+    }
+
+    conn->active_handler_ = choose_handler(conn);
+    conn->active_handler_->check_permissions(conn);
+    conn->active_handler_->setup_handler(conn);
+    conn->conn_state_ = CONN_GENERATING_RESPONSE;
+    return PARSE_SUCCESS;
+}
+
+ParserState WebServer::determine_body_handling_state(Connection* conn) {
+    log(LOG_DEBUG, "Determining body handling state for connection: %i",
+        conn->client_fd_);
+
+    conn->parser_context_.clear_for_next_state();
+
+    HttpRequest* request = conn->request_data_;
+    if (request->method_ != "POST" && request->method_ != "PUT") {
+        conn->request_data_->body_fully_parsed_ = true;
+        return PARSER_COMPLETE;
+    }
+
+    std::string transfer_encoding = request->get_header("transfer-encoding");
+    if (!transfer_encoding.empty() &&
+        transfer_encoding.find("chunked") != std::string::npos) {
+        return PARSER_READING_CHUNKED_BODY;
+    }
+
+    std::string content_length = request->get_header("content-length");
+    if (!content_length.empty()) {
+        char* end_ptr;
+        request->content_length_ =
+            std::strtoul(content_length.c_str(), &end_ptr, 10);
+        conn->parser_context_.body_remaining_bytes_ = request->content_length_;
+
+        if (request->content_length_ > 0) {
+            return PARSER_READING_CONTENT_BODY;
+        }
+    }
+
+    conn->request_data_->body_fully_parsed_ = true;
+    return PARSER_COMPLETE;
+}
+
+ParseStatus WebServer::validate_version(Connection* conn) {
+    log(LOG_DEBUG, "Validating HTTP version for connection: %i",
+        conn->client_fd_);
+    std::string version = conn->request_data_->version_;
+
+    // Only HTTP/1.0 or HTTP/1.1 allowed
+    if (version == "HTTP/1.0" || version == "HTTP/1.1") {
+        return PARSE_SUCCESS;
+    }
+
+    log(LOG_ERROR, "Invalid HTTP version '%s' in request for connection: %i",
+        version.c_str(), conn->client_fd_);
+    return PARSE_VERSION_NOT_SUPPORTED;
+}
+
+ParseStatus WebServer::validate_method(Connection* conn) {
+    log(LOG_DEBUG, "Validating HTTP method for connection: %i",
+        conn->client_fd_);
+
+    std::string method = conn->request_data_->method_;
+    if (method != "GET" && method != "POST" && method == "PUT" &&
+        method != "DELETE") {
+        log(LOG_ERROR, "Invalid HTTP method '%s' in request for connection: %i",
+            method.c_str(), conn->client_fd_);
+        return PARSE_METHOD_NOT_IMPLEMENTED;
+    }
+
+    // Check if the method is allowed for the matched location
+    const Location* location = conn->location_match_;
+    for (std::vector<std::string>::const_iterator it =
+             location->allowed_methods_.begin();
+         it != location->allowed_methods_.end(); ++it) {
+        if (*it == method) {
+            return PARSE_SUCCESS;
+        }
+    }
+    log(LOG_ERROR, "Method '%s' not allowed for location: %s", method.c_str(),
+        location->path_.c_str());
+    // TODO: include Allow header in the response
+    // conn->request_data_->set_header("Allow", location->allowed_methods_);
+    return PARSE_METHOD_NOT_ALLOWED;
+}
+
+ParseStatus WebServer::validate_body_handling(Connection* conn) {
+    log(LOG_DEBUG, "Validating body handling for connection: %i",
+        conn->client_fd_);
+
+    HttpRequest* request = conn->request_data_;
     if (request->method_ == "POST" || request->method_ == "PUT") {
         bool has_content_length =
             !request->get_header("content-length").empty();
@@ -843,60 +913,53 @@ ParseStatus WebServer::process_request(Connection* conn) {
             !request->get_header("transfer-encoding").empty();
 
         if (!has_content_length && !has_transfer_encoding) {
-            // Translates to response status 411
             log(LOG_ERROR,
                 "POST/PUT without Content-Length or Transfer-Encoding");
             return PARSE_MISSING_CONTENT_LENGTH;
         }
 
         if (has_content_length && has_transfer_encoding) {
-            // Translates to response status 400
             log(LOG_ERROR,
                 "POST/PUT with both Content-Length and Transfer-Encoding");
             return PARSE_INVALID_CONTENT_LENGTH;
         }
 
         if (has_content_length) {
-            // Validate Content-Length
             std::string content_length = request->get_header("content-length");
             char* end_ptr;
             size_t body_size =
                 std::strtoul(content_length.c_str(), &end_ptr, 10);
 
-            // Check for invalid Content-Length format
             if (end_ptr == content_length.c_str() || *end_ptr != '\0') {
                 log(LOG_ERROR, "Invalid Content-Length header: '%s'",
                     content_length.c_str());
-                // Translates to response status 400
                 return PARSE_INVALID_CONTENT_LENGTH;
             }
 
             if (static_cast<ssize_t>(body_size) >
-                conn->virtual_server_->client_max_body_size_) {
+                conn->location_match_->client_max_body_size_) {
                 log(LOG_ERROR, "Content-Length exceeds maximum size: %zu",
                     body_size);
-                // Translates to response status 413
                 return PARSE_CONTENT_TOO_LARGE;
             }
         }
 
         if (has_transfer_encoding) {
-            // Validate Transfer-Encoding
             std::string transfer_encoding =
                 request->get_header("transfer-encoding");
             if (transfer_encoding != "chunked") {
                 log(LOG_ERROR, "Unknown Transfer-Encoding: '%s'",
                     transfer_encoding.c_str());
-                // Translates to response status 501
                 return PARSE_UNKNOWN_ENCODING;
             }
         }
     }
-
-    log(LOG_DEBUG, "Headers validated successfully for connection: %i",
+    log(LOG_DEBUG, "Body handling validation successful for connection: %i",
         conn->client_fd_);
     return PARSE_SUCCESS;
-}  // REFACTOR AND DELETE
+}
+
+// ------------- TODO: fix functions below -----------
 
 AHandler* WebServer::choose_handler(Connection* conn) {
     log(LOG_DEBUG,
@@ -919,7 +982,6 @@ AHandler* WebServer::choose_handler(Connection* conn) {
         log(LOG_DEBUG,
             "choose_handler: Using CgiHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
-        conn->conn_state_ = CONN_GENERATING_RESPONSE;
         return cgi_handler_;
     } else if (request_method == "POST") {
         // FileUploadHandler for file uploads
@@ -927,14 +989,12 @@ AHandler* WebServer::choose_handler(Connection* conn) {
             "choose_handler: Using FileUploadHandler for client_fd %d, "
             "path %s",
             conn->client_fd_, matching_location->path_.c_str());
-        conn->conn_state_ = CONN_GENERATING_RESPONSE;
         return file_upload_handler_;
     } else if (request_method == "DELETE") {
-        // DeleteHandler for dlete requests
+        // DeleteHandler for delete requests
         log(LOG_DEBUG,
             "choose_handler: Using DeleteHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
-        conn->conn_state_ = CONN_GENERATING_RESPONSE;
         return file_delete_handler_;
     } else {
         // Default to StaticFileHandler for regular files
@@ -942,51 +1002,13 @@ AHandler* WebServer::choose_handler(Connection* conn) {
             "choose_handler: Using StaticFileHandler for client_fd %d, "
             "path %s",
             conn->client_fd_, matching_location->path_.c_str());
-        conn->conn_state_ = CONN_GENERATING_RESPONSE;
         return static_file_handler_;
     }
 }
 
-ParserState WebServer::determine_body_handling_state(Connection* conn) {
-    log(LOG_DEBUG, "Determining body handling state for connection: %i",
-        conn->client_fd_);
-
-    conn->parser_context_.clear_for_next_state();
-
-    // Check for request body
-    HttpRequest* request = conn->request_data_;
-    if (request->method_ == "POST" || request->method_ == "PUT") {
-        // Check for Transfer-Encoding header
-        std::string transfer_encoding =
-            request->get_header("transfer-encoding");
-        if (!transfer_encoding.empty() &&
-            transfer_encoding.find("chunked") != std::string::npos) {
-            return PARSER_READING_CHUNKED_BODY;
-        }
-
-        // Check for Content-Length header
-        std::string content_length = request->get_header("content-length");
-        if (!content_length.empty()) {
-            char* end_ptr;
-            request->content_length_ =
-                std::strtoul(content_length.c_str(), &end_ptr, 10);
-            conn->parser_context_.body_remaining_bytes_ =
-                request->content_length_;
-
-            if (request->content_length_ > 0) {
-                return PARSER_READING_CONTENT_BODY;
-            }
-        }
-    }
-
-    // No body needed or zero-length body
-    conn->request_data_->body_fully_parsed_ = true;
-    return PARSER_COMPLETE;
-}
-
 // Add Location Type Check
-const Location* WebServer::find_matching_location(
-    const VirtualServer* virtual_server, const std::string& uri) const {
+const Location* WebServer::match_location(const VirtualServer* virtual_server,
+                                          const std::string& uri) const {
     // Use a reference instead of making a copy
     const std::vector<Location>& locations_ = virtual_server->locations_;
     const Location* best_match = NULL;
@@ -1035,69 +1057,6 @@ const Location* WebServer::find_matching_location(
     }
 
     return best_match;
-}
-
-// ------------- TODO: fix functions below -----------
-
-bool WebServer::validate_request_location(Connection* conn) {
-    const Location* matching_location = conn->location_match_;
-    if (!matching_location) {
-        log(LOG_ERROR, "No matching location found for request path: %s",
-            conn->request_data_->path_.c_str());
-        ErrorHandler::generate_error_response(conn, NOT_FOUND);
-        return false;
-    }
-
-    const std::string& request_method = conn->request_data_->method_;
-
-    // Check if the requested method is allowed for this location
-    if (!matching_location->allowed_methods_.empty()) {
-        bool method_allowed = false;
-        std::string allowed_methods_str;
-
-        for (size_t i = 0; i < matching_location->allowed_methods_.size();
-             i++) {
-            // Build Allow header value
-            if (i > 0) {
-                allowed_methods_str += ", ";
-            }
-            allowed_methods_str += matching_location->allowed_methods_[i];
-
-            // Check if the current request method is allowed
-            if (matching_location->allowed_methods_[i] == request_method) {
-                method_allowed = true;
-            }
-        }
-
-        if (!method_allowed) {
-            log(LOG_DEBUG,
-                "Connection '%i', Host '%s': Method not allowed: %s, "
-                "Allowed "
-                "methods: %s",
-                conn->client_fd_, conn->virtual_server_->host_.c_str(),
-                request_method.c_str(), allowed_methods_str.c_str());
-
-            // Apply 405 error directly to the response
-            ErrorHandler::generate_error_response(conn, METHOD_NOT_ALLOWED);
-            log(LOG_WARNING,
-                "validate_request_location: Invalid request location for "
-                "client_fd %d",
-                conn->client_fd_);
-
-            // Add the Allow header
-            conn->response_data_->set_header("Allow", allowed_methods_str);
-
-            return false;
-        }
-    }
-
-    log(LOG_DEBUG,
-        "Connection '%i', Host '%s': Request method '%s' is allowed for "
-        "path "
-        "'%s'",
-        conn->client_fd_, conn->virtual_server_->host_.c_str(),
-        request_method.c_str(), matching_location->path_.c_str());
-    return true;
 }
 
 // TODO: improve this ugly ass function
@@ -1223,11 +1182,30 @@ void WebServer::match_host_header(Connection* conn) {
     }*/
 }
 
+// -----------------------------------------------------------------------------
+
 void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
     Connection* conn = ctx->conn_;
+    IOContext* client_ctx = ctx->conn_->io_contexts_[0];
     if (event_flags & EPOLLOUT) {
         if (conn && conn->active_handler_) {
             conn->active_handler_->handle_event(conn);
+        }
+
+        response_writer_->write_response_to_buffer(conn);
+        if (!conn->write_buffer_.empty()) {
+            if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
+                log(LOG_ERROR,
+                    "handle_file_upload_event: Failed to update epoll events "
+                    "for client_fd %d",
+                    conn->client_fd_);
+                close_client_connection(conn);
+            }
+            conn->conn_state_ = CONN_WRITING_RESPONSE;
+        } else {
+            log(LOG_DEBUG,
+                "handle_file_upload_event: No data to write for client_fd %d",
+                conn->client_fd_);
         }
     } else {
         log(LOG_FATAL,
@@ -1238,16 +1216,22 @@ void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
 }
 
 void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
+    log(LOG_FATAL, "handle_static_file_event called for client '%s'",
+        ctx->conn_->client_fd_);
     (void)ctx;
     (void)event_flags;
 }
 
 void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
+    log(LOG_FATAL, "handle_cgi_read_event called for client '%s'",
+        ctx->conn_->client_fd_);
     (void)ctx;
     (void)event_flags;
 }
 
 void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
+    log(LOG_FATAL, "handle_cgi_write_event called for client '%s'",
+        ctx->conn_->client_fd_);
     (void)ctx;
     (void)event_flags;
 }
