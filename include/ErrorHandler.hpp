@@ -23,7 +23,8 @@ void handle_error(HttpResponse* resp, int status_code,
 
 // ==================== ERROR PAGE GENERATION ====================
 std::string get_error_page_content(int status_code,
-                                   const VirtualServer& virtual_server);
+                                   const VirtualServer& virtual_server,
+                                   int& body_fd);
 std::string generate_default_error_page(int status_code,
                                         const std::string& status_message);
 
