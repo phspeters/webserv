@@ -478,6 +478,7 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
     }
 }
 
+
 void CgiHandler::handle_cgi_read(Connection* conn) {
     log(LOG_DEBUG,
         "CGI: Handling read for client %d on stdout_fd %d, current cgi_state: "
@@ -512,87 +513,61 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
         // result < 0 means error, but continue anyway (process might be gone)
     }
 
-    // Resize the read buffer to accommodate incoming data
-    /* Temporarily commented out to avoid compiling issues
-    size_t original_size = conn->cgi_context_->cgi_output_buffer_.size();
-    conn->cgi_context_->cgi_output_buffer_.resize(original_size +
-    DEFAULT_CHUNK_SIZE);
-
-    // Read from CGI's stdout pipe
-    ssize_t bytes_read =
-        read(conn->cgi_context_->cgi_pipe_stdout_fd_,
-    &conn->cgi_context_->cgi_output_buffer_[original_size], DEFAULT_CHUNK_SIZE);
-
+    // --- New implementation using Buffer ---
+    Buffer& buffer = conn->cgi_context_->cgi_output_buffer_;
+    size_t writable = buffer.writable_space();
+    if (writable == 0) buffer.compact();
+    writable = buffer.writable_space();
+    if (writable == 0) {
+        log(LOG_ERROR, "CGI output buffer is full for client %d", conn->client_fd_);
+        finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
+        return;
+    }
+    ssize_t bytes_read = read(conn->cgi_context_->cgi_pipe_stdout_fd_, buffer.write_ptr(), writable);
     if (bytes_read < 0) {
-        log(LOG_ERROR, "CGI: Failed to read from stdout pipe for client %d: %s",
-            conn->client_fd_, strerror(errno));
+        log(LOG_ERROR, "CGI: Failed to read from stdout pipe for client %d: %s", conn->client_fd_, strerror(errno));
         finalize_cgi_error(conn, BAD_GATEWAY);
         return;
     }
-
-    // Resize the buffer to the actual size read
-    conn->cgi_context_->cgi_output_buffer_.resize(original_size + bytes_read);
-
     if (bytes_read > 0) {
-        log(LOG_DEBUG,
-            "CGI: Read %zd bytes from stdout for client %d. Total buffer: %zu",
-            bytes_read, conn->client_fd_,
-    conn->cgi_context_->cgi_output_buffer_.size()); parse_cgi_output(conn);  //
-    This might change conn->cgi_context_->cgi_handler_state_
-    }
-
-    if (conn->cgi_context_->cgi_handler_state_ == CGI_ERROR) {
-        log(LOG_ERROR,
-            "CGI: Error state reached for client %d, cleaning up resources",
-            conn->client_fd_);
-        return;
-    }
-
-    if (bytes_read == 0) {
-        log(LOG_DEBUG, "CGI: EOF received from stdout for client %d.",
-            conn->client_fd_);
-
-        if (conn->cgi_context_->cgi_handler_state_ == CGI_READING_FROM_PIPE) {
-            // Headers not fully parsed before EOF - this is an error
-            if (conn->cgi_context_->cgi_output_buffer_.empty() &&
-                conn->response_data_->headers_.empty()) {
-                // No data at all - script execution failure
-                log(LOG_WARNING,
-                    "CGI: No output received from script for client %d",
-                    conn->client_fd_);
-                finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
-            } else {
-                // Partial data - malformed response
-                log(LOG_WARNING,
-                    "CGI: Incomplete headers received for client %d",
-                    conn->client_fd_);
-                finalize_cgi_error(conn, BAD_GATEWAY);
-            }
+        buffer.has_written(bytes_read);
+        log(LOG_DEBUG, "CGI: Read %zd bytes from stdout for client %d. Total buffer: %zu", bytes_read, conn->client_fd_, buffer.readable_bytes());
+        parse_cgi_output(conn); // This may change the handler state
+        if (conn->cgi_context_->cgi_handler_state_ == CGI_ERROR) {
+            log(LOG_ERROR, "CGI: Error state reached for client %d, cleaning up resources", conn->client_fd_);
             return;
         }
-
-        // Headers already parsed - check Content-Length if present
-        std::string content_length_str =
-            conn->response_data_->get_header("content-length");
-        if (!content_length_str.empty()) {
-            char* end_ptr;
-            size_t expected_content_length =
-                std::strtoul(content_length_str.c_str(), &end_ptr, 10);
-            if (expected_content_length != conn->response_data_->body_.size()) {
-                log(LOG_ERROR,
-                    "CGI: Content-Length mismatch for client %d. Expected %zu, "
-                    "got %zu",
-                    conn->client_fd_, expected_content_length,
-                    conn->response_data_->body_.size());
-                finalize_cgi_error(conn, BAD_GATEWAY);
-                return;
-            }
-
-        // All good - finalize the response
-        finalize_cgi_response(conn);
+        return; // Not EOF, so do not process the rest
+    }
+    // --- EOF (bytes_read == 0) ---
+    log(LOG_DEBUG, "CGI: EOF received from stdout for client %d.", conn->client_fd_);
+    if (conn->cgi_context_->cgi_handler_state_ == CGI_READING_FROM_PIPE) {
+        // Headers not fully processed before EOF
+        if (buffer.readable_bytes() == 0 && conn->response_data_->headers_.empty()) {
+            // No data received - script execution failure
+            log(LOG_WARNING, "CGI: No output received from script for client %d", conn->client_fd_);
+            finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
+        } else {
+            // Partial data - malformed response
+            log(LOG_WARNING, "CGI: Incomplete headers received for client %d", conn->client_fd_);
+            finalize_cgi_error(conn, BAD_GATEWAY);
+        }
         return;
     }
-        }*/
+    // Headers already processed - check Content-Length if present
+    std::string content_length_str = conn->response_data_->get_header("content-length");
+    if (!content_length_str.empty()) {
+        char* end_ptr;
+        size_t expected_content_length = std::strtoul(content_length_str.c_str(), &end_ptr, 10);
+        if (expected_content_length != conn->response_data_->body_.size()) {
+            log(LOG_ERROR, "CGI: Content-Length mismatch for client %d. Expected %zu, got %zu", conn->client_fd_, expected_content_length, conn->response_data_->body_.size());
+            finalize_cgi_error(conn, BAD_GATEWAY);
+            return;
+        }
+    }
+    // All good - finalize the response
+    finalize_cgi_response(conn);
+    return;
 }
 
 void CgiHandler::parse_cgi_output(Connection* conn) {
