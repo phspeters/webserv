@@ -115,3 +115,13 @@ std::string get_file_extension(const std::string& uri_path) {
     }
     return extension;
 }
+
+std::string join(const std::vector<std::string>& vec, const std::string& sep) {
+    std::ostringstream oss;
+    for (size_t i = 0; i < vec.size(); ++i) {
+        if (i != 0)
+            oss << sep;
+        oss << vec[i];
+    }
+    return oss.str();
+}

@@ -370,6 +370,7 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
     return envp_char_array;
 }
 
+// TODO: setup executing directory (chdir to script's directory)
 void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
     char* cgi_script_path_cstr =
         const_cast<char*>(conn->cgi_context_->cgi_script_path_.c_str());

@@ -1,5 +1,94 @@
 #include "common.hpp"
 
+void ErrorHandler::generate_error_response(Connection* conn,
+                                           ResponseStatus response_status) {
+    if (!conn || !conn->response_data_) {
+        log(LOG_FATAL,
+            "generate_error_response: Invalid connection or response data");
+        return;
+    }
+
+    handle_error(conn->response_data_, response_status, *conn->virtual_server_);
+
+    // Set additional headers
+    conn->response_data_->set_header("connection", "close");
+    conn->response_data_->set_header("server", "webserv/1.0");
+    conn->response_data_->set_header("date", get_current_gmt_time());
+
+    // Update connection state to writing
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
+
+    std::string status_msg = get_status_message(response_status);
+    log(LOG_INFO, "Generated error response %d for client_fd %d: %s",
+        response_status, conn->client_fd_, status_msg.c_str());
+}
+
+void ErrorHandler::generate_error_response(Connection* conn,
+                                           ParseStatus parse_status) {
+    if (!conn || !conn->response_data_) {
+        log(LOG_FATAL,
+            "generate_error_response: Invalid connection or response data");
+        return;
+    }
+
+    int response_status = get_parse_message_status(parse_status);
+    handle_error(conn->response_data_, response_status, *conn->virtual_server_);
+
+    // Set additional headers
+    conn->response_data_->set_header("connection", "close");
+    conn->response_data_->set_header("server", "webserv/1.0");
+    conn->response_data_->set_header("date", get_current_gmt_time());
+
+    // Set error-specific headers if any
+    if (!conn->response_data_->error_headers_.empty()) {
+        for (std::map<std::string, std::string>::const_iterator it =
+                 conn->response_data_->error_headers_.begin();
+             it != conn->response_data_->error_headers_.end(); ++it) {
+            conn->response_data_->set_header(it->first, it->second);
+        }
+    }
+
+    // TODO: Update connection state to writing only write_buffer_ is not empty
+    // serialize_response_to_buffer(conn);
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
+
+    std::string status_msg = get_status_message(parse_status);
+    log(LOG_INFO, "Generated error response %d for client_fd %d: %s",
+        parse_status, conn->client_fd_, status_msg.c_str());
+}
+
+void ErrorHandler::handle_error(HttpResponse* resp, int response_status,
+                                const VirtualServer& config) {
+    if (!resp) {
+        log(LOG_FATAL, "handle_error: NULL response pointer");
+        return;
+    }
+
+    resp->headers_.clear();
+    resp->body_.clear();
+
+    // Set status code and message
+    resp->status_code_ = response_status;
+    resp->status_message_ = get_status_message(response_status);
+
+    // Get error page content (custom or default)
+    std::string content = get_error_page_content(response_status, config);
+
+    // Set response body and headers
+    resp->body_.assign(content.begin(), content.end());
+
+    // Set headers
+    resp->set_header("Content-Type", "text/html; charset=UTF-8");
+
+    // Convert size to string (C++98 compatible)
+    std::ostringstream content_length;
+    content_length << resp->body_.size();
+    resp->set_header("Content-Length", content_length.str());
+
+    log(LOG_DEBUG, "Generated error page for status %d (%zu bytes)",
+        response_status, resp->body_.size());
+}
+
 int ErrorHandler::get_parse_message_status(ParseStatus parse_status) {
     int status_code = 500;  // Default to Internal Server Error
 
@@ -44,90 +133,45 @@ int ErrorHandler::get_parse_message_status(ParseStatus parse_status) {
     return status_code;
 }
 
-void ErrorHandler::generate_error_response(Connection* conn,
-                                           ResponseStatus response_status) {
+// TODO: Leave serialization logic in ResponseWriter (this is temporary)
+void serialize_response_to_buffer(Connection* conn) {
     if (!conn || !conn->response_data_) {
         log(LOG_FATAL,
-            "generate_error_response: Invalid connection or response data");
+            "serialize_response_to_buffer: Invalid connection or response "
+            "data");
         return;
     }
 
-    handle_error(conn->response_data_, response_status, *conn->virtual_server_);
+    // Clear existing write buffer
+    conn->write_buffer_.reset();
 
-    // Set additional headers
-    conn->response_data_->set_header("connection", "close");
-    conn->response_data_->set_header("server", "webserv/1.0");
-    conn->response_data_->set_header("date", get_current_gmt_time());
-
-    // Update connection state to writing
-    conn->conn_state_ = CONN_WRITING_RESPONSE;
-
-    std::string status_msg = get_status_message(response_status);
-    log(LOG_INFO, "Generated error response %d for client_fd %d: %s",
-        response_status, conn->client_fd_, status_msg.c_str());
-}
-
-void ErrorHandler::generate_error_response(Connection* conn,
-                                           ParseStatus parse_status) {
-    if (!conn || !conn->response_data_) {
-        log(LOG_FATAL,
-            "generate_error_response: Invalid connection or response data");
+    // Serialize headers
+    std::string headers = conn->response_data_->get_headers_string();
+    if (conn->write_buffer_.append(headers.data(), headers.size()) ==
+        BUFFER_FULL) {
+        log(LOG_ERROR,
+            "serialize_response_to_buffer: Write buffer full while appending "
+            "headers");
         return;
     }
 
-    int response_status = get_parse_message_status(parse_status);
-    handle_error(conn->response_data_, response_status, *conn->virtual_server_);
-
-    // Set additional headers
-    conn->response_data_->set_header("connection", "close");
-    conn->response_data_->set_header("server", "webserv/1.0");
-    conn->response_data_->set_header("date", get_current_gmt_time());
-
-    // TODO: Update connection state to writing only write_buffer_ is not empty
-    conn->conn_state_ = CONN_WRITING_RESPONSE;
-
-    std::string status_msg = get_status_message(parse_status);
-    log(LOG_INFO, "Generated error response %d for client_fd %d: %s",
-        parse_status, conn->client_fd_, status_msg.c_str());
-}
-
-void ErrorHandler::handle_error(HttpResponse* resp, int response_status,
-                                const VirtualServer& config) {
-    if (!resp) {
-        log(LOG_FATAL, "handle_error: NULL response pointer");
-        return;
+    // Append body if present
+    std::vector<char>& body = conn->response_data_->body_;
+    if (!body.empty()) {
+        if (conn->write_buffer_.append(body.data(), body.size()) ==
+            BUFFER_FULL) {
+            log(LOG_ERROR,
+                "serialize_response_to_buffer: Write buffer full while "
+                "appending body");
+            return;
+        }
     }
-
-    // TODO: create an error_headers that are not cleared and are only populated
-    // on error, this function translates them to normal headers afterwards
-
-    resp->headers_.clear();
-    resp->body_.clear();
-
-    // Set status code and message
-    resp->status_code_ = response_status;
-    resp->status_message_ = get_status_message(response_status);
-
-    // Get error page content (custom or default)
-    std::string content = get_error_page_content(response_status, config);
-
-    // Set response body and headers
-    resp->body_.assign(content.begin(), content.end());
-
-    // Set headers
-    resp->set_header("Content-Type", "text/html; charset=UTF-8");
-
-    // Convert size to string (C++98 compatible)
-    std::ostringstream content_length;
-    content_length << resp->body_.size();
-    resp->set_header("Content-Length", content_length.str());
-
-    log(LOG_DEBUG, "Generated error page for status %d (%zu bytes)",
-        response_status, resp->body_.size());
 }
 
 // ==================== ERROR PAGE GENERATION ====================
 
+// TODO: Set response_data->body_fd_ to a file descriptor if the error page
+// is a file, so it can be sent directly without loading into memory
 std::string ErrorHandler::get_error_page_content(int response_status,
                                                  const VirtualServer& config) {
     // Check if custom error page is configured

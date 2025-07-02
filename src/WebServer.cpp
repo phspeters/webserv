@@ -616,7 +616,6 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
                 ErrorHandler::generate_error_response(conn, status);
                 // TODO: ResponseWriter try to serialize response to
                 // write_buffer_
-                conn->conn_state_ = CONN_WRITING_RESPONSE;
                 return;
             }
             log_request(LOG_TRACE, conn);
@@ -867,8 +866,9 @@ ParseStatus WebServer::validate_method(Connection* conn) {
     }
     log(LOG_ERROR, "Method '%s' not allowed for location: %s", method.c_str(),
         location->path_.c_str());
-    // TODO: include Allow header in the response
-    // conn->request_data_->set_header("Allow", location->allowed_methods_);
+
+    std::string allowed_methods_str = join(location->allowed_methods_, ", ");
+    conn->response_data_->set_error_header("Allow", allowed_methods_str);
     return PARSE_METHOD_NOT_ALLOWED;
 }
 

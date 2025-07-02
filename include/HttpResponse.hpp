@@ -15,6 +15,9 @@ struct HttpResponse {
     std::string version_;
 
     std::map<std::string, std::string> headers_;
+    std::map<std::string, std::string>
+        error_headers_;  // Headers that are only set on error responses, not
+                         // cleared before generating the response
 
     std::vector<char> body_;
     int body_fd_;  // File descriptor for file-based responses (e.g., static
@@ -35,6 +38,7 @@ struct HttpResponse {
     //--------------------------------------
     void set_status(int code);
     void set_header(const std::string& name, const std::string& value);
+    void set_error_header(const std::string& name, const std::string& value);
 
     std::string get_header(const std::string& name) const;
     std::string get_headers_string() const;

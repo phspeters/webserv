@@ -1,10 +1,19 @@
 #include "common.hpp"
 
-HttpResponse::HttpResponse() : status_code_(OK), body_fd_(-1), content_length_(0) {
+HttpResponse::HttpResponse()
+    : status_code_(OK), body_fd_(-1), content_length_(0) {
     version_ = "HTTP/1.1";
 }
 
 HttpResponse::~HttpResponse() {}
+
+void HttpResponse::set_status(int code) {
+    status_code_ = code;
+    status_message_ = get_status_message(code);
+
+    log(LOG_TRACE, "Response status set: %d %s", status_code_,
+        status_message_.c_str());
+}
 
 void HttpResponse::set_header(const std::string& name,
                               const std::string& value) {
@@ -20,12 +29,18 @@ void HttpResponse::set_header(const std::string& name,
         value.c_str());
 }
 
-void HttpResponse::set_status(int code) {
-    status_code_ = code;
-    status_message_ = get_status_message(code);
+void HttpResponse::set_error_header(const std::string& name,
+                                    const std::string& value) {
+    // Case-insensitive lookup for error headers
+    std::string lower_name = name;
+    for (size_t i = 0; i < lower_name.size(); ++i) {
+        lower_name[i] = std::tolower(static_cast<unsigned char>(lower_name[i]));
+    }
 
-    log(LOG_TRACE, "Response status set: %d %s", status_code_,
-        status_message_.c_str());
+    error_headers_[lower_name] = value;
+
+    log(LOG_TRACE, "Response error header set: '%s: %s'", lower_name.c_str(),
+        value.c_str());
 }
 
 std::string HttpResponse::get_header(const std::string& name) const {
@@ -92,6 +107,7 @@ void HttpResponse::clear() {
     status_message_.clear();
     version_ = "HTTP/1.1";
     headers_.clear();
+    error_headers_.clear();
     body_.clear();
     body_fd_ = -1;
     content_length_ = 0;
