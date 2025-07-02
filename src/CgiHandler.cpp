@@ -440,41 +440,47 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
 }
 
 void CgiHandler::handle_cgi_write(Connection* conn) {
-    // Write request body to CGI's stdin pipe
-    ssize_t bytes_written = write(conn->cgi_context_->cgi_pipe_stdin_fd_,
-                                  conn->request_data_->body_buffer_.data(),
-                                  conn->request_data_->body_buffer_.size());
-
-    if (bytes_written < 0) {
-        log(LOG_ERROR, "Failed to write to CGI stdin pipe: %s",
-            strerror(errno));
+    if (!conn || !conn->cgi_context_ || conn->cgi_context_->cgi_pipe_stdin_fd_ < 0) {
+        log(LOG_ERROR, "CGI write: Invalid connection or pipe");
         finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
         return;
     }
 
-    // Clear written bytes from request body after writing
-    conn->request_data_->body_buffer_.erase(
-        conn->request_data_->body_buffer_.begin(),
-        conn->request_data_->body_buffer_.begin() + bytes_written);
+    Buffer& body_buffer = conn->request_data_->body_buffer_;
+    int fd = conn->cgi_context_->cgi_pipe_stdin_fd_;
 
-    // If all data is written, close the pipe and switch to reading state
-    if (conn->request_data_->body_buffer_.empty()) {
-        close(conn->cgi_context_->cgi_pipe_stdin_fd_);
-        conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;  // Mark as closed
-        conn->cgi_context_->cgi_handler_state_ =
-            CGI_READING_FROM_PIPE;  // Switch to reading state
-        /* Temporarily commented out to avoid compiling issues
-                // Register the stdout pipe for reading
-                if (!WebServer::register_epoll_events(
-                        conn->cgi_context_->cgi_pipe_stdout_fd_, EPOLLIN)) {
-                    log(LOG_ERROR, "Failed to register CGI stdout pipe with
-           epoll"); finalize_cgi_error(conn, INTERNAL_SERVER_ERROR); return;
-                }*/
+    // Write as much as possible from the buffer to the pipe
+    ssize_t bytes_written = body_buffer.write_to(fd);
 
+    if (bytes_written < 0) {
+        log(LOG_ERROR, "Failed to write to CGI stdin pipe: %s", strerror(errno));
+        finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
+        return;
+    }
+
+    if (body_buffer.empty()) {
+        // All data sent, close the stdin pipe
+        close(fd);
+        conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
+        
+        // Create IOContext for stdout pipe and add to epoll for reading
+        IOContext* stdout_ctx = conn->add_io_context(
+            conn->cgi_context_->cgi_pipe_stdout_fd_, 
+            FD_CGI_PIPE_READ, 
+            EPOLLIN
+        );
+        
+        if (!stdout_ctx) {
+            log(LOG_ERROR, "Failed to register CGI stdout pipe with epoll for client %d", conn->client_fd_);
+            finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
+            return;
+        }
+        
+        conn->cgi_context_->cgi_handler_state_ = CGI_READING_FROM_PIPE;
+        log(LOG_DEBUG, "CGI: Finished writing to stdin, switching to read mode for client %d", conn->client_fd_);
     } else {
         // Still have more data to write, keep the state as writing
-        log(LOG_DEBUG, "Partial write to CGI stdin pipe for client %d",
-            conn->client_fd_);
+        log(LOG_DEBUG, "Partial write to CGI stdin pipe for client %d, %zu bytes left", conn->client_fd_, body_buffer.readable_bytes());
     }
 }
 

@@ -1129,8 +1129,20 @@ void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
 }
 
 void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
-    log(LOG_FATAL, "handle_cgi_write_event called for client '%s'",
-        ctx->conn_->client_fd_);
-    (void)ctx;
+    // event_flags is not necessary here because this handler is only registered for EPOLLOUT events on the CGI pipe.
     (void)event_flags;
+    
+    Connection* conn = ctx->conn_;
+    if (!conn || !conn->active_handler_) {
+        log(LOG_FATAL, "handle_cgi_write_event: Connection or active handler is NULL");
+        return;
+    }
+    
+    // Call the CGI handler's write logic
+    cgi_handler_->handle_cgi_write(conn);
+    
+    // If the CGI handler changed state to reading, we don't need to do anything else
+    // The handler will have already registered the stdout pipe for reading
+    // If there's still data to write, the handler will keep the current state
+    // and epoll will call this handler again when the pipe is ready for more writing
 }
