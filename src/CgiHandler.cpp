@@ -513,24 +513,15 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
         // result < 0 means error, but continue anyway (process might be gone)
     }
 
-    // --- New implementation using Buffer ---
+    // --- New implementation using only high-level Buffer API ---
     Buffer& buffer = conn->cgi_context_->cgi_output_buffer_;
-    size_t writable = buffer.writable_space();
-    if (writable == 0) buffer.compact();
-    writable = buffer.writable_space();
-    if (writable == 0) {
-        log(LOG_ERROR, "CGI output buffer is full for client %d", conn->client_fd_);
-        finalize_cgi_error(conn, INTERNAL_SERVER_ERROR);
-        return;
-    }
-    ssize_t bytes_read = read(conn->cgi_context_->cgi_pipe_stdout_fd_, buffer.write_ptr(), writable);
+    ssize_t bytes_read = buffer.read_from(conn->cgi_context_->cgi_pipe_stdout_fd_);
     if (bytes_read < 0) {
         log(LOG_ERROR, "CGI: Failed to read from stdout pipe for client %d: %s", conn->client_fd_, strerror(errno));
         finalize_cgi_error(conn, BAD_GATEWAY);
         return;
     }
     if (bytes_read > 0) {
-        buffer.has_written(bytes_read);
         log(LOG_DEBUG, "CGI: Read %zd bytes from stdout for client %d. Total buffer: %zu", bytes_read, conn->client_fd_, buffer.readable_bytes());
         parse_cgi_output(conn); // This may change the handler state
         if (conn->cgi_context_->cgi_handler_state_ == CGI_ERROR) {
@@ -569,7 +560,6 @@ void CgiHandler::handle_cgi_read(Connection* conn) {
     finalize_cgi_response(conn);
     return;
 }
-
 void CgiHandler::parse_cgi_output(Connection* conn) {
     (void)conn;  // To avoid unused parameter warning
     /*Temporarily commented out to avoid compiling issues

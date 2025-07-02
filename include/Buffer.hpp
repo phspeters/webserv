@@ -58,7 +58,9 @@ class Buffer {
     // If there is pipelined data, it is compacted. Otherwise, the buffer is
     // reset.
     void prepare_for_next_request();
-    
+
+   private:
+
     // Slides unread data to the beginning to maximize writable space.
     void compact();
  
@@ -67,8 +69,6 @@ class Buffer {
     char* write_ptr() { return &buffer_[last_]; }
  
     void has_written(size_t bytes_written) { last_ += bytes_written; }
-
-   private:
     std::vector<char> buffer_;
     size_t pos_;   // Start of readable data.
     size_t last_;  // End of readable data (start of writable space).
