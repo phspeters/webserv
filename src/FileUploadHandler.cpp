@@ -181,11 +181,7 @@ bool FileUploadHandler::write_file_to_disk(Connection* conn,
         // Try to remove partially written file
         std::remove(file_path.c_str());
 
-        if (errno == ENOSPC) {
-            ErrorHandler::generate_error_response(conn, INSUFFICIENT_STORAGE);
-        } else {
-            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        }
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         return false;
     }
 

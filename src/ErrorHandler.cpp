@@ -147,7 +147,7 @@ void serialize_response_to_buffer(Connection* conn) {
 
     // Serialize headers
     std::string headers = conn->response_data_->get_headers_string();
-    if (conn->write_buffer_.append(headers.data(), headers.size()) ==
+    if ((ssize_t)conn->write_buffer_.append(headers.data(), headers.size()) ==
         BUFFER_FULL) {
         log(LOG_ERROR,
             "serialize_response_to_buffer: Write buffer full while appending "
@@ -158,7 +158,7 @@ void serialize_response_to_buffer(Connection* conn) {
     // Append body if present
     std::vector<char>& body = conn->response_data_->body_;
     if (!body.empty()) {
-        if (conn->write_buffer_.append(body.data(), body.size()) ==
+        if ((ssize_t)conn->write_buffer_.append(body.data(), body.size()) ==
             BUFFER_FULL) {
             log(LOG_ERROR,
                 "serialize_response_to_buffer: Write buffer full while "

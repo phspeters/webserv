@@ -1103,10 +1103,29 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
 }
 
 void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
-    log(LOG_FATAL, "handle_cgi_read_event called for client '%s'",
-        ctx->conn_->client_fd_);
-    (void)ctx;
+    // event_flags is not necessary here because this handler is only registered for EPOLLIN events on the CGI pipe.
     (void)event_flags;
+    
+    Connection* conn = ctx->conn_;
+    if (!conn || !conn->active_handler_) {
+        log(LOG_FATAL, "handle_cgi_read_event: Connection or active handler is NULL");
+        return;
+    }
+    // Call the CGI handler's read logic
+    cgi_handler_->handle_cgi_read(conn);
+
+    // Write the response to the buffer if ready
+    response_writer_->write_response_to_buffer(conn);
+    IOContext* client_ctx = conn->io_contexts_[0];
+    if (!conn->write_buffer_.empty()) {
+        if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
+            log(LOG_ERROR, "handle_cgi_read_event: Failed to update epoll events for client_fd %d", conn->client_fd_);
+            close_client_connection(conn);
+        }
+        conn->conn_state_ = CONN_WRITING_RESPONSE;
+    } else {
+        log(LOG_DEBUG, "handle_cgi_read_event: No data to write for client_fd %d", conn->client_fd_);
+    }
 }
 
 void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
