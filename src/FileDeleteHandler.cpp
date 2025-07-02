@@ -38,11 +38,54 @@ void FileDeleteHandler::handle_event(Connection* conn) {
     conn->conn_state_ = CONN_WRITING_RESPONSE;
 }
 
-void FileDeleteHandler::check_permissions(Connection* conn) { (void)conn; }
+void FileDeleteHandler::check_permissions(Connection* conn) {
+    // Check if we can access the target directory for deletion
+    std::string file_path = parse_absolute_path(conn);
+    if (file_path.empty()) {
+        log(LOG_ERROR, "FileDeleteHandler: Failed to determine file path for client_fd %d", conn->client_fd_);
+        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
+        return;
+    }
 
-void FileDeleteHandler::setup_handler(Connection* conn) { (void)conn; }
+    // Get directory path
+    size_t last_slash = file_path.find_last_of('/');
+    std::string dir_path = (last_slash != std::string::npos) ? file_path.substr(0, last_slash) : ".";
 
-void FileDeleteHandler::cleanup_handler(Connection* conn) { (void)conn; }
+    // Check if directory is writable (needed to delete files)
+    if (access(dir_path.c_str(), W_OK) != 0) {
+        log(LOG_ERROR, "FileDeleteHandler: No write permission for directory: %s", dir_path.c_str());
+        ErrorHandler::generate_error_response(conn, FORBIDDEN);
+        return;
+    }
+
+    // Check if file exists and is accessible
+    if (access(file_path.c_str(), F_OK) != 0) {
+        if (errno == ENOENT) {
+            log(LOG_ERROR, "FileDeleteHandler: File not found: %s", file_path.c_str());
+            ErrorHandler::generate_error_response(conn, NOT_FOUND);
+        } else if (errno == EACCES) {
+            log(LOG_ERROR, "FileDeleteHandler: Access denied to file: %s", file_path.c_str());
+            ErrorHandler::generate_error_response(conn, FORBIDDEN);
+        } else {
+            log(LOG_ERROR, "FileDeleteHandler: Error accessing file %s: %s", file_path.c_str(), strerror(errno));
+            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+        }
+        return;
+    }
+
+    log(LOG_DEBUG, "FileDeleteHandler: Permissions check passed for client_fd %d", conn->client_fd_);
+}
+
+void FileDeleteHandler::setup_handler(Connection* conn) {
+    // No specific setup needed for file deletion
+    log(LOG_DEBUG, "FileDeleteHandler: Setup complete for client_fd %d", conn->client_fd_);
+}
+
+void FileDeleteHandler::cleanup_handler(Connection* conn) {
+    // No specific cleanup needed for file deletion
+    log(LOG_DEBUG, "FileDeleteHandler: Cleanup complete for client_fd %d", conn->client_fd_);
+}
+
 
 bool FileDeleteHandler::validate_delete_request(Connection* conn) {
     // 1. Basic connection validation

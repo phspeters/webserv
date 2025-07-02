@@ -33,11 +33,62 @@ void CgiHandler::handle_event(Connection* conn) {
     }
 }
 
-void CgiHandler::check_permissions(Connection* conn) { (void)conn; }
+void CgiHandler::check_permissions(Connection* conn) {
+    // Check if CGI script exists and is executable
+    std::string script_path = parse_absolute_path(conn);
+    if (script_path.empty()) {
+        log(LOG_ERROR, "CgiHandler: Failed to determine script path for client_fd %d", conn->client_fd_);
+        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+        return;
+    }
 
-void CgiHandler::setup_handler(Connection* conn) { (void)conn; }
+    struct stat file_stat;
+    if (stat(script_path.c_str(), &file_stat) != 0) {
+        if (errno == ENOENT) {
+            log(LOG_ERROR, "CgiHandler: Script not found: %s", script_path.c_str());
+            ErrorHandler::generate_error_response(conn, NOT_FOUND);
+        } else if (errno == EACCES) {
+            log(LOG_ERROR, "CgiHandler: Access denied to script: %s", script_path.c_str());
+            ErrorHandler::generate_error_response(conn, FORBIDDEN);
+        } else {
+            log(LOG_ERROR, "CgiHandler: Error accessing script %s: %s", script_path.c_str(), strerror(errno));
+            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+        }
+        return;
+    }
 
-void CgiHandler::cleanup_handler(Connection* conn) { (void)conn; }
+    // Check if it's a regular file
+    if (!S_ISREG(file_stat.st_mode)) {
+        log(LOG_ERROR, "CgiHandler: Script is not a regular file: %s", script_path.c_str());
+        ErrorHandler::generate_error_response(conn, FORBIDDEN);
+        return;
+    }
+
+    // Check if script is executable
+    if (!(file_stat.st_mode & S_IXUSR)) {
+        log(LOG_ERROR, "CgiHandler: Script is not executable: %s", script_path.c_str());
+        ErrorHandler::generate_error_response(conn, FORBIDDEN);
+        return;
+    }
+
+    log(LOG_DEBUG, "CgiHandler: Permissions check passed for client_fd %d", conn->client_fd_);
+}
+
+void CgiHandler::setup_handler(Connection* conn) {
+    // Create CGI context
+    conn->cgi_context_ = new CgiContext();
+    log(LOG_DEBUG, "CgiHandler: Setup complete for client_fd %d", conn->client_fd_);
+}
+
+void CgiHandler::cleanup_handler(Connection* conn) {
+    // Clean up CGI resources
+    if (conn->cgi_context_) {
+        cleanup_cgi_resources(conn);
+        delete conn->cgi_context_;
+        conn->cgi_context_ = NULL;
+    }
+    log(LOG_DEBUG, "CgiHandler: Cleanup complete for client_fd %d", conn->client_fd_);
+}
 
 bool CgiHandler::validate_cgi_request(Connection* conn) {
     // 1. Check redirect (same as StaticFileHandler)
