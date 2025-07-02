@@ -23,7 +23,8 @@ static const std::string DEFAULT_INDEX = "index.html";
 
 // Constructor for Location with defaults
 Location::Location()
-    : autoindex_(DEFAULT_AUTOINDEX),
+    : type_(LOC_DEFAULT),
+      autoindex_(DEFAULT_AUTOINDEX),
       cgi_enabled_(DEFAULT_CGI_ENABLED),
       index_(DEFAULT_INDEX),
       client_max_body_size_(DEFAULT_LOCATION_MAX_BODY_SIZE) {
@@ -87,10 +88,14 @@ bool VirtualServer::parse_location_block(std::ifstream& file,
                                          std::string line) {
     // Extract location path
     size_t pathStart = line.find_first_not_of(" \t", 8);  // Skip "location"
-    if (pathStart == std::string::npos) return false;
+    if (pathStart == std::string::npos) {
+        return false;
+    }
 
     size_t pathEnd = line.find_first_of(" \t{", pathStart);
-    if (pathEnd == std::string::npos) return false;
+    if (pathEnd == std::string::npos) {
+        return false;
+    }
 
     std::string path = line.substr(pathStart, pathEnd - pathStart);
 
@@ -99,10 +104,14 @@ bool VirtualServer::parse_location_block(std::ifstream& file,
     if (bracePos == std::string::npos) {
         // Get next line and look for brace
         std::string nextLine;
-        if (!std::getline(file, nextLine)) return false;
+        if (!std::getline(file, nextLine)) {
+            return false;
+        }
 
         nextLine = trim(nextLine);
-        if (nextLine != "{") return false;
+        if (nextLine != "{") {
+            return false;
+        }
     }
 
     // Create a new Location
@@ -357,53 +366,13 @@ bool VirtualServer::parse_directive(const std::string& line, std::string& key,
     return !value.empty();
 }
 
-// TODO: implement new rules for host validation (forbid non printable only?)
 bool VirtualServer::is_valid_host() const {
-    // TEMP
-    return true;
-
-    // Check if the host is valid IP address format
-    std::string::size_type start = 0;
-    int octets = 0;
-
-    while (start < host_.length() && octets < 4) {
-        std::string::size_type end = host_.find('.', start);
-        if (octets < 3 && end == std::string::npos) {
-            log(LOG_ERROR, "Invalid IP address format: %s", host_.c_str());
+    for (size_t i = 0; i < host_.length(); i++) {
+        if (!isprint(host_[i]) || isspace(host_[i])) {
+            log(LOG_ERROR, "Invalid character in host: %s", host_.c_str());
             return false;
         }
-        if (octets == 3) {
-            end = host_.length();
-        }
-
-        std::string octet = host_.substr(start, end - start);
-        // Check if octet is a valid number
-        for (size_t i = 0; i < octet.length(); i++) {
-            if (!isdigit(octet[i])) {
-                log(LOG_ERROR, "Invalid IP address format (non-digit): %s",
-                    host_.c_str());
-                return false;
-            }
-        }
-
-        // Check octet range (0-255)
-        int value = atoi(octet.c_str());
-        if (value < 0 || value > 255) {
-            log(LOG_ERROR, "Invalid IP address (octet out of range): %s",
-                host_.c_str());
-            return false;
-        }
-
-        start = end + 1;
-        octets++;
     }
-
-    if (octets != 4 || start != host_.length() + 1) {
-        log(LOG_ERROR, "Invalid IP address (incorrect format): %s",
-            host_.c_str());
-        return false;
-    }
-
     return true;
 }
 
@@ -421,15 +390,21 @@ bool VirtualServer::has_valid_locations() const {
         return false;
     }
 
-    // Validate each location
+    bool has_root = false;
     for (size_t i = 0; i < locations_.size(); i++) {
+        if (locations_[i].path_ == "/") {
+            has_root = true;
+        }
         if (!locations_[i].is_valid()) {
             log(LOG_ERROR, "Invalid location block: %s",
                 locations_[i].path_.c_str());
             return false;
         }
     }
-
+    if (!has_root) {
+        log(LOG_ERROR, "Server must have a 'location /' block as a fallback");
+        return false;
+    }
     return true;
 }
 
@@ -483,9 +458,10 @@ bool VirtualServer::is_valid() const {
         return false;
     }
 
-    // if (!has_valid_error_pages()) {
-    //     return false;
-    // }
+    // TODO: Uncomment or erase this check
+    //  if (!has_valid_error_pages()) {
+    //      return false;
+    //  }
 
     return true;
 }
@@ -496,9 +472,11 @@ bool Location::is_valid() const {
         return false;
     }
 
-    // Check if path starts with /
-    if (path_[0] != '/') {
-        log(LOG_ERROR, "Location path must start with /: %s", path_.c_str());
+    // Check if path starts with / or is cgi extension
+    if (!(path_[0] == '/' || (path_[0] == '.' && is_cgi_extension(path_)))) {
+        log(LOG_ERROR,
+            "Location path must be a CGI extension or must start with '/': %s",
+            path_.c_str());
         return false;
     }
 

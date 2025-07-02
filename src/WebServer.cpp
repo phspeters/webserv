@@ -536,31 +536,6 @@ void WebServer::signal_handler(int signal) {
     }
 }
 
-bool WebServer::is_cgi_extension(const std::string& request_uri) const {
-    std::string extension = get_file_extension(request_uri);
-    if (!extension.empty() &&
-        (extension == ".php" || extension == ".py" || extension == ".sh")) {
-        log(LOG_DEBUG, "Request uri: '%s' is a CGI script",
-            request_uri.c_str());
-        return true;
-    }
-    return false;
-}
-
-std::string WebServer::get_file_extension(const std::string& uri_path) const {
-    size_t dot_pos = uri_path.find_last_of('.');
-    if (dot_pos == std::string::npos) {
-        return "";
-    }
-    std::string extension = uri_path.substr(dot_pos);
-    // Convert to lowercase for case-insensitive comparison
-    for (std::string::iterator it = extension.begin(); it != extension.end();
-         ++it) {
-        *it = std::tolower(*it);
-    }
-    return extension;
-}
-
 void WebServer::accept_new_connection(int listener_fd) {
     log(LOG_DEBUG,
         "accept_new_connection: Processing new connection on listener_fd "
@@ -636,7 +611,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
 
         if (conn->conn_state_ == CONN_READING_REQUEST ||
             conn->conn_state_ == CONN_GENERATING_RESPONSE) {
-            ParseStatus status = process_request_data(conn);
+            ParseStatus status = handle_request_parsing(conn);
             if (status >= PARSE_ERROR) {
                 ErrorHandler::generate_error_response(conn, status);
                 // TODO: ResponseWriter try to serialize response to
@@ -714,7 +689,7 @@ bool WebServer::handle_keep_alive(Connection* conn) {
     }
 }
 
-ParseStatus WebServer::process_request_data(Connection* conn) {
+ParseStatus WebServer::handle_request_parsing(Connection* conn) {
     ParseStatus status = PARSE_SUCCESS;
 
     while (true) {
@@ -783,10 +758,6 @@ ParseStatus WebServer::process_request_data(Connection* conn) {
         }
     }
 }
-
-// -----------------------------------------------------------------------------
-// ------------------------- PROCESS REQUEST BUNDLE ----------------------------
-// -----------------------------------------------------------------------------
 
 ParseStatus WebServer::process_request(Connection* conn) {
     log(LOG_DEBUG, "Processing request for connection: %i", conn->client_fd_);
@@ -959,8 +930,6 @@ ParseStatus WebServer::validate_body_handling(Connection* conn) {
     return PARSE_SUCCESS;
 }
 
-// ------------- TODO: fix functions below -----------
-
 AHandler* WebServer::choose_handler(Connection* conn) {
     log(LOG_DEBUG,
         "choose_handler: Finding handler for client_fd %d, method %s, path "
@@ -972,32 +941,24 @@ AHandler* WebServer::choose_handler(Connection* conn) {
     const std::string& request_method = conn->request_data_->method_;
     const std::string& request_path = conn->request_data_->path_;
 
-    // TODO - Change CGI condition to cgi_enabled + executable file + valid
-    // script extension?
-    // Return appropriate handler based on location config
-    // CHECK AND TEST - Carol
     if (matching_location->cgi_enabled_ && is_cgi_extension(request_path) &&
         request_method != "DELETE") {
-        // CGI handler for CGI-enabled locations
         log(LOG_DEBUG,
             "choose_handler: Using CgiHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
         return cgi_handler_;
     } else if (request_method == "POST") {
-        // FileUploadHandler for file uploads
         log(LOG_DEBUG,
             "choose_handler: Using FileUploadHandler for client_fd %d, "
             "path %s",
             conn->client_fd_, matching_location->path_.c_str());
         return file_upload_handler_;
     } else if (request_method == "DELETE") {
-        // DeleteHandler for delete requests
         log(LOG_DEBUG,
             "choose_handler: Using DeleteHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
         return file_delete_handler_;
     } else {
-        // Default to StaticFileHandler for regular files
         log(LOG_DEBUG,
             "choose_handler: Using StaticFileHandler for client_fd %d, "
             "path %s",
@@ -1006,65 +967,56 @@ AHandler* WebServer::choose_handler(Connection* conn) {
     }
 }
 
-// Add Location Type Check
-const Location* WebServer::match_location(const VirtualServer* virtual_server,
-                                          const std::string& uri) const {
-    // Use a reference instead of making a copy
-    const std::vector<Location>& locations_ = virtual_server->locations_;
-    const Location* best_match = NULL;
+const Location* WebServer::match_location(const VirtualServer* vs,
+                                          const std::string& path) const {
+    const Location* best_prefix = NULL;
+    const Location* best_extension = NULL;
 
-    for (std::vector<Location>::const_iterator it = locations_.begin();
-         it != locations_.end(); ++it) {
-        const Location& location = *it;
-        // Check if the request path starts with the location path
-        if (uri.find(location.path_) == 0) {
-            // Make sure we match complete segments
-            if (location.path_ == "/" ||  // Root always matches
-                uri == location.path_ ||  // Exact match
-                (uri.length() > location.path_.length() &&
-                 (uri[location.path_.length()] == '/' ||
-                  location.path_[location.path_.length() - 1] == '/'))) {
-                if (!best_match ||
-                    location.path_.length() > best_match->path_.length()) {
-                    best_match = &location;
+    for (size_t i = 0; i < vs->locations_.size(); ++i) {
+        const Location& loc = vs->locations_[i];
+        if (loc.type_ == LOC_EXTENSION) {
+            // Extension match: path ends with loc.path_
+            if (path.length() >= loc.path_.length() &&
+                path.compare(path.length() - loc.path_.length(),
+                             loc.path_.length(), loc.path_) == 0) {
+                if (!best_extension ||
+                    loc.path_.length() > best_extension->path_.length()) {
+                    best_extension = &loc;
+                }
+            }
+        } else {
+            // Prefix match: path starts with loc.path_
+            if (path.find(loc.path_) == 0 &&
+                (loc.path_ == "/" || path == loc.path_ ||
+                 (path.length() > loc.path_.length() &&
+                  (path[loc.path_.length()] == '/' ||
+                   loc.path_[loc.path_.length() - 1] == '/')))) {
+                if (!best_prefix ||
+                    loc.path_.length() > best_prefix->path_.length()) {
+                    best_prefix = &loc;
                 }
             }
         }
     }
 
-    if (!best_match) {
-        log(LOG_FATAL, "No matching location found for URI: %s", uri.c_str());
-    } else {
-        log(LOG_DEBUG, "Found matching location: %s",
-            best_match->path_.c_str());
-
-        std::string allowed_methods_str = "";
-        for (size_t i = 0; i < best_match->allowed_methods_.size(); i++) {
-            if (i > 0) {
-                allowed_methods_str += ", ";
-            }
-            allowed_methods_str += best_match->allowed_methods_[i];
-        }
-
-        log(LOG_TRACE,
-            "Location details: path=%s, root=%s, autoindex=%d, "
-            "cgi_enabled=%d, "
-            "allowed_methods=%s, index=%s, redirect=%s",
-            best_match->path_.c_str(), best_match->root_.c_str(),
-            best_match->autoindex_, best_match->cgi_enabled_,
-            allowed_methods_str.c_str(), best_match->index_.c_str(),
-            best_match->redirect_.c_str());
+    // Prefer extension match over prefix match if both exist
+    if (best_extension) {
+        return best_extension;
+    }
+    if (best_prefix) {
+        return best_prefix;
     }
 
-    return best_match;
+    // Should never reach this because we enforce a '/' location at parsing
+    log(LOG_FATAL,
+        "No matching location found for path '%s' on virtual server '%s:%d'",
+        path.c_str(), vs->host_.c_str(), vs->port_);
+    return NULL;
 }
 
-// TODO: improve this ugly ass function
 void WebServer::match_host_header(Connection* conn) {
     if (!conn || !conn->request_data_ || !conn->default_virtual_server_) {
         log(LOG_FATAL, "match_host_header: Invalid connection or data.");
-        // conn->virtual_server_ should already be default_virtual_server_
-        // or NULL if creation failed
         return;
     }
 
@@ -1085,104 +1037,27 @@ void WebServer::match_host_header(Connection* conn) {
         target_hostname = target_hostname.substr(0, colon_pos);
     }
 
-    // The connection's default_virtual_server_ tells us the port and listen
-    // IP this connection is associated with.
-    // int listener_port = conn->default_virtual_server_->port_;
-    std::string listener_host_ip =
-        conn->default_virtual_server_->host_;  // IP from 'listen' directive
-
-    // VirtualServer* matched_vs = NULL;
-
-    /*
-    // 1. Check servers listening on the specific IP:Port of the connection
-    std::map<int, std::map<std::string, std::vector<VirtualServer*> > >::
-        const_iterator port_it = port_to_hosts_.find(listener_port);
-    if (port_it != port_to_hosts_.end()) {
-        const std::map<std::string, std::vector<VirtualServer*> >&
-            hosts_on_port = port_it->second;
-
-        // Check specific listener IP
-        std::map<std::string, std::vector<VirtualServer*> >::const_iterator
-            host_ip_it = hosts_on_port.find(listener_host_ip);
-        if (host_ip_it != hosts_on_port.end()) {
-            const std::vector<VirtualServer*>& candidate_servers =
-                host_ip_it->second;
-            for (std::vector<VirtualServer*>::const_iterator server_it =
-                     candidate_servers.begin();
-                 server_it != candidate_servers.end(); ++server_it) {
-                VirtualServer* vs = *server_it;
-                for (std::vector<std::string>::const_iterator name_it =
-                         vs->server_names_.begin();
-                     name_it != vs->server_names_.end(); ++name_it) {
-                    if (*name_it == target_hostname) {
-                        matched_vs = vs;
-                        break;  // Found specific server_name match on
-                                // specific IP
-                    }
-                }
-                if (matched_vs) {
-                    break;
-                }  // Break if we found a match
-            }
-        }
-
-        // 2. If no match on specific IP, check servers listening on 0.0.0.0
-        // (wildcard) for the same port
-        if (!matched_vs && listener_host_ip != "0.0.0.0") {
-            std::map<std::string, std::vector<VirtualServer*> >::const_iterator
-                wildcard_host_ip_it = hosts_on_port.find("0.0.0.0");
-            if (wildcard_host_ip_it != hosts_on_port.end()) {
-                const std::vector<VirtualServer*>& candidate_wildcard_servers =
-                    wildcard_host_ip_it->second;
-                for (std::vector<VirtualServer*>::const_iterator server_it =
-                         candidate_wildcard_servers.begin();
-                     server_it != candidate_wildcard_servers.end();
-                     ++server_it) {
-                    VirtualServer* vs = *server_it;
-                    for (std::vector<std::string>::const_iterator name_it =
-                             vs->server_names_.begin();
-                         name_it != vs->server_names_.end(); ++name_it) {
-                        if (*name_it == target_hostname) {
-                            matched_vs = vs;
-                            break;  // Found specific server_name match on
-                                    // wildcard IP
-                        }
-                    }
-                    if (matched_vs) {
-                        break;
-                    }
-                }
-            }
+    // Loop through all virtual servers for this listener
+    std::vector<VirtualServer*> vs_candidates =
+        listener_to_virtual_servers_[conn->io_contexts_[0]->fd_];
+    for (std::vector<VirtualServer*>::iterator it = vs_candidates.begin();
+         it != vs_candidates.end(); ++it) {
+        if ((*it)->host_ == target_hostname) {
+            conn->virtual_server_ = *it;
+            log(LOG_DEBUG, "Matched Host header '%s' to virtual server %s:%d",
+                target_hostname.c_str(), (*it)->host_.c_str(), (*it)->port_);
+            return;
         }
     }
 
-    if (matched_vs) {
-        log(LOG_DEBUG,
-            "Matched Host header '%s' to virtual server with primary name "
-            "'%s' "
-            "on %s:%d",
-            request_host_header_val.c_str(),
-            matched_vs->server_names_.empty()
-                ? matched_vs->host_.c_str()
-                : matched_vs->server_names_[0].c_str(),
-            matched_vs->host_.c_str(), matched_vs->port_);
-        conn->virtual_server_ = matched_vs;
-    } else {
-        // No specific server_name match found, conn->virtual_server_
-        // remains as conn->default_virtual_server_.
-        log(LOG_DEBUG,
-            "No specific virtual server for Host header '%s'. Using "
-            "default "
-            "for listener %s:%d (primary name '%s').",
-            request_host_header_val.c_str(),
-            conn->virtual_server_->host_.c_str(), conn->virtual_server_->port_,
-            conn->virtual_server_->server_names_.empty()
-                ? conn->virtual_server_->host_.c_str()
-                : conn->virtual_server_->server_names_[0].c_str());
-    }*/
+    // If no match found, use the default virtual server
+    conn->virtual_server_ = conn->default_virtual_server_;
+    log(LOG_DEBUG,
+        "No match for Host header '%s'. Using default virtual server %s:%d",
+        target_hostname.c_str(), conn->virtual_server_->host_.c_str(),
+        conn->virtual_server_->port_);
+    return;
 }
-
-// -----------------------------------------------------------------------------
 
 void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
     Connection* conn = ctx->conn_;
@@ -1190,6 +1065,11 @@ void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
     if (event_flags & EPOLLOUT) {
         if (conn && conn->active_handler_) {
             conn->active_handler_->handle_event(conn);
+        } else {
+            log(LOG_FATAL,
+                "handle_file_upload_event: Connection or active handler is "
+                "NULL");
+            return;
         }
 
         response_writer_->write_response_to_buffer(conn);

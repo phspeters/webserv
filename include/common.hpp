@@ -86,7 +86,7 @@ enum CgiHandlerState {
 enum WriterState {
     WRITER_START,
     WRITER_WRITING_HEADERS,
-    WRITER_DECIDE_BODY_SOURCE, // New decider state
+    WRITER_DECIDE_BODY_SOURCE,
     WRITER_WRITING_BODY_FROM_BUFFER,
     WRITER_WRITING_BODY_FROM_FD,
     WRITER_DONE
@@ -159,6 +159,8 @@ enum FdType {
     FD_STATIC_FILE,
 };
 
+enum LocType { LOC_DEFAULT, LOC_EXTENSION };
+
 #include "AHandler.hpp"
 #include "Buffer.hpp"
 #include "ErrorHandler.hpp"
@@ -179,5 +181,7 @@ enum FdType {
 std::string trim(const std::string& str);
 std::string get_status_message(int code);
 std::string get_current_gmt_time();
+bool is_cgi_extension(const std::string& request_uri);
+std::string get_file_extension(const std::string& uri_path);
 
 #endif

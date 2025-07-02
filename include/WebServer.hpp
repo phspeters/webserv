@@ -83,7 +83,16 @@ class WebServer {
 
     void handle_client_socket_event(IOContext* ctx, uint32_t event_flags);
     bool read_from_client_socket(Connection* conn);
-    ParseStatus process_request_data(Connection* conn);
+    ParseStatus handle_request_parsing(Connection* conn);
+    ParseStatus process_request(Connection* conn);
+    void match_host_header(Connection* conn);
+    const Location* match_location(const VirtualServer* virtual_server,
+                                   const std::string& path) const;
+    ParseStatus validate_version(Connection* conn);
+    ParseStatus validate_method(Connection* conn);
+    ParseStatus validate_body_handling(Connection* conn);
+    AHandler* choose_handler(Connection* conn);
+    ParserState determine_body_handling_state(Connection* conn);
     bool handle_keep_alive(Connection* conn);
 
     void handle_static_file_event(IOContext* ctx, uint32_t event_flags);
@@ -105,19 +114,6 @@ class WebServer {
     WebServer(const WebServer&);
     WebServer& operator=(const WebServer&);
 
-    //--- TODO: review these methods
-    ParseStatus process_request(Connection* conn);
-    void match_host_header(Connection* conn);
-    const Location* match_location(const VirtualServer* virtual_server,
-                                   const std::string& path) const;
-    ParseStatus validate_version(Connection* conn);
-    ParseStatus validate_method(Connection* conn);
-    ParseStatus validate_body_handling(Connection* conn);
-    AHandler* choose_handler(Connection* conn);
-    ParserState determine_body_handling_state(Connection* conn);
-    bool is_cgi_extension(const std::string& request_uri) const;
-    std::string get_file_extension(const std::string& uri_path) const;
-    //------------------------------
 };  // class WebServer
 
 #endif  // WEBSERVER_HPP

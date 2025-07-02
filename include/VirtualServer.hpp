@@ -45,6 +45,7 @@ struct VirtualServer {
 };  // struct VirtualServer
 
 struct Location {
+    LocType type_;
     std::string path_;
     std::string root_;
     bool autoindex_;

@@ -1,6 +1,5 @@
 #include "common.hpp"
 
-// Helper function to trim whitespace
 std::string trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t");
     if (first == std::string::npos) {
@@ -90,4 +89,29 @@ std::string get_current_gmt_time() {
 
     strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S: ", tm_info);
     return std::string(buffer);
+}
+
+bool is_cgi_extension(const std::string& request_uri) {
+    std::string extension = get_file_extension(request_uri);
+    if (!extension.empty() && (extension == ".php" || extension == ".py" ||
+                               extension == ".sh" || extension == ".bla")) {
+        log(LOG_DEBUG, "Request uri: '%s' is a CGI script",
+            request_uri.c_str());
+        return true;
+    }
+    return false;
+}
+
+std::string get_file_extension(const std::string& uri_path) {
+    size_t dot_pos = uri_path.find_last_of('.');
+    if (dot_pos == std::string::npos) {
+        return "";
+    }
+    std::string extension = uri_path.substr(dot_pos);
+    // Convert to lowercase for case-insensitive comparison
+    for (std::string::iterator it = extension.begin(); it != extension.end();
+         ++it) {
+        *it = std::tolower(*it);
+    }
+    return extension;
 }
