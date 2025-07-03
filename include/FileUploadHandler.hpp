@@ -53,7 +53,15 @@ struct FileUploadContext {
     bool upload_complete;
     std::string filename_;
 
-    FileUploadContext() : file_fd_(-1), upload_complete(false) {}
+    // State for multipart parser
+    std::string part_headers_;
+    bool is_file_part_;
+
+    FileUploadContext()
+        : file_fd_(-1),
+          upload_complete(false),
+          is_file_part_(false) {}
 };
+
 
 #endif  // FILEUPLOADHANDLER_HPP

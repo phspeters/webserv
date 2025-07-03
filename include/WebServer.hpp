@@ -5,6 +5,7 @@
 
 class CgiHandler;
 class RequestParser;
+class MultipartParser;
 class ResponseWriter;
 class StaticFileHandler;
 class FileUploadHandler;
@@ -63,6 +64,7 @@ class WebServer {
     // Owned Components (Composition)
     //--------------------------------------
     RequestParser* request_parser_;
+    MultipartParser* multipart_parser_;
     ResponseWriter* response_writer_;
     //// Handler instances
     StaticFileHandler* static_file_handler_;

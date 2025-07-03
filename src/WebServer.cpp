@@ -6,6 +6,7 @@ WebServer::WebServer()
     : epoll_fd_(-1),
       ready_(false),
       request_parser_(NULL),
+      multipart_parser_(NULL),
       response_writer_(NULL),
       static_file_handler_(NULL),
       cgi_handler_(NULL),
@@ -17,6 +18,7 @@ WebServer::WebServer()
 WebServer::~WebServer() {
     // Clean up owned components
     delete request_parser_;
+    delete multipart_parser_;
     delete response_writer_;
     delete static_file_handler_;
     delete cgi_handler_;
@@ -46,6 +48,7 @@ bool WebServer::init() {
     try {
         // Initialize components
         request_parser_ = new RequestParser();
+        multipart_parser_ = new MultipartParser();
         response_writer_ = new ResponseWriter();
 
         // Initialize handlers
@@ -730,6 +733,13 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
                     state = PARSER_COMPLETE;
                 }
                 break;
+            
+            case PARSER_READING_MULTIPART_BODY:
+                status = multipart_parser_->parse(conn);
+                if (status == PARSE_SUCCESS) {
+                    state = PARSER_COMPLETE;
+                }
+                break;
 
             case PARSER_COMPLETE:
                 log(LOG_DEBUG, "Request parsing complete for fd %d.",
@@ -806,6 +816,18 @@ ParserState WebServer::determine_body_handling_state(Connection* conn) {
         return PARSER_COMPLETE;
     }
 
+    std::string content_type = request->get_header("content-type");
+    if (content_type.find("multipart/form-data") != std::string::npos) {
+        conn->parser_context_.multipart_boundary_ =
+            MultipartParser::extract_boundary(content_type);
+        if (conn->parser_context_.multipart_boundary_.empty()) {
+            log(LOG_ERROR, "Invalid multipart boundary for connection: %i",
+                conn->client_fd_);
+            return PARSER_ERROR;
+        }
+        return PARSER_READING_MULTIPART_BODY;
+    }
+
     std::string transfer_encoding = request->get_header("transfer-encoding");
     if (!transfer_encoding.empty() &&
         transfer_encoding.find("chunked") != std::string::npos) {
@@ -848,7 +870,7 @@ ParseStatus WebServer::validate_method(Connection* conn) {
         conn->client_fd_);
 
     std::string method = conn->request_data_->method_;
-    if (method != "GET" && method != "POST" && method == "PUT" &&
+    if (method != "GET" && method != "POST" && method != "PUT" &&
         method != "DELETE") {
         log(LOG_ERROR, "Invalid HTTP method '%s' in request for connection: %i",
             method.c_str(), conn->client_fd_);
