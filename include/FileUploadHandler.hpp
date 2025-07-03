@@ -48,20 +48,17 @@ class FileUploadHandler : public AHandler {
 
 struct FileUploadContext {
     int file_fd_;
-    Buffer upload_buffer_;
     std::string temp_path_;
-    bool upload_complete;
     std::string filename_;
-
-    // State for multipart parser
-    std::string part_headers_;
-    bool is_file_part_;
+    Buffer upload_buffer_;
+    bool upload_complete;
+    MultipartParser parser_; 
 
     FileUploadContext()
         : file_fd_(-1),
-          upload_complete(false),
-          is_file_part_(false) {}
+          upload_complete(false) {}
 };
+
 
 
 #endif  // FILEUPLOADHANDLER_HPP

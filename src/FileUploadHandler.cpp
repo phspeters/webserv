@@ -219,12 +219,18 @@ void FileUploadHandler::setup_handler(Connection* conn) {
         conn->client_fd_, file_fd);
 }
 
-// TODO: Handle multipart parsing inside handle_event
 void FileUploadHandler::handle_event(Connection* conn) {
-    // Consume from upload_buffer_ and write to temporary file
     if (!conn->file_upload_context_) {
         return;
     }
+
+    ParseStatus status = conn->file_upload_context_->parser_.parse(conn);
+    if (status == PARSE_ERROR) {
+        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
+        return;
+    }
+
+    // Write any parsed file data to the temp file
     Buffer& buffer = conn->file_upload_context_->upload_buffer_;
     int file_fd = conn->file_upload_context_->file_fd_;
     if (!buffer.empty()) {
@@ -233,9 +239,10 @@ void FileUploadHandler::handle_event(Connection* conn) {
             ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
             return;
         }
-        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d",
-            written, file_fd);
+        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d", written, file_fd);
     }
+
+    // If upload is complete, send response
     if (conn->file_upload_context_->upload_complete) {
         send_success_response(conn);
         conn->conn_state_ = CONN_WRITING_RESPONSE;
