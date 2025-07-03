@@ -2,29 +2,9 @@
 
 WebServer* WebServer::instance_ = NULL;
 
-WebServer::WebServer()
-    : epoll_fd_(-1),
-      ready_(false),
-      request_parser_(NULL),
-      multipart_parser_(NULL),
-      response_writer_(NULL),
-      static_file_handler_(NULL),
-      cgi_handler_(NULL),
-      file_upload_handler_(NULL),
-      file_delete_handler_(NULL) {
-    instance_ = this;
-}
+WebServer::WebServer() : epoll_fd_(-1), ready_(false) { instance_ = this; }
 
 WebServer::~WebServer() {
-    // Clean up owned components
-    delete request_parser_;
-    delete multipart_parser_;
-    delete response_writer_;
-    delete static_file_handler_;
-    delete cgi_handler_;
-    delete file_upload_handler_;
-    delete file_delete_handler_;
-
     // Close listener sockets if they are open
     while (!listener_contexts_.empty()) {
         remove_listener_context(listener_contexts_.back());
@@ -45,23 +25,6 @@ WebServer::~WebServer() {
 }
 
 bool WebServer::init() {
-    try {
-        // Initialize components
-        request_parser_ = new RequestParser();
-        multipart_parser_ = new MultipartParser();
-        response_writer_ = new ResponseWriter();
-
-        // Initialize handlers
-        static_file_handler_ = new StaticFileHandler();
-        cgi_handler_ = new CgiHandler();
-        file_upload_handler_ = new FileUploadHandler();
-        file_delete_handler_ = new FileDeleteHandler();
-    } catch (const std::exception& e) {
-        log(LOG_ERROR, "WebServer components memory allocation failed: %s",
-            e.what());
-        return false;
-    }
-
     if (!setup_signal_handlers()) {
         log(LOG_ERROR, "Failed to set up signal handlers");
         return false;
@@ -699,14 +662,14 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
 
         switch (state) {
             case PARSER_READING_REQUEST_LINE:
-                status = request_parser_->parse_request_line(conn);
+                status = request_parser_.parse_request_line(conn);
                 if (status == PARSE_SUCCESS) {
                     state = PARSER_READING_HEADERS;
                 }
                 break;
 
             case PARSER_READING_HEADERS:
-                status = request_parser_->parse_headers(conn);
+                status = request_parser_.parse_headers(conn);
                 if (status == PARSE_SUCCESS) {
                     state = PARSER_PROCESSING_REQUEST;
                 }
@@ -721,14 +684,14 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
                 break;
 
             case PARSER_READING_CONTENT_BODY:
-                status = request_parser_->parse_content_body(conn);
+                status = request_parser_.parse_content_body(conn);
                 if (status == PARSE_SUCCESS) {
                     state = PARSER_COMPLETE;
                 }
                 break;
 
             case PARSER_READING_CHUNKED_BODY:
-                status = request_parser_->parse_chunked_body(conn);
+                status = request_parser_.parse_chunked_body(conn);
                 if (status == PARSE_SUCCESS) {
                     state = PARSER_COMPLETE;
                 }
@@ -949,24 +912,24 @@ AHandler* WebServer::choose_handler(Connection* conn) {
         log(LOG_DEBUG,
             "choose_handler: Using CgiHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
-        return cgi_handler_;
+        return &cgi_handler_;
     } else if (request_method == "POST") {
         log(LOG_DEBUG,
             "choose_handler: Using FileUploadHandler for client_fd %d, "
             "path %s",
             conn->client_fd_, matching_location->path_.c_str());
-        return file_upload_handler_;
+        return &file_upload_handler_;
     } else if (request_method == "DELETE") {
         log(LOG_DEBUG,
             "choose_handler: Using DeleteHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
-        return file_delete_handler_;
+        return &file_delete_handler_;
     } else {
         log(LOG_DEBUG,
             "choose_handler: Using StaticFileHandler for client_fd %d, "
             "path %s",
             conn->client_fd_, matching_location->path_.c_str());
-        return static_file_handler_;
+        return &static_file_handler_;
     }
 }
 
@@ -1075,7 +1038,7 @@ void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
             return;
         }
 
-        response_writer_->write_response_to_buffer(conn);
+        response_writer_.write_response_to_buffer(conn);
         if (!conn->write_buffer_.empty()) {
             if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
                 log(LOG_ERROR,
@@ -1139,7 +1102,7 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
                 conn->client_fd_);
 
             // Response writer serializes the response into the write_buffer
-            response_writer_->write_response_to_buffer(conn);
+            response_writer_.write_response_to_buffer(conn);
 
             // and switches the client socket to listen for EPOLLOUT
             if (!conn->write_buffer_.empty()) {
@@ -1165,7 +1128,7 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
             "client_fd %d",
             event_flags, ctx->fd_, conn->client_fd_);
         ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        response_writer_->write_response_to_buffer(conn);
+        response_writer_.write_response_to_buffer(conn);
         if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
             close_client_connection(conn);
         } else {
@@ -1186,10 +1149,10 @@ void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
         return;
     }
     // Call the CGI handler's read logic
-    cgi_handler_->handle_cgi_read(conn);
+    cgi_handler_.handle_cgi_read(conn);
 
     // Write the response to the buffer if ready
-    response_writer_->write_response_to_buffer(conn);
+    response_writer_.write_response_to_buffer(conn);
     IOContext* client_ctx = conn->io_contexts_[0];
     if (!conn->write_buffer_.empty()) {
         if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
@@ -1220,7 +1183,7 @@ void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
     }
 
     // Call the CGI handler's write logic
-    cgi_handler_->handle_cgi_write(conn);
+    cgi_handler_.handle_cgi_write(conn);
 
     // If the CGI handler changed state to reading, we don't need to do anything
     // else The handler will have already registered the stdout pipe for reading

@@ -219,6 +219,7 @@ void FileUploadHandler::setup_handler(Connection* conn) {
         conn->client_fd_, file_fd);
 }
 
+// TODO: Handle multipart parsing inside handle_event
 void FileUploadHandler::handle_event(Connection* conn) {
     // Consume from upload_buffer_ and write to temporary file
     if (!conn->file_upload_context_) {

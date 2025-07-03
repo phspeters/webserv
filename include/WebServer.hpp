@@ -63,14 +63,14 @@ class WebServer {
     //--------------------------------------
     // Owned Components (Composition)
     //--------------------------------------
-    RequestParser* request_parser_;
-    MultipartParser* multipart_parser_;
-    ResponseWriter* response_writer_;
+    RequestParser request_parser_;
+    MultipartParser multipart_parser_;
+    ResponseWriter response_writer_;
     //// Handler instances
-    StaticFileHandler* static_file_handler_;
-    CgiHandler* cgi_handler_;
-    FileUploadHandler* file_upload_handler_;
-    FileDeleteHandler* file_delete_handler_;
+    StaticFileHandler static_file_handler_;
+    CgiHandler cgi_handler_;
+    FileUploadHandler file_upload_handler_;
+    FileDeleteHandler file_delete_handler_;
 
     // Make singleton instance for signal handling
     static WebServer* instance_;
