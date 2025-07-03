@@ -493,8 +493,7 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
         cgi_to_server_pipe[0];  // Parent keeps read-end
 
     // Set the pipe stdin to non-blocking mode
-    WebServer* server = WebServer::get_instance();
-    if (!server->set_non_blocking(conn->cgi_context_->cgi_pipe_stdin_fd_)) {
+    if (!set_non_blocking(conn->cgi_context_->cgi_pipe_stdin_fd_)) {
         log(LOG_ERROR,
             "Failed to set CGI stdin pipe to non-blocking mode for client %d",
             conn->client_fd_);
@@ -503,7 +502,7 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
     }
 
     // Set the pipe stdout to non-blocking mode
-    if (!server->set_non_blocking(conn->cgi_context_->cgi_pipe_stdout_fd_)) {
+    if (!set_non_blocking(conn->cgi_context_->cgi_pipe_stdout_fd_)) {
         log(LOG_ERROR,
             "Failed to set CGI stdout pipe to non-blocking mode for client %d",
             conn->client_fd_);

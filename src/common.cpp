@@ -125,3 +125,20 @@ std::string join(const std::vector<std::string>& vec, const std::string& sep) {
     }
     return oss.str();
 }
+
+bool set_non_blocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        log(LOG_ERROR, "Failed to get flags for socket '%i'", fd);
+        return false;
+    }
+
+    flags |= O_NONBLOCK;
+
+    if (fcntl(fd, F_SETFL, flags) == -1) {
+        log(LOG_ERROR, "Failed to set non-blocking mode for socket '%i'", fd);
+        return false;
+    }
+
+    return true;
+}

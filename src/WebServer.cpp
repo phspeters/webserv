@@ -393,23 +393,6 @@ int WebServer::cleanup_timed_out_connections() {
     return closed;
 }
 
-bool WebServer::set_non_blocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1) {
-        log(LOG_ERROR, "Failed to get flags for socket '%i'", fd);
-        return false;
-    }
-
-    flags |= O_NONBLOCK;
-
-    if (fcntl(fd, F_SETFL, flags) == -1) {
-        log(LOG_ERROR, "Failed to set non-blocking mode for socket '%i'", fd);
-        return false;
-    }
-
-    return true;
-}
-
 bool WebServer::add_listener_context(int listener_fd) {
     if (listener_fd < 0) {
         log(LOG_FATAL, "add_listener_context: Invalid listener_fd '%i'",

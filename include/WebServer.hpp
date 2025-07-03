@@ -37,9 +37,6 @@ class WebServer {
     bool update_context_in_epoll(IOContext* ctx, uint32_t events);
     bool remove_context_from_epoll(IOContext* ctx);
 
-    // Utility functions
-    bool set_non_blocking(int fd);
-
     // Getter for singleton instance
     static WebServer* get_instance() { return instance_; };
 
