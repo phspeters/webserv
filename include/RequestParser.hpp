@@ -7,7 +7,6 @@ struct Connection;
 struct HttpRequest;
 struct ParserContext;
 
-// TODO: Split RequestParser and MultipartParser into separate files
 class RequestParser {
    public:
     RequestParser() {}
@@ -49,9 +48,6 @@ struct ParserContext {
     size_t body_remaining_bytes_;
     size_t chunk_remaining_bytes_;
 
-    std::string multipart_boundary_;
-    size_t multipart_boundary_len_;
-
     const char* method_start_;
     const char* method_end_;
     const char* uri_start_;
@@ -92,9 +88,6 @@ struct ParserContext {
         value_end_ = NULL;
         version_major_ = 0;
         version_minor_ = 0;
-
-        multipart_boundary_.clear();
-        multipart_boundary_len_ = 0;
     }
 
 };  // struct ParserContext

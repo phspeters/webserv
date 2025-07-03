@@ -10,6 +10,7 @@ struct HttpRequest;
 struct HttpResponse;
 struct VirtualServer;
 struct CgiContext;
+struct MultipartContext;
 struct ParserContext;
 struct WriterContext;
 struct FileUploadContext;
@@ -51,8 +52,10 @@ struct Connection {
     //--------------------------------------
     ConnectionState conn_state_;
     ParserContext parser_context_;
+    MultipartContext multipart_context_;
     WriterContext writer_context_;
-    std::vector<IOContext*> io_contexts_; //TODO: change to map<FdType, IOContext*> ??
+    std::vector<IOContext*>
+        io_contexts_;  // TODO: change to map<FdType, IOContext*> ??
 
     //--------------------------------------
     // Connection Management
@@ -72,8 +75,6 @@ struct Connection {
     StaticFileContext* static_file_context_;
     FileUploadContext* file_upload_context_;
     CgiContext* cgi_context_;
-
-    std::string multipart_boundary_;
 
    private:
     // Prevent copying

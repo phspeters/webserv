@@ -60,15 +60,13 @@ class Buffer {
     void prepare_for_next_request();
 
    private:
-
     // Slides unread data to the beginning to maximize writable space.
     void compact();
- 
+
     size_t writable_space() const { return buffer_.size() - last_; }
- 
     char* write_ptr() { return &buffer_[last_]; }
- 
     void has_written(size_t bytes_written) { last_ += bytes_written; }
+    
     std::vector<char> buffer_;
     size_t pos_;   // Start of readable data.
     size_t last_;  // End of readable data (start of writable space).

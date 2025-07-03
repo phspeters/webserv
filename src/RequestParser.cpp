@@ -593,15 +593,12 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
         return PARSE_SUCCESS;
     }
 
-    size_t bytes_to_add = std::min(buff.readable_bytes(), body_remaining_bytes);
-    if (bytes_to_add > 0) {
-        req->body_buffer_.append(buff.data(), bytes_to_add);
-        buff.consume(bytes_to_add);
-        body_remaining_bytes -= bytes_to_add;
-    }
+    size_t unloaded_bytes =
+        buff.unload_to(req->body_data_, body_remaining_bytes);
+    body_remaining_bytes -= unloaded_bytes;
 
-    log(LOG_DEBUG, "Added %zu bytes to body buffer for connection: %i",
-        bytes_to_add, conn->client_fd_);
+    log(LOG_DEBUG, "Unloaded %zu bytes to body buffer for connection: %i",
+        unloaded_bytes, conn->client_fd_);
 
     if (body_remaining_bytes == 0) {
         req->body_fully_parsed_ = true;
@@ -612,7 +609,7 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
 
     log(LOG_DEBUG,
         "Body parsing incomplete for connection: %i, need %zu more bytes.",
-        conn->client_fd_, req->content_length_ - req->body_buffer_.readable_bytes());
+        conn->client_fd_, req->content_length_ - req->body_data_.size());
     return PARSE_INCOMPLETE;
 }
 
@@ -707,7 +704,9 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     buff.readable_bytes(), context.chunk_remaining_bytes_);
 
                 if (bytes_to_process > 0) {
-                    conn->request_data_->body_buffer_.append(buff.data(), bytes_to_process);
+                    conn->request_data_->body_data_.insert(
+                        conn->request_data_->body_data_.end(), buff.data(),
+                        buff.data() + bytes_to_process);
                     buff.consume(bytes_to_process);
                     context.chunk_remaining_bytes_ -= bytes_to_process;
                 }
@@ -813,4 +812,3 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
         conn->client_fd_);
     return PARSE_INCOMPLETE;
 }
-

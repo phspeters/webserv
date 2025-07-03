@@ -23,7 +23,8 @@ void StaticFileHandler::check_permissions(Connection* conn) {
         return;
     }
 
-    log(LOG_DEBUG, "StaticFileHandler: Permissions check passed for client_fd %d",
+    log(LOG_DEBUG,
+        "StaticFileHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
 }
 
@@ -36,7 +37,8 @@ void StaticFileHandler::setup_handler(Connection* conn) {
     std::string absolute_path = parse_absolute_path(conn);
 
     // Handle directory-related logic (redirects, index files, autoindex)
-    if (absolute_path.empty() || absolute_path[absolute_path.length() - 1] == '/') {
+    if (absolute_path.empty() ||
+        absolute_path[absolute_path.length() - 1] == '/') {
         // Redirect if URI is a directory but lacks a trailing slash
         if (process_directory_redirect(conn, absolute_path)) {
             conn->conn_state_ = CONN_WRITING_RESPONSE;
@@ -95,7 +97,8 @@ void StaticFileHandler::setup_handler(Connection* conn) {
     conn->static_file_context_->file_fd_ = fd;
     conn->static_file_context_->bytes_to_send_ = file_info.st_size;
 
-    log(LOG_INFO, "StaticFileHandler: Setup complete for client_fd %d, file_fd %d",
+    log(LOG_INFO,
+        "StaticFileHandler: Setup complete for client_fd %d, file_fd %d",
         conn->client_fd_, fd);
 }
 
@@ -104,7 +107,8 @@ void StaticFileHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Handling event for client_fd %d",
         conn->client_fd_);
 
-    if (!conn->static_file_context_ || conn->static_file_context_->file_fd_ < 0) {
+    if (!conn->static_file_context_ ||
+        conn->static_file_context_->file_fd_ < 0) {
         ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         conn->conn_state_ = CONN_WRITING_RESPONSE;
         return;
@@ -129,25 +133,33 @@ void StaticFileHandler::handle_event(Connection* conn) {
     size_t dot_pos = path.find_last_of('.');
     if (dot_pos != std::string::npos) {
         std::string ext = path.substr(dot_pos + 1);
-        if (ext == "html" || ext == "htm") content_type = "text/html";
-        else if (ext == "css") content_type = "text/css";
-        else if (ext == "js") content_type = "application/javascript";
-        else if (ext == "png") content_type = "image/png";
-        else if (ext == "jpg" || ext == "jpeg") content_type = "image/jpeg";
-        else if (ext == "gif") content_type = "image/gif";
-        else if (ext == "txt") content_type = "text/plain";
+        if (ext == "html" || ext == "htm")
+            content_type = "text/html";
+        else if (ext == "css")
+            content_type = "text/css";
+        else if (ext == "js")
+            content_type = "application/javascript";
+        else if (ext == "png")
+            content_type = "image/png";
+        else if (ext == "jpg" || ext == "jpeg")
+            content_type = "image/jpeg";
+        else if (ext == "gif")
+            content_type = "image/gif";
+        else if (ext == "txt")
+            content_type = "text/plain";
     }
 
     // Prepare the successful response
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->set_header("Content-Type", content_type);
-    
+
     std::ostringstream size_stream;
     size_stream << file_size;
     conn->response_data_->set_header("Content-Length", size_stream.str());
-    
-    conn->response_data_->body_.assign(file_content.begin(), file_content.end());
+
+    conn->response_data_->body_data_.assign(file_content.begin(),
+                                            file_content.end());
 
     // Mark the connection as ready for writing
     conn->conn_state_ = CONN_WRITING_RESPONSE;

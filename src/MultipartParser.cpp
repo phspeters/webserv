@@ -14,7 +14,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
 
     Buffer& buff = conn->read_buffer_;
     FileUploadContext* upload_ctx = conn->file_upload_context_;
-    std::string boundary = conn->parser_context_.multipart_boundary_;
+    std::string boundary = conn->multipart_context_.boundary_;
     if (boundary.empty()) {
         log(LOG_ERROR, "No multipart boundary set for connection: %i",
             conn->client_fd_);
@@ -23,8 +23,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
     std::string full_boundary = "--" + boundary;
     std::string end_boundary = full_boundary + "--";
 
-    MultipartState& state = reinterpret_cast<MultipartState&>(
-        conn->parser_context_.granular_parser_state_);
+    MultipartState& state = conn->multipart_context_.state_;
 
     while (buff.readable_bytes() > 0) {
         const char* data = buff.data();
@@ -65,8 +64,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
                 if (fnpos != std::string::npos) {
                     upload_ctx->is_file_part_ = true;
                     // Extract filename from headers
-                    size_t start =
-                        upload_ctx->part_headers_.find('"', fnpos);
+                    size_t start = upload_ctx->part_headers_.find('"', fnpos);
                     size_t end = std::string::npos;
                     if (start != std::string::npos) {
                         end = upload_ctx->part_headers_.find('"', start + 1);

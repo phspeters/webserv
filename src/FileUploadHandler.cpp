@@ -31,8 +31,8 @@ void FileUploadHandler::send_success_response(Connection* conn) {
     std::string body =
         "<html><body><h1>Upload Successful</h1><p>Your file has been "
         "uploaded successfully.</p></body></html>";
-    resp->body_.assign(body.begin(), body.end());
-    resp->content_length_ = resp->body_.size();
+    resp->body_data_.assign(body.begin(), body.end());
+    resp->content_length_ = resp->body_data_.size();
 }
 
 std::string FileUploadHandler::get_upload_directory(Connection* conn) {
@@ -338,7 +338,7 @@ bool FileUploadHandler::write_file_to_disk(Connection* conn,
     file.close();
     return true;
 }
-    
+
 bool FileUploadHandler::save_uploaded_file(Connection* conn,
                                            const std::string& filename,
                                            const std::vector<char>& data) {

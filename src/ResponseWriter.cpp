@@ -34,7 +34,7 @@ WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
                 if (resp->body_fd_ != -1) {
                     context.response_writer_state_ =
                         WRITER_WRITING_BODY_FROM_FD;
-                } else if (!resp->body_.empty()) {
+                } else if (!resp->body_data_.empty()) {
                     context.response_writer_state_ =
                         WRITER_WRITING_BODY_FROM_BUFFER;
                 } else {
@@ -134,13 +134,13 @@ WriteStatus ResponseWriter::write_response_body_from_buffer(Connection* conn) {
     Buffer& buffer = conn->write_buffer_;
 
     size_t bytes_to_write =
-        resp->body_.size() - conn->writer_context_.body_bytes_written_;
+        resp->body_data_.size() - conn->writer_context_.body_bytes_written_;
     if (bytes_to_write == 0) {
         return WRITE_SUCCESS;
     }
 
     size_t bytes_written = buffer.append(
-        resp->body_.data() + conn->writer_context_.body_bytes_written_,
+        resp->body_data_.data() + conn->writer_context_.body_bytes_written_,
         bytes_to_write);
 
     if (bytes_written < bytes_to_write) {

@@ -18,7 +18,7 @@ struct HttpRequest {
 
     std::map<std::string, std::string> headers_;
 
-    Buffer body_buffer_;   // Reserved to DEFAUL_CHUNK_SIZE
+    std::vector<char> body_data_;   // Reserved to DEFAUL_CHUNK_SIZE
     bool body_fully_parsed_;
 
     size_t content_length_;

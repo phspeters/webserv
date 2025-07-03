@@ -76,8 +76,8 @@ void log_request(log_level level, const Connection* conn) {
         std::cerr << "  " << it->first << ": " << it->second << std::endl;
     }
     std::cerr << "body: " << std::endl;
-    std::cerr.write(conn->request_data_->body_buffer_.data(),
-                    conn->request_data_->body_buffer_.readable_bytes());
+    std::cerr.write(conn->request_data_->body_data_.data(),
+                    conn->request_data_->body_data_.size());
     std::cerr << "\n====================================\n"
               << RESET << std::endl;
 }
@@ -121,11 +121,11 @@ void log_response(log_level level, Connection* conn) {
         std::cerr << it->first << "=" << it->second << "; ";
     }
     std::cerr << std::endl;
-    std::cerr << "Body size: " << conn->response_data_->body_.size() << " bytes"
-              << std::endl;
+    std::cerr << "Body size: " << conn->response_data_->body_data_.size()
+              << " bytes" << std::endl;
     std::cerr << "---------------------" << std::endl;
-    std::cerr.write(conn->response_data_->body_.data(),
-                    conn->response_data_->body_.size());
+    std::cerr.write(conn->response_data_->body_data_.data(),
+                    conn->response_data_->body_data_.size());
     std::cerr << "=====================" << RESET << std::endl;
 }
 

@@ -733,13 +733,6 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
                     state = PARSER_COMPLETE;
                 }
                 break;
-            
-            case PARSER_READING_MULTIPART_BODY:
-                status = multipart_parser_->parse(conn);
-                if (status == PARSE_SUCCESS) {
-                    state = PARSER_COMPLETE;
-                }
-                break;
 
             case PARSER_COMPLETE:
                 log(LOG_DEBUG, "Request parsing complete for fd %d.",
@@ -814,18 +807,6 @@ ParserState WebServer::determine_body_handling_state(Connection* conn) {
     if (request->method_ != "POST" && request->method_ != "PUT") {
         conn->request_data_->body_fully_parsed_ = true;
         return PARSER_COMPLETE;
-    }
-
-    std::string content_type = request->get_header("content-type");
-    if (content_type.find("multipart/form-data") != std::string::npos) {
-        conn->parser_context_.multipart_boundary_ =
-            MultipartParser::extract_boundary(content_type);
-        if (conn->parser_context_.multipart_boundary_.empty()) {
-            log(LOG_ERROR, "Invalid multipart boundary for connection: %i",
-                conn->client_fd_);
-            return PARSER_ERROR;
-        }
-        return PARSER_READING_MULTIPART_BODY;
     }
 
     std::string transfer_encoding = request->get_header("transfer-encoding");
@@ -1118,7 +1099,6 @@ void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
 }
 
 void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
-    
     Connection* conn = ctx->conn_;
     IOContext* client_ctx = conn->io_contexts_[0];
 
@@ -1129,30 +1109,34 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
 
         AHandler* handler = conn->active_handler_;
         if (!handler) {
-            log(LOG_FATAL,"handle_static_file_event: Active handler is NULL");
-            close_client_connection(conn); // CHECK
+            log(LOG_FATAL, "handle_static_file_event: Active handler is NULL");
+            close_client_connection(conn);  // CHECK
             return;
         }
 
         // IF state is handling request THEN handler prepare response // CHECK
         if (conn->conn_state_ == CONN_GENERATING_RESPONSE) {
-            // The handler reads the file content and prepares the response data.
+            // The handler reads the file content and prepares the response
+            // data.
             handler->handle_event(conn);
         }
 
         // The file has been read, so we can remove its context from epoll.
         if (!remove_context_from_epoll(ctx)) {
             log(LOG_ERROR,
-                "handle_static_file_event: Failed to remove file_fd %d from epoll",
+                "handle_static_file_event: Failed to remove file_fd %d from "
+                "epoll",
                 ctx->fd_);
-            close_client_connection(conn); //CHECK
+            close_client_connection(conn);  // CHECK
             return;
         }
 
         // IF state is writing responde THEN response_writer prepares the buffer
-        // The handler should have set the state to CONN_WRITING_RESPONSE upon success. // OK
+        // The handler should have set the state to CONN_WRITING_RESPONSE upon
+        // success. // OK
         if (conn->conn_state_ == CONN_WRITING_RESPONSE) {
-            log(LOG_DEBUG, "Writing static file response for client_fd %d", conn->client_fd_);
+            log(LOG_DEBUG, "Writing static file response for client_fd %d",
+                conn->client_fd_);
 
             // Response writer serializes the response into the write_buffer
             response_writer_->write_response_to_buffer(conn);
@@ -1161,19 +1145,24 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
             if (!conn->write_buffer_.empty()) {
                 if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
                     log(LOG_ERROR,
-                        "handle_static_file_event: Failed to update client_fd %d for writing",
+                        "handle_static_file_event: Failed to update client_fd "
+                        "%d for writing",
                         conn->client_fd_);
                     close_client_connection(conn);
                 }
             } else {
-                log(LOG_DEBUG, "Static file response buffer is empty for client_fd %d, closing.", conn->client_fd_);
+                log(LOG_DEBUG,
+                    "Static file response buffer is empty for client_fd %d, "
+                    "closing.",
+                    conn->client_fd_);
                 close_client_connection(conn);
             }
         }
     } else {
         // Handle errors on the file descriptor (e.g., EPOLLERR, EPOLLHUP)
         log(LOG_ERROR,
-            "handle_static_file_event: Error event %u on file_fd %d for client_fd %d",
+            "handle_static_file_event: Error event %u on file_fd %d for "
+            "client_fd %d",
             event_flags, ctx->fd_, conn->client_fd_);
         ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
         response_writer_->write_response_to_buffer(conn);
@@ -1186,12 +1175,14 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
 }
 
 void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
-    // event_flags is not necessary here because this handler is only registered for EPOLLIN events on the CGI pipe.
+    // event_flags is not necessary here because this handler is only registered
+    // for EPOLLIN events on the CGI pipe.
     (void)event_flags;
-    
+
     Connection* conn = ctx->conn_;
     if (!conn || !conn->active_handler_) {
-        log(LOG_FATAL, "handle_cgi_read_event: Connection or active handler is NULL");
+        log(LOG_FATAL,
+            "handle_cgi_read_event: Connection or active handler is NULL");
         return;
     }
     // Call the CGI handler's read logic
@@ -1202,30 +1193,38 @@ void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
     IOContext* client_ctx = conn->io_contexts_[0];
     if (!conn->write_buffer_.empty()) {
         if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
-            log(LOG_ERROR, "handle_cgi_read_event: Failed to update epoll events for client_fd %d", conn->client_fd_);
+            log(LOG_ERROR,
+                "handle_cgi_read_event: Failed to update epoll events for "
+                "client_fd %d",
+                conn->client_fd_);
             close_client_connection(conn);
         }
         conn->conn_state_ = CONN_WRITING_RESPONSE;
     } else {
-        log(LOG_DEBUG, "handle_cgi_read_event: No data to write for client_fd %d", conn->client_fd_);
+        log(LOG_DEBUG,
+            "handle_cgi_read_event: No data to write for client_fd %d",
+            conn->client_fd_);
     }
 }
 
 void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
-    // event_flags is not necessary here because this handler is only registered for EPOLLOUT events on the CGI pipe.
+    // event_flags is not necessary here because this handler is only registered
+    // for EPOLLOUT events on the CGI pipe.
     (void)event_flags;
-    
+
     Connection* conn = ctx->conn_;
     if (!conn || !conn->active_handler_) {
-        log(LOG_FATAL, "handle_cgi_write_event: Connection or active handler is NULL");
+        log(LOG_FATAL,
+            "handle_cgi_write_event: Connection or active handler is NULL");
         return;
     }
-    
+
     // Call the CGI handler's write logic
     cgi_handler_->handle_cgi_write(conn);
-    
-    // If the CGI handler changed state to reading, we don't need to do anything else
-    // The handler will have already registered the stdout pipe for reading
+
+    // If the CGI handler changed state to reading, we don't need to do anything
+    // else The handler will have already registered the stdout pipe for reading
     // If there's still data to write, the handler will keep the current state
-    // and epoll will call this handler again when the pipe is ready for more writing
+    // and epoll will call this handler again when the pipe is ready for more
+    // writing
 }

@@ -295,7 +295,7 @@ void AHandler::generate_directory_listing(Connection* conn,
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->set_header("Content-Type", "text/html");
-    conn->response_data_->body_.assign(html.begin(), html.end());
+    conn->response_data_->body_data_.assign(html.begin(), html.end());
     conn->conn_state_ = CONN_WRITING_RESPONSE;
 
     // Clean up

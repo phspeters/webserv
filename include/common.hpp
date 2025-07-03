@@ -70,9 +70,15 @@ enum ParserState {
     PARSER_PROCESSING_REQUEST,
     PARSER_READING_CONTENT_BODY,
     PARSER_READING_CHUNKED_BODY,
-    PARSER_READING_MULTIPART_BODY,
     PARSER_COMPLETE,
     PARSER_ERROR
+};
+
+enum MultipartState {
+    SEARCH_BOUNDARY,
+    READ_HEADERS,
+    READ_FILE_DATA,
+    END_MULTIPART
 };
 
 enum CgiHandlerState {
@@ -113,13 +119,6 @@ enum ParseStatus {
     PARSE_UNKNOWN_ENCODING,
     PARSE_INVALID_CHUNK_SIZE
 };
-
-enum MultipartState {
-        SEARCH_BOUNDARY,
-        READ_HEADERS,
-        READ_FILE_DATA,
-        END_MULTIPART
-    };
 
 enum WriteStatus { WRITE_SUCCESS, WRITE_INCOMPLETE, WRITE_ERROR };
 
@@ -172,6 +171,7 @@ enum LocType { LOC_DEFAULT, LOC_EXTENSION };
 #include "AHandler.hpp"
 #include "Buffer.hpp"
 #include "ErrorHandler.hpp"
+#include "MultipartParser.hpp"
 #include "RequestParser.hpp"
 #include "ResponseWriter.hpp"
 #include "VirtualServer.hpp"
@@ -185,7 +185,6 @@ enum LocType { LOC_DEFAULT, LOC_EXTENSION };
 #include "Logger.hpp"
 #include "StaticFileHandler.hpp"
 #include "WebServer.hpp"
-#include "MultipartParser.hpp"
 
 std::string trim(const std::string& str);
 std::string get_status_message(int code);

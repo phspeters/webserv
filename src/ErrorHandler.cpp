@@ -51,7 +51,7 @@ void ErrorHandler::generate_error_response(Connection* conn,
     // Use ResponseWriter to serialize the response to buffer
     ResponseWriter response_writer;
     response_writer.write_response_to_buffer(conn);
-    
+
     // Only set connection state to writing if there's data in the write buffer
     if (!conn->write_buffer_.empty()) {
         conn->conn_state_ = CONN_WRITING_RESPONSE;
@@ -70,8 +70,8 @@ void ErrorHandler::handle_error(HttpResponse* resp, int response_status,
     }
 
     resp->headers_.clear();
-    resp->body_.clear();
-    resp->body_fd_ = -1; // Reset body_fd
+    resp->body_data_.clear();
+    resp->body_fd_ = -1;  // Reset body_fd
 
     // Set status code and message
     resp->status_code_ = response_status;
@@ -79,7 +79,8 @@ void ErrorHandler::handle_error(HttpResponse* resp, int response_status,
 
     // Get error page content (custom or default)
     int body_fd = -1;
-    std::string content = get_error_page_content(response_status, config, body_fd);
+    std::string content =
+        get_error_page_content(response_status, config, body_fd);
 
     if (content.empty() && body_fd != -1) {
         // Custom error page file opened successfully, use body_fd
@@ -88,8 +89,8 @@ void ErrorHandler::handle_error(HttpResponse* resp, int response_status,
             body_fd, response_status);
     } else {
         // Use generated content (either default or fallback)
-        resp->body_.assign(content.begin(), content.end());
-        resp->body_fd_ = -1; // Ensure body_fd is invalid when using body_
+        resp->body_data_.assign(content.begin(), content.end());
+        resp->body_fd_ = -1;  // Ensure body_fd is invalid when using body_
     }
 
     // Set headers
@@ -102,21 +103,24 @@ void ErrorHandler::handle_error(HttpResponse* resp, int response_status,
             std::ostringstream content_length;
             content_length << file_stat.st_size;
             resp->set_header("Content-Length", content_length.str());
-            log(LOG_DEBUG, "Using custom error page file (fd: %d, size: %ld bytes) for status %d",
+            log(LOG_DEBUG,
+                "Using custom error page file (fd: %d, size: %ld bytes) for "
+                "status %d",
                 resp->body_fd_, file_stat.st_size, response_status);
         } else {
             log(LOG_WARNING, "Could not get file size for error page fd %d: %s",
                 resp->body_fd_, strerror(errno));
-            // Remove Content-Length header for file-based responses if we can't get size
+            // Remove Content-Length header for file-based responses if we can't
+            // get size
             resp->headers_.erase("Content-Length");
         }
     } else {
         // For generated content, set Content-Length from body size
         std::ostringstream content_length;
-        content_length << resp->body_.size();
+        content_length << resp->body_data_.size();
         resp->set_header("Content-Length", content_length.str());
         log(LOG_DEBUG, "Generated error page for status %d (%zu bytes)",
-            response_status, resp->body_.size());
+            response_status, resp->body_data_.size());
     }
 }
 
@@ -165,8 +169,8 @@ int ErrorHandler::get_parse_message_status(ParseStatus parse_status) {
 }
 
 // Serialization logic has been moved to ResponseWriter class
-// This function is no longer needed as ResponseWriter::write_response_to_buffer()
-// handles all serialization properly
+// This function is no longer needed as
+// ResponseWriter::write_response_to_buffer() handles all serialization properly
 
 // ==================== ERROR PAGE GENERATION ====================
 
@@ -175,8 +179,8 @@ int ErrorHandler::get_parse_message_status(ParseStatus parse_status) {
 std::string ErrorHandler::get_error_page_content(int response_status,
                                                  const VirtualServer& config,
                                                  int& body_fd) {
-    body_fd = -1; // Initialize to invalid fd
-    
+    body_fd = -1;  // Initialize to invalid fd
+
     // Check if custom error page is configured
     std::map<int, std::string>::const_iterator it =
         config.error_pages_.find(response_status);
@@ -184,18 +188,19 @@ std::string ErrorHandler::get_error_page_content(int response_status,
     if (it != config.error_pages_.end()) {
         // Custom error page found, try to open the file
         std::string error_page_path = it->second;
-        
+
         // Try to open the file for reading
         body_fd = open(error_page_path.c_str(), O_RDONLY);
         if (body_fd != -1) {
             // File opened successfully, return empty string and set body_fd
             log(LOG_DEBUG, "Opened custom error page file: %s (fd: %d)",
                 error_page_path.c_str(), body_fd);
-            return ""; // Empty string indicates file should be used via body_fd
+            return "";  // Empty string indicates file should be used via
+                        // body_fd
         } else {
             log(LOG_WARNING, "Could not open custom error page: %s (%s)",
                 error_page_path.c_str(), strerror(errno));
-            body_fd = -1; // Ensure it's invalid
+            body_fd = -1;  // Ensure it's invalid
         }
     }
 

@@ -108,7 +108,7 @@ void HttpResponse::clear() {
     version_ = "HTTP/1.1";
     headers_.clear();
     error_headers_.clear();
-    body_.clear();
+    body_data_.clear();
     body_fd_ = -1;
     content_length_ = 0;
     content_type_.clear();
