@@ -4,7 +4,8 @@ FileDeleteHandler::FileDeleteHandler() : AHandler() {}
 
 FileDeleteHandler::~FileDeleteHandler() {}
 
-void FileDeleteHandler::handle_event(Connection* conn) {
+//TODO: Leave handle_event blank and move everything to setup_handler
+ResponseStatus FileDeleteHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "FileDeleteHandler: Starting processing for client_fd %d",
         conn->client_fd_);
 
@@ -38,7 +39,7 @@ void FileDeleteHandler::handle_event(Connection* conn) {
     conn->conn_state_ = CONN_WRITING_RESPONSE;
 }
 
-void FileDeleteHandler::check_permissions(Connection* conn) {
+ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
     // Check if we can access the target directory for deletion
     std::string file_path = parse_absolute_path(conn);
     if (file_path.empty()) {
@@ -87,7 +88,11 @@ void FileDeleteHandler::check_permissions(Connection* conn) {
         conn->client_fd_);
 }
 
-void FileDeleteHandler::setup_handler(Connection* conn) {
+// TODO: Setup handle will be the new handle_event, so it will perform all the actions
+// and populate the response
+// We might need to return a specific status to tell WebServer that the response is
+// already done and we are ready for sending it
+ResponseStatus FileDeleteHandler::setup_handler(Connection* conn) {
     // No specific setup needed for file deletion
     log(LOG_DEBUG, "FileDeleteHandler: Setup complete for client_fd %d",
         conn->client_fd_);

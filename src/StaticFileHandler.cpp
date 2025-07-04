@@ -5,16 +5,16 @@ StaticFileHandler::StaticFileHandler() {}
 StaticFileHandler::~StaticFileHandler() {}
 
 // 1. Initial, lightweight validation of the request.
-void StaticFileHandler::check_permissions(Connection* conn) {
+ResponseStatus StaticFileHandler::check_permissions(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Checking permissions for client_fd %d",
         conn->client_fd_);
 
     // Only GET method is supported for static files
     if (conn->request_data_->method_ != "GET") {
-        ErrorHandler::generate_error_response(conn, METHOD_NOT_ALLOWED);
-        conn->response_data_->set_header("Allow", "GET");
-        conn->conn_state_ = CONN_WRITING_RESPONSE;
-        return;
+        //ErrorHandler::generate_error_response(conn, METHOD_NOT_ALLOWED);
+        conn->response_data_->set_error_header("Allow", "GET");
+        //conn->conn_state_ = CONN_WRITING_RESPONSE;
+        return METHOD_NOT_ALLOWED;
     }
 
     // Check for location-level redirects first
@@ -29,7 +29,7 @@ void StaticFileHandler::check_permissions(Connection* conn) {
 }
 
 // 2. Setup resources: resolve path, open file, and prepare for serving.
-void StaticFileHandler::setup_handler(Connection* conn) {
+ResponseStatus StaticFileHandler::setup_handler(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Setting up handler for client_fd %d",
         conn->client_fd_);
 
@@ -103,7 +103,7 @@ void StaticFileHandler::setup_handler(Connection* conn) {
 }
 
 // 3. Main logic: read the file and prepare the response.
-void StaticFileHandler::handle_event(Connection* conn) {
+ResponseStatus StaticFileHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Handling event for client_fd %d",
         conn->client_fd_);
 
@@ -118,14 +118,14 @@ void StaticFileHandler::handle_event(Connection* conn) {
     size_t file_size = conn->static_file_context_->bytes_to_send_;
 
     // Read the entire file content into a buffer
-    std::vector<char> file_content(file_size);
-    ssize_t bytes_read = read(fd, &file_content[0], file_size);
+    //std::vector<char> file_content(file_size);
+    //ssize_t bytes_read = read(fd, &file_content[0], file_size);
 
-    if (bytes_read < 0 || static_cast<size_t>(bytes_read) != file_size) {
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        conn->conn_state_ = CONN_WRITING_RESPONSE;
-        return;
-    }
+    //if (bytes_read < 0 || static_cast<size_t>(bytes_read) != file_size) {
+    //    ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+    //    conn->conn_state_ = CONN_WRITING_RESPONSE;
+    //    return;
+    //}
 
     // Determine content type from file extension
     std::string content_type = "application/octet-stream";
@@ -158,11 +158,11 @@ void StaticFileHandler::handle_event(Connection* conn) {
     size_stream << file_size;
     conn->response_data_->set_header("Content-Length", size_stream.str());
 
-    conn->response_data_->body_data_.assign(file_content.begin(),
-                                            file_content.end());
+    //conn->response_data_->body_data_.assign(file_content.begin(),
+    //                                        file_content.end());
 
-    // Mark the connection as ready for writing
-    conn->conn_state_ = CONN_WRITING_RESPONSE;
+    //// Mark the connection as ready for writing
+    //conn->conn_state_ = CONN_WRITING_RESPONSE;
     log(LOG_INFO, "StaticFileHandler: File ready to be served for client_fd %d",
         conn->client_fd_);
 }

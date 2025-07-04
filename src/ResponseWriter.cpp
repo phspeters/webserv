@@ -1,5 +1,6 @@
 #include "common.hpp"
 
+// TODO: Change ResponseWriter to work with buffer and fd at the same time
 WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
     if (!conn || !conn->response_data_) {
         return WRITE_ERROR;

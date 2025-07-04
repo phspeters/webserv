@@ -11,9 +11,9 @@ class AHandler {
    public:
     virtual ~AHandler() {}
 
-    virtual void check_permissions(Connection* conn) = 0;
-    virtual void setup_handler(Connection* conn) = 0;
-    virtual void handle_event(Connection* conn) = 0;
+    virtual ResponseStatus check_permissions(Connection* conn) = 0;
+    virtual ResponseStatus setup_handler(Connection* conn) = 0;
+    virtual ResponseStatus handle_event(Connection* conn) = 0;
     virtual void cleanup_handler(Connection* conn) = 0;
 
    protected:

@@ -12,13 +12,13 @@ class CgiHandler : public AHandler {
     CgiHandler();
     virtual ~CgiHandler();
 
-    virtual void check_permissions(Connection* conn);
-    virtual void setup_handler(Connection* conn);
-    virtual void handle_event(Connection* conn);
+    virtual ResponseStatus check_permissions(Connection* conn);
+    virtual ResponseStatus setup_handler(Connection* conn);
+    virtual ResponseStatus handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
-    void handle_cgi_read(Connection* conn);
-    void handle_cgi_write(Connection* conn);
+    ResponseStatus handle_cgi_read(Connection* conn);
+    ResponseStatus handle_cgi_write(Connection* conn);
 
    private:
     bool validate_cgi_request(Connection* conn);

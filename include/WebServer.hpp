@@ -101,6 +101,7 @@ class WebServer {
     void handle_cgi_read_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_write_event(IOContext* ctx, uint32_t event_flags);
     void handle_file_upload_event(IOContext* ctx, uint32_t event_flags);
+    bool handle_error_response(Connection* conn, ResponseStatus status);
 
     bool setup_listener_sockets();
     int create_listener_socket(const std::string& host, int port);

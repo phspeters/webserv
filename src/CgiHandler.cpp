@@ -4,36 +4,9 @@ CgiHandler::CgiHandler() : AHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
-void CgiHandler::handle_event(Connection* conn) {
-    log(LOG_DEBUG, "CgiHandler: Starting processing for client_fd %d",
-        conn->client_fd_);
+ResponseStatus CgiHandler::handle_event(Connection* conn) {}
 
-    switch (conn->cgi_context_->cgi_handler_state_) {
-        case CGI_IDLE:
-            // Initial state, ready to start CGI execution
-            if (!validate_cgi_request(conn)) {
-                // Validation failed, error response already generated
-                return;
-            }
-            setup_cgi_execution(conn);
-            break;
-        case CGI_WRITING_TO_PIPE:
-            // Write request body to CGI's stdi, should not reach here
-            handle_cgi_write(conn);
-            break;
-        case CGI_READING_FROM_PIPE:
-        case CGI_HEADERS_PARSED:
-            // Read from CGI's stdout
-            handle_cgi_read(conn);
-            break;
-        case CGI_COMPLETE:
-        case CGI_ERROR:
-            conn->conn_state_ = CONN_WRITING_RESPONSE;
-            break;
-    }
-}
-
-void CgiHandler::check_permissions(Connection* conn) {
+ResponseStatus CgiHandler::check_permissions(Connection* conn) {
     // Check if CGI script exists and is executable
     std::string script_path = parse_absolute_path(conn);
     if (script_path.empty()) {
@@ -78,13 +51,15 @@ void CgiHandler::check_permissions(Connection* conn) {
         return;
     }
 
+    // TODO: call validate_cgi_request(conn)?
     log(LOG_DEBUG, "CgiHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
 }
 
-void CgiHandler::setup_handler(Connection* conn) {
+ResponseStatus CgiHandler::setup_handler(Connection* conn) {
     // Create CGI context
     conn->cgi_context_ = new CgiContext();
+    // TODO: Call setup_cgi_execution(conn)?
     log(LOG_DEBUG, "CgiHandler: Setup complete for client_fd %d",
         conn->client_fd_);
 }
@@ -100,6 +75,7 @@ void CgiHandler::cleanup_handler(Connection* conn) {
         conn->client_fd_);
 }
 
+// TODO: Move these to check_permissions 
 bool CgiHandler::validate_cgi_request(Connection* conn) {
     // 1. Check redirect (same as StaticFileHandler)
     if (process_location_redirect(conn)) {
@@ -517,7 +493,12 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
     return true;
 }
 
-void CgiHandler::handle_cgi_write(Connection* conn) {
+// 1. Write everything in body_data to cgi_input_pipe, clear what has been read
+// 2. if body_fully_parse == false, return and wait for next event
+// 3. if body_fully_parsed == true, send all the remaining buffer
+// 4. if body_data_.empty() return success
+// Function has to return status so that WebServer knows when to call ResponseWriter or not
+ResponseStatus CgiHandler::handle_cgi_write(Connection* conn) {
     if (!conn || !conn->cgi_context_ ||
         conn->cgi_context_->cgi_pipe_stdin_fd_ < 0) {
         log(LOG_ERROR, "CGI write: Invalid connection or pipe");
@@ -529,7 +510,7 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
     int fd = conn->cgi_context_->cgi_pipe_stdin_fd_;
 
     // Write as much as possible from the buffer to the pipe
-    // TODO: change to send with we decide to go with sockets
+    // TODO: change to send if we decide to go with sockets
     ssize_t bytes_written = write(fd, body_buffer.data(), body_buffer.size());
 
     if (bytes_written < 0) {
@@ -569,7 +550,14 @@ void CgiHandler::handle_cgi_write(Connection* conn) {
     }
 }
 
-void CgiHandler::handle_cgi_read(Connection* conn) {
+// TODO: This function has to:
+// 1) Read from the pipe
+// 2) Parse the headers and put remaining data in body_data_
+// 3) Set the response line using the status header
+// 4) Set the response body_fd to the output pipe
+// Cleanup handler will be called after response if fully written and
+// will be responsible for reaping the child and closing the fds, so we can remove it here
+ResponseStatus CgiHandler::handle_cgi_read(Connection* conn) {
     log(LOG_DEBUG,
         "CGI: Handling read for client %d on stdout_fd %d, current cgi_state: "
         "%d",

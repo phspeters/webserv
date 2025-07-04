@@ -6,14 +6,15 @@
 struct Connection;
 struct FileUploadContext;
 
+// TODO: find where we can fit FileDeleteHandler in our WebServer flow
 class FileUploadHandler : public AHandler {
    public:
     FileUploadHandler();
     virtual ~FileUploadHandler();
 
-    virtual void check_permissions(Connection* conn);
-    virtual void setup_handler(Connection* conn);
-    virtual void handle_event(Connection* conn);
+    virtual ResponseStatus check_permissions(Connection* conn);
+    virtual ResponseStatus setup_handler(Connection* conn);
+    virtual ResponseStatus handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
    private:

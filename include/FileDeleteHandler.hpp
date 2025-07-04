@@ -10,9 +10,9 @@ class FileDeleteHandler : public AHandler {
     FileDeleteHandler();
     virtual ~FileDeleteHandler();
 
-    virtual void check_permissions(Connection* conn);
-    virtual void setup_handler(Connection* conn);
-    virtual void handle_event(Connection* conn);
+    virtual ResponseStatus check_permissions(Connection* conn);
+    virtual ResponseStatus setup_handler(Connection* conn);
+    virtual ResponseStatus handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
    private:

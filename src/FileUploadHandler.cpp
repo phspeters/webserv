@@ -169,7 +169,7 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
     return true;
 }
 
-void FileUploadHandler::check_permissions(Connection* conn) {
+ResponseStatus FileUploadHandler::check_permissions(Connection* conn) {
     std::string content_length =
         conn->request_data_->get_header("content-length");
     if (content_length.empty()) {
@@ -186,7 +186,7 @@ void FileUploadHandler::check_permissions(Connection* conn) {
         conn->client_fd_);
 }
 
-void FileUploadHandler::setup_handler(Connection* conn) {
+ResponseStatus FileUploadHandler::setup_handler(Connection* conn) {
     // Redirect if needed
     if (process_trailing_slash_redirect(conn)) {
         conn->conn_state_ = CONN_WRITING_RESPONSE;
@@ -219,7 +219,9 @@ void FileUploadHandler::setup_handler(Connection* conn) {
         conn->client_fd_, file_fd);
 }
 
-void FileUploadHandler::handle_event(Connection* conn) {
+// TODO: Handle multipart parsing inside handle_event
+ResponseStatus FileUploadHandler::handle_event(Connection* conn) {
+    // Consume from upload_buffer_ and write to temporary file
     if (!conn->file_upload_context_) {
         return;
     }
