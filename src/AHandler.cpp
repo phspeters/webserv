@@ -1,6 +1,6 @@
 #include "common.hpp"
 
-bool AHandler::process_location_redirect(Connection* conn) {
+ResponseStatus AHandler::process_location_redirect(Connection* conn) {
     const Location* location = conn->location_match_;
 
     // Check if this location has a redirect
@@ -8,16 +8,15 @@ bool AHandler::process_location_redirect(Connection* conn) {
         log(LOG_DEBUG,
             "process_location_redirect: No redirect configured for location %s",
             location->path_.c_str());
-        return false;  // No redirect
+        return OK;  // No redirect
     }
 
     log(LOG_INFO, "REDIRECT: Location %s redirecting to %s",
         location->path_.c_str(), location->redirect_.c_str());
 
     // Set up redirect response
-    ErrorHandler::generate_error_response(conn, MOVED_PERMANENTLY);
     conn->response_data_->set_header("Location", location->redirect_);
-    return true;  // Redirect was processed
+    return MOVED_PERMANENTLY;
 }
 
 std::string AHandler::parse_absolute_path(Connection* conn) {
@@ -60,7 +59,7 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     return (absolute_path);
 }
 
-bool AHandler::process_directory_redirect(Connection* conn,
+ResponseStatus AHandler::process_directory_redirect(Connection* conn,
                                           std::string& absolute_path) {
     std::string path = conn->request_data_->path_;
 
@@ -72,7 +71,7 @@ bool AHandler::process_directory_redirect(Connection* conn,
     if (stat(absolute_path.c_str(), &path_stat) != 0 ||
         !S_ISDIR(path_stat.st_mode)) {
         // Not a directory or couldn't stat
-        return false;
+        return OK;
     }
 
     // If URI doesn't end with slash, redirect to add the slash (nginx behavior)
@@ -87,16 +86,15 @@ bool AHandler::process_directory_redirect(Connection* conn,
             redirect_url += "?" + query;
         }
 
-        ErrorHandler::generate_error_response(conn, MOVED_PERMANENTLY);
         conn->response_data_->set_header("Location", redirect_url);
-        return true;
+        return MOVED_PERMANENTLY;
     }
 
-    return false;  // No redirect, but path modified
+    return OK;  // No redirect, but path modified
 }
 
 // Handle directory path resolution (index file or autoindex)
-bool AHandler::process_directory_index(Connection* conn,
+ResponseStatus AHandler::process_directory_index(Connection* conn,
                                        std::string& absolute_path,
                                        bool& need_autoindex) {
     // Ensure absolute_path ends with /
@@ -117,7 +115,7 @@ bool AHandler::process_directory_index(Connection* conn,
             S_ISREG(index_stat.st_mode)) {
             // Index file exists, update path to use it
             absolute_path = index_path;
-            return true;  // Found and using index file
+            return OK;  // Found and using index file
         }
     }
 
@@ -128,19 +126,18 @@ bool AHandler::process_directory_index(Connection* conn,
             "process_directory_index: No index file found, autoindex enabled "
             "for %s",
             absolute_path.c_str());
-        return true;  // Will use autoindex
+        return OK;  // Will use autoindex
     }
 
     // No index file and autoindex is disabled
     // Fluxogram 403 - autoindex off - call error handler
-    ErrorHandler::generate_error_response(conn, FORBIDDEN);
     log(LOG_DEBUG,
         "process_directory_index: No index file and autoindex disabled for %s",
         absolute_path.c_str());
-    return false;  // Error response set
+    return FORBIDDEN;  
 }
 
-void AHandler::generate_directory_listing(Connection* conn,
+ResponseStatus AHandler::generate_directory_listing(Connection* conn,
                                           const std::string& dir_path) {
     // Open the directory
     DIR* dir = opendir(dir_path.c_str());
@@ -151,8 +148,7 @@ void AHandler::generate_directory_listing(Connection* conn,
     if (!dir) {
         log(LOG_ERROR, "Failed to open directory for listing: %s",
             strerror(errno));
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return;
+        return INTERNAL_SERVER_ERROR;
     }
 
     // Start building HTML for directory listing
@@ -296,8 +292,9 @@ void AHandler::generate_directory_listing(Connection* conn,
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->set_header("Content-Type", "text/html");
     conn->response_data_->body_data_.assign(html.begin(), html.end());
-    conn->conn_state_ = CONN_WRITING_RESPONSE;
 
     // Clean up
     closedir(dir);
+
+    return OK;  
 }

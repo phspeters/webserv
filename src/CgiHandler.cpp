@@ -13,8 +13,7 @@ ResponseStatus CgiHandler::check_permissions(Connection* conn) {
         log(LOG_ERROR,
             "CgiHandler: Failed to determine script path for client_fd %d",
             conn->client_fd_);
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return;
+        return INTERNAL_SERVER_ERROR;
     }
 
     struct stat file_stat;
@@ -22,38 +21,37 @@ ResponseStatus CgiHandler::check_permissions(Connection* conn) {
         if (errno == ENOENT) {
             log(LOG_ERROR, "CgiHandler: Script not found: %s",
                 script_path.c_str());
-            ErrorHandler::generate_error_response(conn, NOT_FOUND);
+            return NOT_FOUND;
         } else if (errno == EACCES) {
             log(LOG_ERROR, "CgiHandler: Access denied to script: %s",
                 script_path.c_str());
-            ErrorHandler::generate_error_response(conn, FORBIDDEN);
+            return FORBIDDEN;
         } else {
             log(LOG_ERROR, "CgiHandler: Error accessing script %s: %s",
                 script_path.c_str(), strerror(errno));
-            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+            return INTERNAL_SERVER_ERROR;
         }
-        return;
     }
 
     // Check if it's a regular file
     if (!S_ISREG(file_stat.st_mode)) {
         log(LOG_ERROR, "CgiHandler: Script is not a regular file: %s",
             script_path.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return;
+        return FORBIDDEN;
     }
 
     // Check if script is executable
     if (!(file_stat.st_mode & S_IXUSR)) {
         log(LOG_ERROR, "CgiHandler: Script is not executable: %s",
             script_path.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return;
+        return FORBIDDEN;
     }
 
     // TODO: call validate_cgi_request(conn)?
     log(LOG_DEBUG, "CgiHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
+
+    return OK;  
 }
 
 ResponseStatus CgiHandler::setup_handler(Connection* conn) {
@@ -76,7 +74,7 @@ void CgiHandler::cleanup_handler(Connection* conn) {
 }
 
 // TODO: Move these to check_permissions 
-bool CgiHandler::validate_cgi_request(Connection* conn) {
+ResponseStatus CgiHandler::validate_cgi_request(Connection* conn) {
     // 1. Check redirect (same as StaticFileHandler)
     if (process_location_redirect(conn)) {
         return false;  // Redirect response was set up, stop processing
@@ -97,17 +95,15 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (request_method != "GET" && request_method != "POST") {
         log(LOG_ERROR, "Invalid request method '%s' for CGI script",
             request_method.c_str());
-        ErrorHandler::generate_error_response(conn, METHOD_NOT_ALLOWED);
-        conn->response_data_->set_header("Allow", "GET, POST");
-        return false;
+        conn->response_data_->set_error_header("Allow", "GET, POST");
+        return METHOD_NOT_ALLOWED;
     }
 
     // 3. URI Format Check (can't execute a directory)
     if (!request_uri.empty() && request_uri[request_uri.length() - 1] == '/') {
         log(LOG_ERROR, "URI is a directory, cannot execute: %s",
             request_uri.c_str());
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return false;
+        return BAD_REQUEST;
     }
 
     // 4. Script Path Resolution
@@ -115,8 +111,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (conn->cgi_context_->cgi_script_path_.empty()) {
         log(LOG_ERROR, "Failed to determine CGI script path for URI: %s",
             request_uri.c_str());
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return false;
+        return INTERNAL_SERVER_ERROR;
     }
 
     // 5. Script Extension Check
@@ -134,8 +129,7 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
     if (!is_valid_extension) {
         log(LOG_ERROR, "Invalid CGI script extension '%s' for script '%s'",
             extension.c_str(), conn->cgi_context_->cgi_script_path_.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return false;
+        return FORBIDDEN;
     }
 
     // 6. Script Existence Check
@@ -144,34 +138,31 @@ bool CgiHandler::validate_cgi_request(Connection* conn) {
         if (errno == ENOENT) {
             log(LOG_ERROR, "CGI script '%s' not found",
                 conn->cgi_context_->cgi_script_path_.c_str());
-            ErrorHandler::generate_error_response(conn, NOT_FOUND);
+            return NOT_FOUND;
         } else {
             log(LOG_ERROR, "Failed to access CGI script '%s': %s",
                 conn->cgi_context_->cgi_script_path_.c_str(), strerror(errno));
-            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+            return INTERNAL_SERVER_ERROR;
         }
-        return false;
     }
 
     // 7. Script Type Validation
     if (!S_ISREG(file_info.st_mode)) {
         log(LOG_ERROR, "CGI script '%s' is not a regular file",
             conn->cgi_context_->cgi_script_path_.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return false;
+        return FORBIDDEN;
     }
 
     // 8. Script Permission Check
     if (!(file_info.st_mode & S_IXUSR)) {  // Check for user execute permission
         log(LOG_ERROR, "CGI script '%s' is not executable",
             conn->cgi_context_->cgi_script_path_.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return false;
+        return FORBIDDEN;
     }
 
     log(LOG_DEBUG, "CGI request validated for script: %s",
         conn->cgi_context_->cgi_script_path_.c_str());
-    return true;  // All checks passed
+    return OK;  // All checks passed
 }
 
 bool CgiHandler::setup_cgi_execution(Connection* conn) {
@@ -195,8 +186,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
         close(cgi_to_server_pipe[1]);
 
         log(LOG_ERROR, "Fork error: %s", strerror(errno));
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return false;
+        return INTERNAL_SERVER_ERROR;
     } else if (pid == 0) {
         // This code runs ONLY in the CHILD process
         handle_child_pipes(server_to_cgi_pipe, cgi_to_server_pipe);
@@ -269,10 +259,10 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
         }
     }
 
-    return true;  // Successfully forked and parent setup initiated
+    return OK;  // Successfully forked and parent setup initiated
 }
 
-bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
+ResponseStatus CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                                  int cgi_to_server_pipe[2]) {
     // Create pipes for communication between server and CGI script
 
@@ -280,16 +270,14 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
         // Pipe creation failure
         log(LOG_ERROR, "Pipe server_to_cgi_pipe creation error: %s",
             strerror(errno));
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return false;
+        return INTERNAL_SERVER_ERROR;
     }
 
     if (pipe(cgi_to_server_pipe) == -1) {
         // Pipe creation failure
         log(LOG_ERROR, "Pipe cgi_to_server_pipe creation error: %s",
             strerror(errno));
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return false;
+        return INTERNAL_SERVER_ERROR;
     }
 
     log(LOG_DEBUG,
@@ -297,7 +285,7 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
         "%d and %d",
         server_to_cgi_pipe[0], server_to_cgi_pipe[1], cgi_to_server_pipe[0],
         cgi_to_server_pipe[1]);
-    return true;
+    return OK;
 }
 
 void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
@@ -799,7 +787,6 @@ void CgiHandler::finalize_cgi_response(Connection* conn) {
 
     // Change states
     conn->cgi_context_->cgi_handler_state_ = CGI_COMPLETE;
-    conn->conn_state_ = CONN_WRITING_RESPONSE;
 
     cleanup_cgi_resources(conn);
 

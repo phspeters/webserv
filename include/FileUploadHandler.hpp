@@ -19,8 +19,8 @@ class FileUploadHandler : public AHandler {
 
    private:
     // Request validation and processing
-    bool validate_request(Connection* conn, std::string& boundary);
-    bool process_trailing_slash_redirect(Connection* conn);
+    // bool validate_request(Connection* conn, std::string& boundary);
+    ResponseStatus process_trailing_slash_redirect(Connection* conn);
 
     // Response generation
     void send_success_response(Connection* conn);
@@ -28,16 +28,16 @@ class FileUploadHandler : public AHandler {
     // File saving operations
     bool copy_temp_to_final_file(const std::string& temp_path,
                                  const std::string& final_path);
-    bool save_uploaded_file(Connection* conn, const std::string& filename,
-                            const std::vector<char>& data);
-    bool write_file_to_disk(Connection* conn, const std::string& file_path,
-                            const std::vector<char>& data);
+    // bool save_uploaded_file(Connection* conn, const std::string& filename,
+    //                         const std::vector<char>& data);
+    // bool write_file_to_disk(Connection* conn, const std::string& file_path,
+    //                         const std::vector<char>& data);
 
     // Directory operations
     std::string get_upload_directory(Connection* conn);
-    bool ensure_upload_directory_exists(Connection* conn,
+    ResponseStatus ensure_upload_directory_exists(Connection* conn,
                                         const std::string& upload_dir);
-    bool create_directory_recursive(Connection* conn, const std::string& path);
+    ResponseStatus create_directory_recursive(Connection* conn, const std::string& path);
 
     // Utility methods
     std::string sanitize_filename(const std::string& filename);

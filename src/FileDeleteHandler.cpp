@@ -6,27 +6,32 @@ FileDeleteHandler::~FileDeleteHandler() {}
 
 //TODO: Leave handle_event blank and move everything to setup_handler
 ResponseStatus FileDeleteHandler::handle_event(Connection* conn) {
+    ResponseStatus status = OK;
     log(LOG_DEBUG, "FileDeleteHandler: Starting processing for client_fd %d",
         conn->client_fd_);
 
     // 1. Check for location redirects (same pattern as other handlers)
-    if (process_location_redirect(conn)) {
-        return;  // Redirect response was set up, stop processing
+    status = process_location_redirect(conn);
+    if (status != OK) {
+        return status;  // Redirect response was set up, stop processing
     }
 
     // 2. Validate the DELETE request
-    if (!validate_delete_request(conn)) {
-        return;  // Error response already set
+    status = validate_delete_request(conn)
+    if (status != OK) {
+        return status;  
     }
 
     // 3. Extract file path from request
     std::string file_path;
-    if (!extract_file_path(conn, file_path)) {
-        return;  // Error response already set
+    status = extract_file_path(conn, file_path);
+    if (status != OK) {
+        return status;  
     }
 
     // 4. Attempt to delete the file
-    if (delete_file(conn, file_path)) {
+    status = delete_file(conn, file_path);
+    if (status == OK) {
         // Extract just the filename for the response
         size_t last_slash = file_path.find_last_of('/');
         std::string filename = (last_slash != std::string::npos)
@@ -34,9 +39,7 @@ ResponseStatus FileDeleteHandler::handle_event(Connection* conn) {
                                    : file_path;
         send_delete_success_response(conn, filename);
     }
-    // Error response already set by delete_file() on failure
-
-    conn->conn_state_ = CONN_WRITING_RESPONSE;
+    return status;  // Successfully handled DELETE request
 }
 
 ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
@@ -46,8 +49,7 @@ ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
         log(LOG_ERROR,
             "FileDeleteHandler: Failed to determine file path for client_fd %d",
             conn->client_fd_);
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return;
+        return BAD_REQUEST;
     }
 
     // Get directory path
@@ -61,8 +63,7 @@ ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
         log(LOG_ERROR,
             "FileDeleteHandler: No write permission for directory: %s",
             dir_path.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return;
+        return FORBIDDEN;
     }
 
     // Check if file exists and is accessible
@@ -70,22 +71,24 @@ ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
         if (errno == ENOENT) {
             log(LOG_ERROR, "FileDeleteHandler: File not found: %s",
                 file_path.c_str());
-            ErrorHandler::generate_error_response(conn, NOT_FOUND);
+            return NOT_FOUND;
         } else if (errno == EACCES) {
             log(LOG_ERROR, "FileDeleteHandler: Access denied to file: %s",
                 file_path.c_str());
-            ErrorHandler::generate_error_response(conn, FORBIDDEN);
+            return FORBIDDEN;
         } else {
             log(LOG_ERROR, "FileDeleteHandler: Error accessing file %s: %s",
                 file_path.c_str(), strerror(errno));
-            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+            return INTERNAL_SERVER_ERROR;
         }
-        return;
+        return INTERNAL_SERVER_ERROR;
     }
 
     log(LOG_DEBUG,
         "FileDeleteHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
+
+    return OK;  // Permissions check passed
 }
 
 // TODO: Setup handle will be the new handle_event, so it will perform all the actions
@@ -96,6 +99,7 @@ ResponseStatus FileDeleteHandler::setup_handler(Connection* conn) {
     // No specific setup needed for file deletion
     log(LOG_DEBUG, "FileDeleteHandler: Setup complete for client_fd %d",
         conn->client_fd_);
+    return OK;
 }
 
 void FileDeleteHandler::cleanup_handler(Connection* conn) {
@@ -104,23 +108,21 @@ void FileDeleteHandler::cleanup_handler(Connection* conn) {
         conn->client_fd_);
 }
 
-bool FileDeleteHandler::validate_delete_request(Connection* conn) {
+ResponseStatus FileDeleteHandler::validate_delete_request(Connection* conn) {
     // 1. Basic connection validation
     if (!conn->request_data_ || !conn->response_data_) {
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return false;
+        return INTERNAL_SERVER_ERROR;
     }
 
     // 2. Location match validation
     if (!conn->location_match_) {
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return false;
+        return INTERNAL_SERVER_ERROR;
     }
 
-    return true;
+    return OK;
 }
 
-bool FileDeleteHandler::extract_file_path(Connection* conn,
+ResponseStatus FileDeleteHandler::extract_file_path(Connection* conn,
                                           std::string& file_path) {
     // Use the same path resolution as other handlers
     file_path = parse_absolute_path(conn);
@@ -129,32 +131,29 @@ bool FileDeleteHandler::extract_file_path(Connection* conn,
         log(LOG_ERROR,
             "FileDeleteHandler: Failed to resolve file path for URI: %s",
             conn->request_data_->uri_.c_str());
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return false;
+        return BAD_REQUEST;
     }
 
     // Check if path ends with slash (directory)
     if (!file_path.empty() && file_path[file_path.length() - 1] == '/') {
         log(LOG_ERROR, "FileDeleteHandler: Cannot delete directory: %s",
             file_path.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return false;
+        return FORBIDDEN;
     }
 
     // Basic path traversal protection (additional security)
     if (file_path.find("..") != std::string::npos) {
         log(LOG_ERROR, "FileDeleteHandler: Path traversal detected: %s",
             file_path.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return false;
+        return FORBIDDEN;
     }
 
     log(LOG_DEBUG, "FileDeleteHandler: Resolved file path: %s",
         file_path.c_str());
-    return true;
+    return OK;
 }
 
-bool FileDeleteHandler::delete_file(Connection* conn,
+ResponseStatus FileDeleteHandler::delete_file(Connection* conn,
                                     const std::string& file_path) {
     log(LOG_DEBUG, "FileDeleteHandler: Attempting to delete file: %s",
         file_path.c_str());
@@ -165,33 +164,30 @@ bool FileDeleteHandler::delete_file(Connection* conn,
         if (errno == ENOENT) {
             log(LOG_INFO, "FileDeleteHandler: File not found: %s",
                 file_path.c_str());
-            ErrorHandler::generate_error_response(conn, NOT_FOUND);
+            return NOT_FOUND;
         } else if (errno == EACCES) {
             log(LOG_ERROR, "FileDeleteHandler: Access denied for file: %s",
                 file_path.c_str());
-            ErrorHandler::generate_error_response(conn, FORBIDDEN);
+            return FORBIDDEN;
         } else {
             log(LOG_ERROR, "FileDeleteHandler: Error accessing file %s: %s",
                 file_path.c_str(), strerror(errno));
-            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+            return INTERNAL_SERVER_ERROR;
         }
-        return false;
     }
 
     // 2. Check if it's a regular file (not directory, device, etc.)
     if (!S_ISREG(file_stat.st_mode)) {
         log(LOG_ERROR, "FileDeleteHandler: Cannot delete non-regular file: %s",
             file_path.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return false;
+        return FORBIDDEN;
     }
 
     // 3. Check file permissions (read permission as indicator of accessibility)
     if (access(file_path.c_str(), W_OK) != 0) {
         log(LOG_ERROR, "FileDeleteHandler: No write permission for file: %s",
             file_path.c_str());
-        ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        return false;
+        return FORBIDDEN;
     }
 
     // 4. Attempt to delete the file
@@ -200,27 +196,26 @@ bool FileDeleteHandler::delete_file(Connection* conn,
             log(LOG_ERROR,
                 "FileDeleteHandler: Permission denied deleting file: %s",
                 file_path.c_str());
-            ErrorHandler::generate_error_response(conn, FORBIDDEN);
+            return FORBIDDEN;
         } else if (errno == ENOENT) {
             log(LOG_ERROR,
                 "FileDeleteHandler: File disappeared during deletion: %s",
                 file_path.c_str());
-            ErrorHandler::generate_error_response(conn, NOT_FOUND);
+            return NOT_FOUND;
         } else if (errno == EBUSY) {
             log(LOG_ERROR, "FileDeleteHandler: File is busy, cannot delete: %s",
                 file_path.c_str());
-            ErrorHandler::generate_error_response(conn, CONFLICT);
+            return CONFLICT;
         } else {
             log(LOG_ERROR, "FileDeleteHandler: Failed to delete file %s: %s",
                 file_path.c_str(), strerror(errno));
-            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
+            return INTERNAL_SERVER_ERROR;
         }
-        return false;
     }
 
     log(LOG_INFO, "FileDeleteHandler: Successfully deleted file: %s",
         file_path.c_str());
-    return true;
+    return OK;
 }
 
 void FileDeleteHandler::send_delete_success_response(

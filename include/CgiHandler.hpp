@@ -21,9 +21,9 @@ class CgiHandler : public AHandler {
     ResponseStatus handle_cgi_write(Connection* conn);
 
    private:
-    bool validate_cgi_request(Connection* conn);
+    ResponseStatus validate_cgi_request(Connection* conn);
     bool setup_cgi_execution(Connection* conn);
-    bool setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
+    ResponseStatus setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                          int cgi_to_server_pipe[2]);
     void handle_child_pipes(int server_to_cgi_pipe[2],
                             int cgi_to_server_pipe[2]);
