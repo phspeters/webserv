@@ -4,31 +4,61 @@ StaticFileHandler::StaticFileHandler() {}
 
 StaticFileHandler::~StaticFileHandler() {}
 
-// 1. Initial, lightweight validation of the request.
 ResponseStatus StaticFileHandler::check_permissions(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Checking permissions for client_fd %d",
         conn->client_fd_);
 
-    // Only GET method is supported for static files
     if (conn->request_data_->method_ != "GET") {
-        //ErrorHandler::generate_error_response(conn, METHOD_NOT_ALLOWED);
         conn->response_data_->set_error_header("Allow", "GET");
         return METHOD_NOT_ALLOWED;
     }
 
-    // Check for location-level redirects first
-    if (process_location_redirect(conn) == MOVED_PERMANENTLY) {
+    if (process_location_redirect(conn)) {
         return MOVED_PERMANENTLY;
     }
+
+    std::string absolute_path = parse_absolute_path(conn);
+
+    if (absolute_path.empty() ||
+        absolute_path[absolute_path.length() - 1] == '/') {
+        if (process_directory_redirect(conn, absolute_path)) {
+            return REDIRECT;
+        }
+
+        bool need_autoindex = false;
+        if (process_directory_index(conn, absolute_path, need_autoindex)) {
+            if (need_autoindex) {
+                generate_directory_listing(conn, absolute_path);
+                return AUTOINDEX_GENERATED;
+            }
+        } else {
+            return FORBIDDEN;
+        }
+    }
+
+    struct stat file_info;
+    if (stat(absolute_path.c_str(), &file_info) == -1) {
+        if (errno == ENOENT || errno == ENOTDIR) return NOT_FOUND;
+        if (errno == EACCES) return FORBIDDEN;
+        return INTERNAL_SERVER_ERROR;
+    }
+
+    if (!S_ISREG(file_info.st_mode)) {
+        return FORBIDDEN;
+    }
+
+    // Store validated info in the request for setup_handler to use.
+    conn->request_data_->validated_path_ = absolute_path;
+    conn->request_data_->validated_file_size_ = file_info.st_size;
 
     log(LOG_DEBUG,
         "StaticFileHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
-    
-    return OK; 
+    return OK;
 }
 
-// 2. Setup resources: resolve path, open file, and prepare for serving.
+
+// 2. Setup resources: open file and prepare for serving.
 ResponseStatus StaticFileHandler::setup_handler(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Setting up handler for client_fd %d",
         conn->client_fd_);

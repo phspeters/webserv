@@ -27,6 +27,8 @@ class StaticFileHandler : public AHandler {
     // Prevent copying
     StaticFileHandler(const StaticFileHandler&);
     StaticFileHandler& operator=(const StaticFileHandler&);
+
+    std::string absolute_path_;
 };  // class StaticFileHandler
 
 struct StaticFileContext {

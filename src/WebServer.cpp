@@ -1071,68 +1071,39 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
     Connection* conn = ctx->conn_;
     IOContext* client_ctx = conn->io_contexts_[0];
 
-    // This handler is triggered by an event on the static file's descriptor.
-    // We expect an EPOLLIN event, meaning the file is ready to be read.
     if (event_flags & EPOLLIN) {
-        log(LOG_DEBUG, "Handling EPOLLIN for static file fd %d", ctx->fd_);
+        log(LOG_DEBUG, "handle_static_file_event: Handling EPOLLIN for static file fd %d", ctx->fd_);
 
-        AHandler* handler = conn->active_handler_;
-        if (!handler) {
-            log(LOG_FATAL, "handle_static_file_event: Active handler is NULL");
-            close_client_connection(conn);  // CHECK
+        if (conn && conn->active_handler_) {
+            ResponseStatus response_status = conn->active_handler_->handle_event(conn);
+        } else {
+            log(LOG_FATAL,
+                "handle_static_file_event: Connection or active handler is "
+                "NULL");
             return;
         }
 
-        // IF state is handling request THEN handler prepare response // CHECK
-        if (conn->conn_state_ == CONN_GENERATING_RESPONSE) {
-            // The handler reads the file content and prepares the response
-            // data.
-            handler->handle_event(conn);
-        }
-
-        // CHECK: cleanup handler should be responsible for centralizing resources deallocation
-        // The file has been read, so we can remove its context from epoll.
-        //if (!remove_context_from_epoll(ctx)) {
-        //    log(LOG_ERROR,
-        //        "handle_static_file_event: Failed to remove file_fd %d from "
-        //        "epoll",
-        //        ctx->fd_);
-        //    close_client_connection(conn);  // CHECK
-        //    return;
-        //}
-
-        // IF state is writing responde THEN response_writer prepares the buffer
-        // The handler should have set the state to CONN_WRITING_RESPONSE upon
-        // success. // OK
-        if (conn->conn_state_ == CONN_WRITING_RESPONSE) {
-            log(LOG_DEBUG, "Writing static file response for client_fd %d",
-                conn->client_fd_);
-
-            // Response writer serializes the response into the write_buffer
-            response_writer_.write_response_to_buffer(conn);
-
-            // and switches the client socket to listen for EPOLLOUT
-            if (!conn->write_buffer_.empty()) {
-                if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
-                    log(LOG_ERROR,
-                        "handle_static_file_event: Failed to update client_fd "
-                        "%d for writing",
-                        conn->client_fd_);
-                    close_client_connection(conn);
-                }
-                conn->conn_state_ = CONN_WRITING_RESPONSE;
-            } else {
-                log(LOG_DEBUG,
-                    "Static file response buffer is empty for client_fd %d, "
-                    "closing.",
+        response_writer_.write_response_to_buffer(conn);
+        if (!conn->write_buffer_.empty()) {
+            if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
+                log(LOG_ERROR,
+                    "handle_static_file_event: Failed to update client_fd "
+                    "%d for writing",
                     conn->client_fd_);
+                close_client_connection(conn);
             }
+            conn->conn_state_ = CONN_WRITING_RESPONSE;
+            
+        } else {
+            log(LOG_DEBUG,
+            "handle_static_file_event: No data to write for client_fd %d",
+            conn->client_fd_);
         }
     } else {
         log(LOG_FATAL,
-            "handle_static_file_event: Error event %u on file_fd %d for "
-            "client_fd %d",
-            event_flags, ctx->fd_, conn->client_fd_);
+            "handle_static_file_event: Invalid event flags for static file "
+            "event: %u",
+            event_flags);
     }
 }
 
