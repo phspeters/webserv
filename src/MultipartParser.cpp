@@ -9,7 +9,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
         conn->client_fd_);
 
     if (!conn->file_upload_context_) {
-        return PARSE_ERROR;
+        return ERROR;
     }
 
     Buffer& buff = conn->read_buffer_;
@@ -18,7 +18,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
     if (boundary.empty()) {
         log(LOG_ERROR, "No multipart boundary set for connection: %i",
             conn->client_fd_);
-        return PARSE_ERROR;
+        return ERROR;
     }
     std::string full_boundary = "--" + boundary;
     std::string end_boundary = full_boundary + "--";
@@ -38,7 +38,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
                     // Boundary not found, consume all and wait for more
                     // data
                     buff.consume(len);
-                    return PARSE_INCOMPLETE;
+                    return AGAIN;
                 }
                 pos = bpos + full_boundary.length();
                 // There may be CRLF after the boundary
@@ -47,7 +47,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
                 state = READ_HEADERS;
                 upload_ctx->part_headers_.clear();
                 upload_ctx->is_file_part_ = false;
-                if (buff.readable_bytes() == 0) return PARSE_INCOMPLETE;
+                if (buff.readable_bytes() == 0) return AGAIN;
                 continue;
             }
             case READ_HEADERS: {
@@ -56,7 +56,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
                 size_t hpos = chunk_headers.find("\r\n\r\n");
                 if (hpos == std::string::npos) {
                     // Headers incomplete, wait for more data
-                    return PARSE_INCOMPLETE;
+                    return AGAIN;
                 }
                 upload_ctx->part_headers_ = chunk_headers.substr(0, hpos);
                 // Check if it's a file part and extract filename
@@ -79,7 +79,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
                 }
                 buff.consume(hpos + 4);
                 state = READ_FILE_DATA;
-                if (buff.readable_bytes() == 0) return PARSE_INCOMPLETE;
+                if (buff.readable_bytes() == 0) return AGAIN;
                 continue;
             }
             case READ_FILE_DATA: {
@@ -94,7 +94,7 @@ ParseStatus MultipartParser::parse(Connection* conn) {
                             buff.data(), buff.readable_bytes());
                     }
                     buff.consume(buff.readable_bytes());
-                    return PARSE_INCOMPLETE;
+                    return AGAIN;
                 }
                 // Found boundary, write until it
                 if (upload_ctx->is_file_part_ &&
@@ -108,17 +108,17 @@ ParseStatus MultipartParser::parse(Connection* conn) {
                     upload_ctx->upload_complete = true;
                     buff.consume(end_boundary.length());
                     state = END_MULTIPART;
-                    return PARSE_SUCCESS;
+                    return COMPLETE;
                 }
                 state = SEARCH_BOUNDARY;
                 continue;
             }
             case END_MULTIPART:
                 conn->request_data_->body_fully_parsed_ = true;
-                return PARSE_SUCCESS;
+                return COMPLETE;
         }
     }
-    return PARSE_INCOMPLETE;
+    return AGAIN;
 }
 
 std::string MultipartParser::extract_boundary(const std::string& content_type) {

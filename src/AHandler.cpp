@@ -1,6 +1,6 @@
 #include "common.hpp"
 
-ResponseStatus AHandler::process_location_redirect(Connection* conn) {
+HttpStatus AHandler::process_location_redirect(Connection* conn) {
     const Location* location = conn->location_match_;
 
     // Check if this location has a redirect
@@ -59,7 +59,7 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     return (absolute_path);
 }
 
-ResponseStatus AHandler::process_directory_redirect(Connection* conn,
+HttpStatus AHandler::process_directory_redirect(Connection* conn,
                                           std::string& absolute_path) {
     std::string path = conn->request_data_->path_;
 
@@ -94,7 +94,7 @@ ResponseStatus AHandler::process_directory_redirect(Connection* conn,
 }
 
 // Handle directory path resolution (index file or autoindex)
-ResponseStatus AHandler::process_directory_index(Connection* conn,
+HttpStatus AHandler::process_directory_index(Connection* conn,
                                        std::string& absolute_path,
                                        bool& need_autoindex) {
     // Ensure absolute_path ends with /
@@ -137,7 +137,7 @@ ResponseStatus AHandler::process_directory_index(Connection* conn,
     return FORBIDDEN;  
 }
 
-ResponseStatus AHandler::generate_directory_listing(Connection* conn,
+HttpStatus AHandler::generate_directory_listing(Connection* conn,
                                           const std::string& dir_path) {
     // Open the directory
     DIR* dir = opendir(dir_path.c_str());

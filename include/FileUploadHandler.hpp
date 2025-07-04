@@ -12,15 +12,16 @@ class FileUploadHandler : public AHandler {
     FileUploadHandler();
     virtual ~FileUploadHandler();
 
-    virtual ResponseStatus check_permissions(Connection* conn);
-    virtual ResponseStatus setup_handler(Connection* conn);
-    virtual ResponseStatus handle_event(Connection* conn);
+    virtual HttpStatus check_permissions(Connection* conn);
+    virtual HttpStatus setup_handler(Connection* conn);
+    virtual HttpStatus handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
+    virtual bool is_asynchronous() const { return true; }
 
    private:
     // Request validation and processing
     // bool validate_request(Connection* conn, std::string& boundary);
-    ResponseStatus process_trailing_slash_redirect(Connection* conn);
+    HttpStatus process_trailing_slash_redirect(Connection* conn);
 
     // Response generation
     void send_success_response(Connection* conn);
@@ -35,9 +36,10 @@ class FileUploadHandler : public AHandler {
 
     // Directory operations
     std::string get_upload_directory(Connection* conn);
-    ResponseStatus ensure_upload_directory_exists(Connection* conn,
-                                        const std::string& upload_dir);
-    ResponseStatus create_directory_recursive(Connection* conn, const std::string& path);
+    HttpStatus ensure_upload_directory_exists(
+        Connection* conn, const std::string& upload_dir);
+    HttpStatus create_directory_recursive(Connection* conn,
+                                              const std::string& path);
 
     // Utility methods
     std::string sanitize_filename(const std::string& filename);
@@ -53,13 +55,9 @@ struct FileUploadContext {
     std::string filename_;
     Buffer upload_buffer_;
     bool upload_complete;
-    MultipartParser parser_; 
+    MultipartParser parser_;
 
-    FileUploadContext()
-        : file_fd_(-1),
-          upload_complete(false) {}
+    FileUploadContext() : file_fd_(-1), upload_complete(false) {}
 };
-
-
 
 #endif  // FILEUPLOADHANDLER_HPP

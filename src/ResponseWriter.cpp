@@ -1,14 +1,13 @@
 #include "common.hpp"
 
-// TODO: Change ResponseWriter to work with buffer and fd at the same time
-WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
+Result ResponseWriter::write_response_to_buffer(Connection* conn) {
     if (!conn || !conn->response_data_) {
-        return WRITE_ERROR;
+        return ERROR;
     }
 
     HttpResponse* resp = conn->response_data_;
     WriterContext& context = conn->writer_context_;
-    WriteStatus status = WRITE_SUCCESS;
+    Result status = COMPLETE;
 
     while (context.response_writer_state_ != WRITER_DONE) {
         switch (context.response_writer_state_) {
@@ -23,7 +22,7 @@ WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
                     context.response_writer_state_ = WRITER_DECIDE_BODY_SOURCE;
                 }
                 status = write_response_head(conn);
-                if (status == WRITE_SUCCESS) {
+                if (status == COMPLETE) {
                     context.response_writer_state_ = WRITER_DECIDE_BODY_SOURCE;
                 } else {
                     return status;
@@ -32,12 +31,12 @@ WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
             }
 
             case WRITER_DECIDE_BODY_SOURCE: {
-                if (resp->body_fd_ != -1) {
-                    context.response_writer_state_ =
-                        WRITER_WRITING_BODY_FROM_FD;
-                } else if (!resp->body_data_.empty()) {
+                if (!resp->body_data_.empty()) {
                     context.response_writer_state_ =
                         WRITER_WRITING_BODY_FROM_BUFFER;
+                } else if (resp->body_fd_ != -1) {
+                    context.response_writer_state_ =
+                        WRITER_WRITING_BODY_FROM_FD;
                 } else {
                     context.response_writer_state_ = WRITER_DONE;
                 }
@@ -46,8 +45,13 @@ WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
 
             case WRITER_WRITING_BODY_FROM_BUFFER: {
                 status = write_response_body_from_buffer(conn);
-                if (status == WRITE_SUCCESS) {
-                    context.response_writer_state_ = WRITER_DONE;
+                if (status == COMPLETE) {
+                    if (resp->body_fd_ != -1) {
+                        context.response_writer_state_ =
+                            WRITER_WRITING_BODY_FROM_FD;
+                    } else {
+                        context.response_writer_state_ = WRITER_DONE;
+                    }
                 } else {
                     return status;
                 }
@@ -56,7 +60,7 @@ WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
 
             case WRITER_WRITING_BODY_FROM_FD: {
                 status = write_response_body_from_fd(conn);
-                if (status == WRITE_SUCCESS) {
+                if (status == COMPLETE) {
                     context.response_writer_state_ = WRITER_DONE;
                 } else {
                     return status;
@@ -69,7 +73,7 @@ WriteStatus ResponseWriter::write_response_to_buffer(Connection* conn) {
         }
     }
 
-    return WRITE_SUCCESS;
+    return COMPLETE;
 }
 
 std::string ResponseWriter::get_response_head_string(HttpResponse* resp) {
@@ -113,7 +117,7 @@ std::string ResponseWriter::get_response_head_string(HttpResponse* resp) {
     return headers.str();
 }
 
-WriteStatus ResponseWriter::write_response_head(Connection* conn) {
+Result ResponseWriter::write_response_head(Connection* conn) {
     WriterContext& context = conn->writer_context_;
 
     size_t bytes_to_write = context.formatted_headers_.size();
@@ -123,21 +127,21 @@ WriteStatus ResponseWriter::write_response_head(Connection* conn) {
     if (bytes_written < bytes_to_write) {
         // Buffer is full, store remaining and return
         context.formatted_headers_.erase(0, bytes_written);
-        return WRITE_INCOMPLETE;
+        return AGAIN;
     }
 
     context.formatted_headers_.clear();
-    return WRITE_SUCCESS;
+    return COMPLETE;
 }
 
-WriteStatus ResponseWriter::write_response_body_from_buffer(Connection* conn) {
+Result ResponseWriter::write_response_body_from_buffer(Connection* conn) {
     HttpResponse* resp = conn->response_data_;
     Buffer& buffer = conn->write_buffer_;
 
     size_t bytes_to_write =
         resp->body_data_.size() - conn->writer_context_.body_bytes_written_;
     if (bytes_to_write == 0) {
-        return WRITE_SUCCESS;
+        return COMPLETE;
     }
 
     size_t bytes_written = buffer.append(
@@ -147,26 +151,26 @@ WriteStatus ResponseWriter::write_response_body_from_buffer(Connection* conn) {
     if (bytes_written < bytes_to_write) {
         // Buffer is full, store remaining and return
         conn->writer_context_.body_bytes_written_ += bytes_written;
-        return WRITE_INCOMPLETE;
+        return AGAIN;
     }
 
     // All body data written
     conn->writer_context_.body_bytes_written_ += bytes_written;
-    return WRITE_SUCCESS;
+    return COMPLETE;
 }
 
-WriteStatus ResponseWriter::write_response_body_from_fd(Connection* conn) {
+Result ResponseWriter::write_response_body_from_fd(Connection* conn) {
     HttpResponse* resp = conn->response_data_;
     Buffer& buffer = conn->write_buffer_;
 
     ssize_t bytes_written = buffer.read_from(resp->body_fd_);
     if (bytes_written < 0) {
-        return WRITE_ERROR;
+        return ERROR;
     } else if (bytes_written == 0) {
         // EOF reached, no more data to write
-        return WRITE_SUCCESS;
+        return COMPLETE;
     }
 
     conn->writer_context_.body_bytes_written_ += bytes_written;
-    return WRITE_INCOMPLETE;
+    return AGAIN;
 }

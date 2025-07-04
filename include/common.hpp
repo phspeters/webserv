@@ -60,7 +60,6 @@ enum ConnectionState {
     CONN_READING_REQUEST,
     CONN_GENERATING_RESPONSE,
     CONN_WRITING_RESPONSE,
-    CONN_FINISHING_WRITE,
     CONN_ERROR
 };
 
@@ -81,15 +80,6 @@ enum MultipartState {
     END_MULTIPART
 };
 
-enum CgiHandlerState {
-    CGI_IDLE,
-    CGI_WRITING_TO_PIPE,
-    CGI_READING_FROM_PIPE,
-    CGI_HEADERS_PARSED,
-    CGI_COMPLETE,
-    CGI_ERROR
-};
-
 enum WriterState {
     WRITER_START,
     WRITER_WRITING_HEADERS,
@@ -99,30 +89,7 @@ enum WriterState {
     WRITER_DONE
 };
 
-enum ParseStatus {
-    PARSE_INCOMPLETE,
-    PARSE_SUCCESS,
-    PARSE_ERROR,
-    PARSE_INVALID_REQUEST_LINE,
-    PARSE_METHOD_NOT_IMPLEMENTED,
-    PARSE_METHOD_NOT_ALLOWED,
-    PARSE_INVALID_PATH,
-    PARSE_INVALID_QUERY_STRING,
-    PARSE_VERSION_NOT_SUPPORTED,
-    PARSE_REQUEST_TOO_LONG,
-    PARSE_MISSING_HOST_HEADER,
-    PARSE_HEADER_TOO_LONG,
-    PARSE_TOO_MANY_HEADERS,
-    PARSE_MISSING_CONTENT_LENGTH,
-    PARSE_INVALID_CONTENT_LENGTH,
-    PARSE_CONTENT_TOO_LARGE,
-    PARSE_UNKNOWN_ENCODING,
-    PARSE_INVALID_CHUNK_SIZE
-};
-
-enum WriteStatus { WRITE_SUCCESS, WRITE_INCOMPLETE, WRITE_ERROR };
-
-enum ResponseStatus {
+enum HttpStatus {
     // 2xx - Success
     OK = 200,          // Request succeeded
     CREATED = 201,     // Request succeeded and a new resource was created
@@ -167,6 +134,8 @@ enum FdType {
 };
 
 enum LocType { LOC_DEFAULT, LOC_EXTENSION };
+
+enum Result { COMPLETE, AGAIN, ERROR };
 
 #include "AHandler.hpp"
 #include "Buffer.hpp"

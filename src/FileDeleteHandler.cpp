@@ -4,7 +4,7 @@ FileDeleteHandler::FileDeleteHandler() : AHandler() {}
 
 FileDeleteHandler::~FileDeleteHandler() {}
 
-ResponseStatus FileDeleteHandler::handle_event(Connection* conn) {
+HttpStatus FileDeleteHandler::handle_event(Connection* conn) {
     // This function is intentionally empty. 
     // All file deletion logic is handled synchronously in `setup_handler`. 
     // Since a DELETE request does not have a body to process, 
@@ -13,7 +13,7 @@ ResponseStatus FileDeleteHandler::handle_event(Connection* conn) {
     return OK;
 }
 
-ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
+HttpStatus FileDeleteHandler::check_permissions(Connection* conn) {
     // Check if we can access the target directory for deletion
     std::string file_path = parse_absolute_path(conn);
     if (file_path.empty()) {
@@ -62,8 +62,8 @@ ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
     return OK;  
 }
 
-ResponseStatus FileDeleteHandler::setup_handler(Connection* conn) {
-    ResponseStatus status = OK;
+HttpStatus FileDeleteHandler::setup_handler(Connection* conn) {
+    HttpStatus status = OK;
     log(LOG_DEBUG, "FileDeleteHandler: Starting processing for client_fd %d",
         conn->client_fd_);
 
@@ -107,7 +107,7 @@ void FileDeleteHandler::cleanup_handler(Connection* conn) {
         conn->client_fd_);
 }
 
-ResponseStatus FileDeleteHandler::validate_delete_request(Connection* conn) {
+HttpStatus FileDeleteHandler::validate_delete_request(Connection* conn) {
     // 1. Basic connection validation
     if (!conn->request_data_ || !conn->response_data_) {
         return INTERNAL_SERVER_ERROR;
@@ -121,7 +121,7 @@ ResponseStatus FileDeleteHandler::validate_delete_request(Connection* conn) {
     return OK;
 }
 
-ResponseStatus FileDeleteHandler::extract_file_path(Connection* conn,
+HttpStatus FileDeleteHandler::extract_file_path(Connection* conn,
                                           std::string& file_path) {
     // Use the same path resolution as other handlers
     file_path = parse_absolute_path(conn);
@@ -152,7 +152,7 @@ ResponseStatus FileDeleteHandler::extract_file_path(Connection* conn,
     return OK;
 }
 
-ResponseStatus FileDeleteHandler::delete_file(Connection* conn,
+HttpStatus FileDeleteHandler::delete_file(Connection* conn,
                                     const std::string& file_path) {
     log(LOG_DEBUG, "FileDeleteHandler: Attempting to delete file: %s",
         file_path.c_str());

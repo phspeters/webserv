@@ -12,13 +12,13 @@ class ResponseWriter {
     ResponseWriter() {}
     ~ResponseWriter() {}
 
-    WriteStatus write_response_to_buffer(Connection* conn);
+    Result write_response_to_buffer(Connection* conn);
 
    private:
     std::string get_response_head_string(HttpResponse* resp);
-    WriteStatus write_response_head(Connection* conn);
-    WriteStatus write_response_body_from_buffer(Connection* conn);
-    WriteStatus write_response_body_from_fd(Connection* conn);
+    Result write_response_head(Connection* conn);
+    Result write_response_body_from_buffer(Connection* conn);
+    Result write_response_body_from_fd(Connection* conn);
 
     // Prevent copying
     ResponseWriter(const ResponseWriter&);

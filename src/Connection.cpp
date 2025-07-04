@@ -9,6 +9,7 @@ Connection::Connection(WebServer* owner, int fd,
       last_activity_(time(NULL)),
       request_data_(new HttpRequest()),
       response_data_(new HttpResponse()),
+      status_(OK),
       conn_state_(CONN_READING_REQUEST),
       active_handler_(NULL),
       location_match_(NULL),
@@ -187,6 +188,7 @@ void Connection::reset_for_keep_alive() {
 
     owner_server_->update_context_in_epoll(*(io_contexts_.begin()), EPOLLIN);
 
+    status_ = OK;
     conn_state_ = CONN_READING_REQUEST;
 
     log(LOG_DEBUG, "Connection reset for keep-alive on socket '%i'",

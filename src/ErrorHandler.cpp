@@ -2,13 +2,13 @@
 
 void ErrorHandler::generate_error_response(Connection* conn,
                                            ParseStatus parse_status) {
-    ResponseStatus response_status =
+    HttpStatus response_status =
         parse_status_to_response_status(parse_status);
     generate_error_response(conn, response_status);
 }
 
 void ErrorHandler::generate_error_response(Connection* conn,
-                                           ResponseStatus response_status) {
+                                           HttpStatus response_status) {
     if (!conn || !conn->response_data_) {
         log(LOG_FATAL,
             "generate_error_response: Invalid connection or response data");
@@ -100,7 +100,7 @@ int ErrorHandler::get_error_page(int response_status,
 }
 
 std::string ErrorHandler::generate_default_error_page(
-    ResponseStatus status_code, const std::string& status_message) {
+    HttpStatus status_code, const std::string& status_message) {
     std::ostringstream html;
 
     std::ostringstream status_code_str;
@@ -174,12 +174,12 @@ std::string ErrorHandler::generate_default_error_page(
     return html.str();
 }
 
-ResponseStatus ErrorHandler::parse_status_to_response_status(
+HttpStatus ErrorHandler::parse_status_to_response_status(
     ParseStatus parse_status) {
-    ResponseStatus status_code = INTERNAL_SERVER_ERROR;
+    HttpStatus status_code = INTERNAL_SERVER_ERROR;
 
     switch (parse_status) {
-        case PARSE_ERROR:
+        case ERROR:
         case PARSE_INVALID_REQUEST_LINE:
         case PARSE_INVALID_PATH:
         case PARSE_INVALID_QUERY_STRING:

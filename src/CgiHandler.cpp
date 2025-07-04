@@ -4,12 +4,12 @@ CgiHandler::CgiHandler() : AHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
-ResponseStatus CgiHandler::handle_event(Connection* conn) {
+HttpStatus CgiHandler::handle_event(Connection* conn) {
     (void)conn;
     return OK;
 }
 
-ResponseStatus CgiHandler::check_permissions(Connection* conn) {
+HttpStatus CgiHandler::check_permissions(Connection* conn) {
     // Check if CGI script exists and is executable
     std::string script_path = parse_absolute_path(conn);
     if (script_path.empty()) {
@@ -57,7 +57,7 @@ ResponseStatus CgiHandler::check_permissions(Connection* conn) {
     return OK;  
 }
 
-ResponseStatus CgiHandler::setup_handler(Connection* conn) {
+HttpStatus CgiHandler::setup_handler(Connection* conn) {
     // Create CGI context
     conn->cgi_context_ = new CgiContext();
     // TODO: Call setup_cgi_execution(conn)?
@@ -114,7 +114,7 @@ void CgiHandler::cleanup_handler(Connection* conn) {
 }
 
 // TODO: Move these to check_permissions 
-ResponseStatus CgiHandler::validate_cgi_request(Connection* conn) {
+HttpStatus CgiHandler::validate_cgi_request(Connection* conn) {
     // 1. Check redirect (same as StaticFileHandler)
     if (process_location_redirect(conn)) {
         return false;  // Redirect response was set up, stop processing
@@ -302,7 +302,7 @@ bool CgiHandler::setup_cgi_execution(Connection* conn) {
     return OK;  // Successfully forked and parent setup initiated
 }
 
-ResponseStatus CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
+HttpStatus CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                                  int cgi_to_server_pipe[2]) {
     // Create pipes for communication between server and CGI script
 
@@ -526,7 +526,7 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
 // 3. if body_fully_parsed == true, send all the remaining buffer
 // 4. if body_data_.empty() return success
 // Function has to return status so that WebServer knows when to call ResponseWriter or not
-ResponseStatus CgiHandler::handle_cgi_write(Connection* conn) {
+HttpStatus CgiHandler::handle_cgi_write(Connection* conn) {
     if (!conn || !conn->cgi_context_ ||
         conn->cgi_context_->cgi_pipe_stdin_fd_ < 0) {
         log(LOG_ERROR, "CGI write: Invalid connection or pipe");
@@ -585,7 +585,7 @@ ResponseStatus CgiHandler::handle_cgi_write(Connection* conn) {
 // 4) Set the response body_fd to the output pipe
 // Cleanup handler will be called after response if fully written and
 // will be responsible for reaping the child and closing the fds, so we can remove it here
-ResponseStatus CgiHandler::handle_cgi_read(Connection* conn) {
+HttpStatus CgiHandler::handle_cgi_read(Connection* conn) {
     log(LOG_DEBUG,
         "CGI: Handling read for client %d on stdout_fd %d, current cgi_state: "
         "%d",
@@ -834,7 +834,7 @@ void CgiHandler::finalize_cgi_response(Connection* conn) {
         conn->client_fd_, conn->response_data_->status_code_);
 }
 
-void CgiHandler::finalize_cgi_error(Connection* conn, ResponseStatus status) {
+void CgiHandler::finalize_cgi_error(Connection* conn, HttpStatus status) {
     ErrorHandler::generate_error_response(conn, status);
     conn->cgi_context_->cgi_handler_state_ = CGI_ERROR;
 

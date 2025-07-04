@@ -12,19 +12,21 @@ class CgiHandler : public AHandler {
     CgiHandler();
     virtual ~CgiHandler();
 
-    virtual ResponseStatus check_permissions(Connection* conn);
-    virtual ResponseStatus setup_handler(Connection* conn);
-    virtual ResponseStatus handle_event(Connection* conn);
+    virtual HttpStatus check_permissions(Connection* conn);
+    virtual HttpStatus setup_handler(Connection* conn);
+    virtual HttpStatus handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
-    ResponseStatus handle_cgi_read(Connection* conn);
-    ResponseStatus handle_cgi_write(Connection* conn);
+    HttpStatus handle_cgi_read(Connection* conn);
+    HttpStatus handle_cgi_write(Connection* conn);
+
+    virtual bool is_asynchronous() const { return true; }
 
    private:
-    ResponseStatus validate_cgi_request(Connection* conn);
+    HttpStatus validate_cgi_request(Connection* conn);
     bool setup_cgi_execution(Connection* conn);
-    ResponseStatus setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
-                         int cgi_to_server_pipe[2]);
+    HttpStatus setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
+                                   int cgi_to_server_pipe[2]);
     void handle_child_pipes(int server_to_cgi_pipe[2],
                             int cgi_to_server_pipe[2]);
     std::vector<char*> create_cgi_envp(Connection* conn);
@@ -33,7 +35,7 @@ class CgiHandler : public AHandler {
                              int cgi_to_server_pipe[2]);
     void parse_cgi_output(Connection* conn);
     void finalize_cgi_response(Connection* conn);
-    void finalize_cgi_error(Connection* conn, ResponseStatus status);
+    void finalize_cgi_error(Connection* conn, HttpStatus status);
     bool set_status_line(Connection* conn);
 
     // Prevent copying
@@ -43,20 +45,15 @@ class CgiHandler : public AHandler {
 
 // TODO: Assess if we should change pipe to socketpair
 struct CgiContext {
-    CgiHandlerState cgi_handler_state_;
     pid_t cgi_pid_;
     int cgi_pipe_stdin_fd_;
     int cgi_pipe_stdout_fd_;
     std::string cgi_script_path_;
     std::vector<std::string> cgi_envp_;
-    Buffer cgi_input_buffer_;
     Buffer cgi_output_buffer_;
 
     CgiContext()
-        : cgi_handler_state_(CGI_IDLE),
-          cgi_pid_(-1),
-          cgi_pipe_stdin_fd_(-1),
-          cgi_pipe_stdout_fd_(-1) {}
+        : cgi_pid_(-1), cgi_pipe_stdin_fd_(-1), cgi_pipe_stdout_fd_(-1) {}
 };
 
 #endif  // CGIHANDLER_HPP

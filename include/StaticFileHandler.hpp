@@ -18,10 +18,11 @@ class StaticFileHandler : public AHandler {
     // - Opens file, prepares response headers (status, content-type, length).
     // - Sets up Connection state for sending (file FD, offset, bytes).
     // - Uses ResponseWriter to format headers into Connection write buffer.
-    virtual ResponseStatus check_permissions(Connection* conn);
-    virtual ResponseStatus setup_handler(Connection* conn);
-    virtual ResponseStatus handle_event(Connection* conn);
+    virtual HttpStatus check_permissions(Connection* conn);
+    virtual HttpStatus setup_handler(Connection* conn);
+    virtual HttpStatus handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
+    virtual bool is_asynchronous() const { return true; }
 
    private:
     // Prevent copying

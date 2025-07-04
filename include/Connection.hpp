@@ -50,6 +50,7 @@ struct Connection {
     //--------------------------------------
     // State Management
     //--------------------------------------
+    HttpStatus status_;
     ConnectionState conn_state_;
     ParserContext parser_context_;
     MultipartContext multipart_context_;

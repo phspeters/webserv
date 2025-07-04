@@ -10,18 +10,18 @@ class FileDeleteHandler : public AHandler {
     FileDeleteHandler();
     virtual ~FileDeleteHandler();
 
-    virtual ResponseStatus check_permissions(Connection* conn);
-    virtual ResponseStatus setup_handler(Connection* conn);
-    virtual ResponseStatus handle_event(Connection* conn);
+    virtual HttpStatus check_permissions(Connection* conn);
+    virtual HttpStatus setup_handler(Connection* conn);
+    virtual HttpStatus handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
    private:
     // Request validation and processing
-    ResponseStatus validate_delete_request(Connection* conn);
-    ResponseStatus extract_file_path(Connection* conn, std::string& file_path);
+    HttpStatus validate_delete_request(Connection* conn);
+    HttpStatus extract_file_path(Connection* conn, std::string& file_path);
 
     // File operations
-    ResponseStatus delete_file(Connection* conn, const std::string& file_path);
+    HttpStatus delete_file(Connection* conn, const std::string& file_path);
 
     // Response generation
     void send_delete_success_response(Connection* conn,

@@ -6,7 +6,7 @@ FileUploadHandler::FileUploadHandler() : AHandler() {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
-ResponseStatus FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
+HttpStatus FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
     std::string uri = conn->request_data_->uri_;
     const Location* location = conn->location_match_;
 
@@ -52,7 +52,7 @@ std::string FileUploadHandler::get_upload_directory(Connection* conn) {
     return upload_dir;
 }
 
-ResponseStatus FileUploadHandler::ensure_upload_directory_exists(
+HttpStatus FileUploadHandler::ensure_upload_directory_exists(
     Connection* conn, const std::string& upload_dir) {
     struct stat st;
     if (stat(upload_dir.c_str(), &st) == 0) {
@@ -63,7 +63,7 @@ ResponseStatus FileUploadHandler::ensure_upload_directory_exists(
     return create_directory_recursive(conn, upload_dir);
 }
 
-ResponseStatus FileUploadHandler::create_directory_recursive(Connection* conn,
+HttpStatus FileUploadHandler::create_directory_recursive(Connection* conn,
                                                    const std::string& path) {
     size_t pos = 0;
     while ((pos = path.find('/', pos + 1)) != std::string::npos) {
@@ -165,7 +165,7 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
     return true;
 }
 
-ResponseStatus FileUploadHandler::check_permissions(Connection* conn) {
+HttpStatus FileUploadHandler::check_permissions(Connection* conn) {
     std::string content_length =
         conn->request_data_->get_header("content-length");
     if (content_length.empty()) {
@@ -182,7 +182,7 @@ ResponseStatus FileUploadHandler::check_permissions(Connection* conn) {
     return OK;
 }
 
-ResponseStatus FileUploadHandler::setup_handler(Connection* conn) {
+HttpStatus FileUploadHandler::setup_handler(Connection* conn) {
     // Redirect if needed
     if (process_trailing_slash_redirect(conn) == MOVED_PERMANENTLY) {
         return MOVED_PERMANENTLY;
@@ -190,7 +190,7 @@ ResponseStatus FileUploadHandler::setup_handler(Connection* conn) {
 
     // Generate temporary file name
     std::string upload_dir = get_upload_directory(conn);
-    ResponseStatus status = ensure_upload_directory_exists(conn, upload_dir);
+    HttpStatus status = ensure_upload_directory_exists(conn, upload_dir);
     if (status == FORBIDDEN) {
         return FORBIDDEN;
     } else if (status == INTERNAL_SERVER_ERROR) {
@@ -218,7 +218,7 @@ ResponseStatus FileUploadHandler::setup_handler(Connection* conn) {
 }
 
 // TODO: Handle multipart parsing inside handle_event
-ResponseStatus FileUploadHandler::handle_event(Connection* conn) {
+HttpStatus FileUploadHandler::handle_event(Connection* conn) {
     // Consume from upload_buffer_ and write to temporary file
     if (!conn->file_upload_context_) {
         log(LOG_FATAL,
@@ -228,7 +228,7 @@ ResponseStatus FileUploadHandler::handle_event(Connection* conn) {
     }
 
     ParseStatus status = conn->file_upload_context_->parser_.parse(conn);
-    if (status == PARSE_ERROR) {
+    if (status == ERROR) {
         return BAD_REQUEST;
     }
 

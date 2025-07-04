@@ -4,7 +4,7 @@ StaticFileHandler::StaticFileHandler() {}
 
 StaticFileHandler::~StaticFileHandler() {}
 
-ResponseStatus StaticFileHandler::check_permissions(Connection* conn) {
+HttpStatus StaticFileHandler::check_permissions(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Checking permissions for client_fd %d",
         conn->client_fd_);
 
@@ -59,7 +59,7 @@ ResponseStatus StaticFileHandler::check_permissions(Connection* conn) {
 
 
 // 2. Setup resources: open file and prepare for serving.
-ResponseStatus StaticFileHandler::setup_handler(Connection* conn) {
+HttpStatus StaticFileHandler::setup_handler(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Setting up handler for client_fd %d",
         conn->client_fd_);
 
@@ -78,7 +78,7 @@ ResponseStatus StaticFileHandler::setup_handler(Connection* conn) {
         bool need_autoindex = false;
         if (process_directory_index(conn, absolute_path, need_autoindex) == OK) {
             if (need_autoindex) {
-                ResponseStatus status = generate_directory_listing(conn, absolute_path);
+                HttpStatus status = generate_directory_listing(conn, absolute_path);
                 return status;
             }
         } else {
@@ -127,7 +127,7 @@ ResponseStatus StaticFileHandler::setup_handler(Connection* conn) {
 }
 
 // 3. Main logic: read the file and prepare the response.
-ResponseStatus StaticFileHandler::handle_event(Connection* conn) {
+HttpStatus StaticFileHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Handling event for client_fd %d",
         conn->client_fd_);
 
