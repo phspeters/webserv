@@ -4,42 +4,13 @@ FileDeleteHandler::FileDeleteHandler() : AHandler() {}
 
 FileDeleteHandler::~FileDeleteHandler() {}
 
-//TODO: Leave handle_event blank and move everything to setup_handler
 ResponseStatus FileDeleteHandler::handle_event(Connection* conn) {
-    ResponseStatus status = OK;
-    log(LOG_DEBUG, "FileDeleteHandler: Starting processing for client_fd %d",
-        conn->client_fd_);
-
-    // 1. Check for location redirects (same pattern as other handlers)
-    status = process_location_redirect(conn);
-    if (status != OK) {
-        return status;  // Redirect response was set up, stop processing
-    }
-
-    // 2. Validate the DELETE request
-    status = validate_delete_request(conn)
-    if (status != OK) {
-        return status;  
-    }
-
-    // 3. Extract file path from request
-    std::string file_path;
-    status = extract_file_path(conn, file_path);
-    if (status != OK) {
-        return status;  
-    }
-
-    // 4. Attempt to delete the file
-    status = delete_file(conn, file_path);
-    if (status == OK) {
-        // Extract just the filename for the response
-        size_t last_slash = file_path.find_last_of('/');
-        std::string filename = (last_slash != std::string::npos)
-                                   ? file_path.substr(last_slash + 1)
-                                   : file_path;
-        send_delete_success_response(conn, filename);
-    }
-    return status;  // Successfully handled DELETE request
+    // This function is intentionally empty. 
+    // All file deletion logic is handled synchronously in `setup_handler`. 
+    // Since a DELETE request does not have a body to process, 
+    // no further event-based handling is needed after the initial setup.
+    (void)conn;
+    return OK;
 }
 
 ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
@@ -88,18 +59,46 @@ ResponseStatus FileDeleteHandler::check_permissions(Connection* conn) {
         "FileDeleteHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
 
-    return OK;  // Permissions check passed
+    return OK;  
 }
 
-// TODO: Setup handle will be the new handle_event, so it will perform all the actions
-// and populate the response
-// We might need to return a specific status to tell WebServer that the response is
-// already done and we are ready for sending it
 ResponseStatus FileDeleteHandler::setup_handler(Connection* conn) {
-    // No specific setup needed for file deletion
+    ResponseStatus status = OK;
+    log(LOG_DEBUG, "FileDeleteHandler: Starting processing for client_fd %d",
+        conn->client_fd_);
+
+    // 1. Check for location redirects (same pattern as other handlers)
+    status = process_location_redirect(conn);
+    if (status != OK) {
+        return status;  // Redirect response was set up, stop processing
+    }
+
+    // 2. Validate the DELETE request
+    status = validate_delete_request(conn)
+    if (status != OK) {
+        return status;  
+    }
+
+    // 3. Extract file path from request
+    std::string file_path;
+    status = extract_file_path(conn, file_path);
+    if (status != OK) {
+        return status;  
+    }
+
+    // 4. Attempt to delete the file
+    status = delete_file(conn, file_path);
+    if (status == OK) {
+        // Extract just the filename for the response
+        size_t last_slash = file_path.find_last_of('/');
+        std::string filename = (last_slash != std::string::npos)
+                                   ? file_path.substr(last_slash + 1)
+                                   : file_path;
+        send_delete_success_response(conn, filename);
+    }
     log(LOG_DEBUG, "FileDeleteHandler: Setup complete for client_fd %d",
         conn->client_fd_);
-    return OK;
+    return status;
 }
 
 void FileDeleteHandler::cleanup_handler(Connection* conn) {

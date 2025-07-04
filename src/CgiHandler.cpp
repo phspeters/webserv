@@ -4,7 +4,10 @@ CgiHandler::CgiHandler() : AHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
-ResponseStatus CgiHandler::handle_event(Connection* conn) {}
+ResponseStatus CgiHandler::handle_event(Connection* conn) {
+    (void)conn;
+    return OK;
+}
 
 ResponseStatus CgiHandler::check_permissions(Connection* conn) {
     // Check if CGI script exists and is executable
