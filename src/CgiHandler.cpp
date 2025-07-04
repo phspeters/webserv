@@ -66,12 +66,49 @@ ResponseStatus CgiHandler::setup_handler(Connection* conn) {
 }
 
 void CgiHandler::cleanup_handler(Connection* conn) {
-    // Clean up CGI resources
-    if (conn->cgi_context_) {
-        cleanup_cgi_resources(conn);
-        delete conn->cgi_context_;
-        conn->cgi_context_ = NULL;
+    if (!conn->cgi_context_) {
+        log(LOG_FATAL,
+            "CgiHandler: Cleanup called but cgi_context_ is NULL for client_fd %d",
+            conn->client_fd_);
+        return;
     }
+
+    // Remove pipe IO contexts from epoll monitoring
+    if (conn->cgi_context_->cgi_pipe_stdin_io_ctx_) {
+        conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdin_io_ctx_);
+    }
+    if (conn->cgi_context_->cgi_pipe_stdout_io_ctx_) {
+        conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdout_io_ctx_);
+    }
+
+    // Always try to reap/kill any remaining child process
+    if (conn->cgi_context_->cgi_pid_ > 0) {
+        int status;
+        pid_t result = waitpid(conn->cgi_context_->cgi_pid_, &status, WNOHANG);
+
+        if (result == 0) {
+            // Child is still running - kill it
+            log(LOG_INFO,
+                "Killing remaining CGI child process %d for client %d",
+                conn->cgi_context_->cgi_pid_, conn->client_fd_);
+            kill(conn->cgi_context_->cgi_pid_, SIGKILL);
+            // Wait for it to die after SIGKILL
+            waitpid(conn->cgi_context_->cgi_pid_, &status, 0);
+        }
+    }
+
+    // Clean up pipe file descriptors
+    if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
+        close(conn->cgi_context_->cgi_pipe_stdin_fd_);
+    }
+    if (conn->cgi_context_->cgi_pipe_stdout_fd_ != -1) {
+        close(conn->cgi_context_->cgi_pipe_stdout_fd_);
+    }
+
+    // Delete the context object itself
+    delete conn->cgi_context_;
+    conn->cgi_context_ = NULL;
+
     log(LOG_DEBUG, "CgiHandler: Cleanup complete for client_fd %d",
         conn->client_fd_);
 }
@@ -791,7 +828,7 @@ void CgiHandler::finalize_cgi_response(Connection* conn) {
     // Change states
     conn->cgi_context_->cgi_handler_state_ = CGI_COMPLETE;
 
-    cleanup_cgi_resources(conn);
+    cleanup_handler(conn);
 
     log(LOG_DEBUG, "CGI response finalized for client %d, status: %d",
         conn->client_fd_, conn->response_data_->status_code_);
@@ -801,7 +838,7 @@ void CgiHandler::finalize_cgi_error(Connection* conn, ResponseStatus status) {
     ErrorHandler::generate_error_response(conn, status);
     conn->cgi_context_->cgi_handler_state_ = CGI_ERROR;
 
-    cleanup_cgi_resources(conn);
+    cleanup_handler(conn);
 }
 
 bool CgiHandler::set_status_line(Connection* conn) {
@@ -829,42 +866,3 @@ bool CgiHandler::set_status_line(Connection* conn) {
     return true;
 }
 
-void CgiHandler::cleanup_cgi_resources(Connection* conn) {
-    // Always try to reap/kill any remaining child process
-    if (conn->cgi_context_->cgi_pid_ > 0) {
-        int status;
-        pid_t result = waitpid(conn->cgi_context_->cgi_pid_, &status, WNOHANG);
-
-        if (result == 0) {
-            // Child is still running - kill it
-            log(LOG_INFO,
-                "Killing remaining CGI child process %d for client %d",
-                conn->cgi_context_->cgi_pid_, conn->client_fd_);
-            kill(conn->cgi_context_->cgi_pid_, SIGKILL);
-            // Wait for it to die after SIGKILL
-            waitpid(conn->cgi_context_->cgi_pid_, &status,
-                    0);  // Blocking wait after SIGKILL
-        } else if (result > 0) {
-            log(LOG_DEBUG,
-                "CGI child process %d already terminated for client %d",
-                conn->cgi_context_->cgi_pid_, conn->client_fd_);
-        }
-        // result < 0 means error (process doesn't exist), which is fine
-
-        conn->cgi_context_->cgi_pid_ = -1;  // Reset PID in all cases
-    }
-
-    // Clean up pipes
-    if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
-        close(conn->cgi_context_->cgi_pipe_stdin_fd_);
-        conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;  // Mark as closed
-    }
-
-    if (conn->cgi_context_->cgi_pipe_stdout_fd_ != -1) {
-        close(conn->cgi_context_->cgi_pipe_stdout_fd_);
-        conn->cgi_context_->cgi_pipe_stdout_fd_ = -1;  // Mark as closed
-    }
-
-    // Clear the CGI read buffer
-    conn->cgi_context_->cgi_output_buffer_.reset();
-}

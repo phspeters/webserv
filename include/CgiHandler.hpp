@@ -35,7 +35,6 @@ class CgiHandler : public AHandler {
     void finalize_cgi_response(Connection* conn);
     void finalize_cgi_error(Connection* conn, ResponseStatus status);
     bool set_status_line(Connection* conn);
-    void cleanup_cgi_resources(Connection* conn);
 
     // Prevent copying
     CgiHandler(const CgiHandler&);
