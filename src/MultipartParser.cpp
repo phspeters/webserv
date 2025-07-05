@@ -20,48 +20,75 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
     MultipartState& state = multipart_ctx->state_;
     Buffer& buff = conn->request_data_->body_buffer_;
 
-    // Pre-build the boundary markers we'll be matching against
     const std::string initial_boundary = "--" + multipart_ctx->boundary_;
     const std::string subsequent_boundary = "\r\n--" + multipart_ctx->boundary_;
 
     while (buff.readable_bytes() > 0) {
+        if (state == ACCUMULATE_PART_DATA) {
+            const char* data_start = buff.data();
+
+            const char* boundary_start = static_cast<const char*>(memchr(
+                data_start, subsequent_boundary[0], buff.readable_bytes()));
+
+            if (boundary_start) {
+                size_t data_len = boundary_start - data_start;
+                if (multipart_ctx->is_file_part_ && data_len > 0) {
+                    upload_ctx->upload_buffer_.append(data_start, data_len);
+                }
+
+                buff.consume(data_len);
+
+                state = MATCH_BOUNDARY;
+                continue;
+            } else {
+                size_t safe_len = 0;
+                if (buff.readable_bytes() > subsequent_boundary.length()) {
+                    safe_len =
+                        buff.readable_bytes() - subsequent_boundary.length();
+                }
+
+                if (multipart_ctx->is_file_part_ && safe_len > 0) {
+                    upload_ctx->upload_buffer_.append(data_start, safe_len);
+                    buff.consume(safe_len);
+                }
+
+                return PARSE_INCOMPLETE;
+            }
+        }
+
         const char ch = buff.peek();
 
         switch (state) {
-            case SEARCH_INITIAL_BOUNDARY: {
-                // Match the first boundary: "--boundary"
+            case SEARCH_INITIAL_BOUNDARY:
                 if (ch ==
                     initial_boundary[multipart_ctx->boundary_match_index_]) {
                     multipart_ctx->boundary_match_index_++;
                     if (multipart_ctx->boundary_match_index_ ==
                         initial_boundary.length()) {
-                        state =
-                            VALIDATE_FINAL_BOUNDARY;  // Check for -- or \r\n
+                        state = BOUNDARY_ALMOST_DONE;
                         multipart_ctx->boundary_match_index_ = 0;
                     }
                 } else {
-                    // Not a boundary, this is an error in strict parsing
+                    log(LOG_ERROR,
+                        "Multipart body did not start with initial boundary.");
                     return PARSE_ERROR;
                 }
                 break;
-            }
 
-            case READ_PART_HEADERS: {
-                // Accumulate headers until we see "\r\n\r\n"
+            case READ_PART_HEADERS:
                 multipart_ctx->part_headers_ += ch;
-                if (multipart_ctx->part_headers_.length() > 4 &&
+                if (multipart_ctx->part_headers_.length() >= 4 &&
                     multipart_ctx->part_headers_.substr(
                         multipart_ctx->part_headers_.length() - 4) ==
                         "\r\n\r\n") {
-                    // Headers complete, process them
                     std::string& headers = multipart_ctx->part_headers_;
-                    headers.resize(headers.length() -
-                                   4);  // Trim the final \r\n\r\n
+                    headers.resize(headers.length() - 4);
 
-                    if (headers.find("filename=\"") != std::string::npos) {
+                    size_t filename_pos = headers.find("filename=\"");
+                    if (filename_pos != std::string::npos) {
                         multipart_ctx->is_file_part_ = true;
-                        // (Your existing logic to extract filename)
-                        size_t start = headers.find("filename=\"") + 10;
+                        size_t start =
+                            filename_pos + 10;  // length of "filename=\""
                         size_t end = headers.find('"', start);
                         if (end != std::string::npos) {
                             upload_ctx->filename_ =
@@ -75,74 +102,62 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                     state = ACCUMULATE_PART_DATA;
                 }
                 break;
-            }
 
-            case ACCUMULATE_PART_DATA: {
-                // We are in the body of a part. We append data but must
-                // also check for the start of the next boundary.
-                if (ch == subsequent_boundary[0]) {  // Potential start ('\r')
-                    state = MATCH_BOUNDARY;
-                    multipart_ctx->boundary_match_index_ =
-                        1;  // We've matched one char
-                } else {
-                    if (multipart_ctx->is_file_part_) {
-                        upload_ctx->upload_buffer_.append(&ch, 1);
-                    }
-                }
-                break;
-            }
-
-            case MATCH_BOUNDARY: {
+            case MATCH_BOUNDARY:
                 if (ch ==
                     subsequent_boundary[multipart_ctx->boundary_match_index_]) {
-                    // Character continues to match the boundary
                     multipart_ctx->boundary_match_index_++;
                     if (multipart_ctx->boundary_match_index_ ==
                         subsequent_boundary.length()) {
-                        // Full boundary matched!
                         state = VALIDATE_FINAL_BOUNDARY;
                         multipart_ctx->boundary_match_index_ = 0;
                     }
                 } else {
-                    // Match failed. This was a false alarm.
-                    // We must write the partial match data we held back.
                     if (multipart_ctx->is_file_part_) {
                         upload_ctx->upload_buffer_.append(
                             subsequent_boundary.c_str(),
                             multipart_ctx->boundary_match_index_);
-                        upload_ctx->upload_buffer_.append(
-                            &ch, 1);  // And the current char
+                        upload_ctx->upload_buffer_.append(&ch, 1);
                     }
-                    // Reset and go back to accumulating data
                     multipart_ctx->boundary_match_index_ = 0;
                     state = ACCUMULATE_PART_DATA;
                 }
                 break;
-            }
 
-            case VALIDATE_FINAL_BOUNDARY: {
+            case VALIDATE_FINAL_BOUNDARY:
                 if (ch == '-') {
-                    // Potentially the final boundary: "--boundary--"
-                    state =
-                        END_MULTIPART;  // Assume final, next char must be '-'
+                    state = END_MULTIPART;
                 } else if (ch == '\r') {
-                    // A new part is starting: "--boundary\r\n"
-                    state = READ_PART_HEADERS;  // Next char must be '\n'
+                    state = BOUNDARY_ALMOST_DONE;
                 } else {
-                    return PARSE_ERROR;  // Malformed boundary
+                    return PARSE_ERROR;
                 }
                 break;
-            }
 
-            case END_MULTIPART: {
-                if (ch == '-') {  // Confirmed final boundary
+            case BOUNDARY_ALMOST_DONE:
+                if (ch == '\n') {
+                    state = READ_PART_HEADERS;
+                } else {
+                    return PARSE_ERROR;
+                }
+                break;
+
+            case END_MULTIPART:
+                if (ch == '-') {
                     upload_ctx->upload_complete = true;
                     conn->request_data_->body_fully_parsed_ = true;
-                    buff.consume(1);  // Consume final '-'
+                    state = FINAL_BOUNDARY_ALMOST_DONE;
+                } else {
+                    return PARSE_ERROR;
+                }
+                break;
+
+            case FINAL_BOUNDARY_ALMOST_DONE:
+                if (ch == '\r') {
+                    buff.consume(1);
                     return PARSE_SUCCESS;
                 }
-                return PARSE_ERROR;  // Malformed final boundary
-            }
+                return PARSE_SUCCESS;
 
             case MULTIPART_ERROR:
                 return PARSE_ERROR;
