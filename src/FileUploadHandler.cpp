@@ -186,19 +186,20 @@ Result FileUploadHandler::check_permissions(Connection* conn) {
         return ERROR;
     }
 
-    conn->status_ = OK;
-    log(LOG_DEBUG,
-        "FileUploadHandler: Permissions check passed for client_fd %d",
-        conn->client_fd_);
-    return COMPLETE;
-}
-
-Result FileUploadHandler::setup_handler(Connection* conn) {
-    // Redirect if needed
+     // Redirect if needed
     if (process_trailing_slash_redirect(conn)) {
         return COMPLETE;
     }
 
+    log(LOG_DEBUG,
+        "FileUploadHandler: Permissions check passed for client_fd %d",
+        conn->client_fd_);
+
+    conn->status_ = OK;
+    return COMPLETE;
+}
+
+Result FileUploadHandler::setup_handler(Connection* conn) {
     // Generate temporary file name
     std::string upload_dir = get_upload_directory(conn);
 
@@ -228,7 +229,7 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
 }
 
 // TODO: Handle multipart parsing inside handle_event
-Result FileUploadHandler::handle_event(Connection* conn) {
+Result FileUploadHandler::handle_file_upload_write(Connection* conn) {
     // Consume from upload_buffer_ and write to temporary file
     if (!conn->file_upload_context_) {
         log(LOG_FATAL,

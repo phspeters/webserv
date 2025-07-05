@@ -23,9 +23,9 @@ class CgiHandler : public AHandler {
     virtual bool is_asynchronous() const { return true; }
 
    private:
-    HttpStatus validate_cgi_request(Connection* conn);
+    Result validate_cgi_request(Connection* conn);
     bool setup_cgi_execution(Connection* conn);
-    HttpStatus setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
+    bool setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                                    int cgi_to_server_pipe[2]);
     void handle_child_pipes(int server_to_cgi_pipe[2],
                             int cgi_to_server_pipe[2]);
@@ -34,8 +34,6 @@ class CgiHandler : public AHandler {
     bool handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2],
                              int cgi_to_server_pipe[2]);
     void parse_cgi_output(Connection* conn);
-    void finalize_cgi_response(Connection* conn);
-    void finalize_cgi_error(Connection* conn, HttpStatus status);
     bool set_status_line(Connection* conn);
 
     // Prevent copying

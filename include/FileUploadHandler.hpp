@@ -14,7 +14,7 @@ class FileUploadHandler : public AHandler {
 
     virtual Result check_permissions(Connection* conn);
     virtual Result setup_handler(Connection* conn);
-    virtual Result handle_event(Connection* conn);
+    virtual Result handle_file_upload_write(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
     virtual bool is_asynchronous() const { return true; }
 
