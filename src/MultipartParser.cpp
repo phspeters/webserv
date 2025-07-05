@@ -76,19 +76,28 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                 break;
 
             case READ_PART_HEADERS:
-                multipart_ctx->part_headers_ += ch;
-                if (multipart_ctx->part_headers_.length() >= 4 &&
-                    multipart_ctx->part_headers_.substr(
-                        multipart_ctx->part_headers_.length() - 4) ==
-                        "\r\n\r\n") {
-                    std::string& headers = multipart_ctx->part_headers_;
-                    headers.resize(headers.length() - 4);
+                const char* eoh_marker = "\r\n\r\n";
+                const char* eoh_pos = static_cast<const char*>(
+                    memmem(buff.data(), buff.readable_bytes(), eoh_marker, 4));
 
+                if (eoh_pos) {
+                    size_t headers_len = eoh_pos - buff.data();
+                    multipart_ctx->part_headers_.append(buff.data(),
+                                                        headers_len);
+
+                    if (multipart_ctx->part_headers_.length() >
+                        http_limits::MAX_REQUEST_HEAD_LENGTH) {
+                        log(LOG_WARNING, "Multipart part header is too long.");
+                        return PARSE_ERROR;
+                    }
+
+                    buff.consume(headers_len + 4);
+
+                    std::string& headers = multipart_ctx->part_headers_;
                     size_t filename_pos = headers.find("filename=\"");
                     if (filename_pos != std::string::npos) {
                         multipart_ctx->is_file_part_ = true;
-                        size_t start =
-                            filename_pos + 10;  // length of "filename=\""
+                        size_t start = filename_pos + 10;
                         size_t end = headers.find('"', start);
                         if (end != std::string::npos) {
                             upload_ctx->filename_ =
@@ -100,8 +109,21 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
 
                     multipart_ctx->part_headers_.clear();
                     state = ACCUMULATE_PART_DATA;
+
+                    continue;
+                } else {
+                    multipart_ctx->part_headers_.append(buff.data(),
+                                                        buff.readable_bytes());
+                    buff.consume(buff.readable_bytes());
+
+                    if (multipart_ctx->part_headers_.length() >
+                        http_limits::MAX_REQUEST_HEAD_LENGTH) {
+                        log(LOG_WARNING, "Multipart part header is too long.");
+                        return PARSE_ERROR;
+                    }
+
+                    return PARSE_INCOMPLETE;
                 }
-                break;
 
             case MATCH_BOUNDARY:
                 if (ch ==
