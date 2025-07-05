@@ -726,34 +726,38 @@ ParseStatus WebServer::process_request(Connection* conn) {
     conn->active_handler_ = choose_handler(conn);
 
     Result result = conn->active_handler_->check_permissions(conn);
-    if (result != OK) {
+    if (result == ERROR) {
         handle_error_response(conn);
         return PARSE_ERROR;
+    }
+    
+    if (conn->is_asynchronous_) {
+        conn->conn_state_ = CONN_GENERATING_RESPONSE;
+        return PARSE_SUCCESS;
     }
 
     result = conn->active_handler_->setup_handler(conn);
-    // DEBATE: Can setup_handler return status != OK legitimaly?
-    if (result >= BAD_REQUEST) {
+    if (result == ERROR) {
         handle_error_response(conn);
         return PARSE_ERROR;
     }
 
-    if (conn->active_handler_->is_asynchronous()) {
+    if (conn->is_asynchronous_) {
         conn->conn_state_ = CONN_GENERATING_RESPONSE;
         return PARSE_SUCCESS;
-    } else {
-        conn->conn_state_ = CONN_WRITING_RESPONSE;
-        response_writer_.write_response_to_buffer(conn);
-        IOContext* client_ctx = conn->io_contexts_[0];
-        if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
-            log(LOG_ERROR,
-                "handle_file_upload_event: Failed to update epoll events "
-                "for client_fd %d",
-                conn->client_fd_);
-            close_client_connection(conn);
-        }
-        return PARSE_SUCCESS;
     }
+    
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
+    response_writer_.write_response_to_buffer(conn);
+    IOContext* client_ctx = conn->io_contexts_[0];
+    if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
+        log(LOG_ERROR,
+            "handle_file_upload_event: Failed to update epoll events "
+            "for client_fd %d",
+            conn->client_fd_);
+        close_client_connection(conn);
+    }
+    return PARSE_SUCCESS;
 }
 
 ParserState WebServer::determine_body_handling_state(Connection* conn) {
@@ -810,7 +814,7 @@ ParseStatus WebServer::validate_method(Connection* conn) {
         conn->client_fd_);
 
     std::string method = conn->request_data_->method_;
-    if (method != "GET" && method != "POST" && method != "PUT" &&
+    if (method != "GET" && method != "POST" &&
         method != "DELETE") {
         log(LOG_ERROR, "Invalid HTTP method '%s' in request for connection: %i",
             method.c_str(), conn->client_fd_);

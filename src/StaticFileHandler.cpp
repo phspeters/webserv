@@ -5,7 +5,7 @@ StaticFileHandler::StaticFileHandler() {}
 StaticFileHandler::~StaticFileHandler() {}
 
 Result StaticFileHandler::check_permissions(Connection* conn) {
-    log(LOG_DEBUG, "StaticFileHandler: Checking permissions for client_fd %d",
+    log(LOG_DEBUG, "check_permissions: Checking permissions for client_fd %d",
         conn->client_fd_);
 
     if (conn->request_data_->method_ != "GET") {
@@ -15,14 +15,24 @@ Result StaticFileHandler::check_permissions(Connection* conn) {
     }
 
     if (process_location_redirect(conn)) {
+        log(LOG_DEBUG,
+            "check_permissions: Processed location redirect for client_fd %d",
+            conn->client_fd_);
+        conn->is_asynchronous_ = true; //VALIDATE
         return COMPLETE;
     }
 
     std::string absolute_path = parse_absolute_path(conn);
+    if( absolute_path.empty() ) {
+        log(LOG_ERROR, "check_permissions: Empty absolute path for client_fd %d",
+            conn->client_fd_);
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;   
+    }
 
-    if (absolute_path.empty() ||
-        absolute_path[absolute_path.length() - 1] == '/') {
+    if (absolute_path[absolute_path.length() - 1] == '/') {
         if (process_directory_redirect(conn, absolute_path)) {
+            conn->is_asynchronous_ = true;
             return COMPLETE;
         }
 
@@ -32,12 +42,15 @@ Result StaticFileHandler::check_permissions(Connection* conn) {
                 // The request URI points to a directory.
                 // The server configuration for that directory does not find an index file AND has autoindex on;
                 generate_directory_listing(conn, absolute_path);
+                conn->is_asynchronous_ = true;
                 return COMPLETE;
             }
         } else {
             conn->status_ = FORBIDDEN;
             return ERROR;
         }
+        std::string index_file = conn->location_match_->index_;
+        absolute_path = absolute_path + index_file;
     }
 
     struct stat file_info;
@@ -59,7 +72,7 @@ Result StaticFileHandler::check_permissions(Connection* conn) {
     }
 
     log(LOG_DEBUG,
-        "StaticFileHandler: Permissions check passed for client_fd %d",
+        "check_permissions: Permissions check passed for client_fd %d",
         conn->client_fd_);
 
     return COMPLETE;
@@ -67,13 +80,42 @@ Result StaticFileHandler::check_permissions(Connection* conn) {
 
 
 Result StaticFileHandler::setup_handler(Connection* conn) {
-    log(LOG_DEBUG, "StaticFileHandler: Setting up handler for client_fd %d",
+    log(LOG_DEBUG, "setup_handler: Setting up handler for client_fd %d",
         conn->client_fd_);
+
+    if (process_location_redirect(conn)) {
+        log(LOG_DEBUG,
+            "setup_handler: Processed location redirect for client_fd %d",
+            conn->client_fd_);
+        conn->is_asynchronous_ = true; //VALIDATE
+        return COMPLETE;
+    }
 
     std::string absolute_path = parse_absolute_path(conn);
 
-    std::string index_file = conn->location_match_->index_;
-    absolute_path = absolute_path + index_file;
+    if (!absolute_path.empty() &&
+        absolute_path[absolute_path.length() - 1] == '/') {
+        if (process_directory_redirect(conn, absolute_path)) {
+            conn->is_asynchronous_ = true; //VALIDATE
+            return COMPLETE;
+        }
+
+        bool need_autoindex = false;
+        if (process_directory_index(conn, absolute_path, need_autoindex)) {
+            if (need_autoindex) {
+                // The request URI points to a directory.
+                // The server configuration for that directory does not find an index file AND has autoindex on;
+                generate_directory_listing(conn, absolute_path);
+                conn->is_asynchronous_ = true; //VALIDATE
+                return COMPLETE;
+            }
+        } else {
+            conn->status_ = FORBIDDEN;
+            return ERROR;
+        }
+        std::string index_file = conn->location_match_->index_;
+        absolute_path = absolute_path + index_file;
+    }
 
     int fd = open(absolute_path.c_str(), O_RDONLY);
     if (fd == -1) {
@@ -94,7 +136,7 @@ Result StaticFileHandler::setup_handler(Connection* conn) {
     conn->static_file_context_->bytes_to_send_ = file_info.st_size;
 
     log(LOG_INFO,
-        "StaticFileHandler: Setup complete for client_fd %d, file_fd %d",
+        "setup_handler: Setup complete for client_fd %d, file_fd %d",
         conn->client_fd_, fd);
     
     return COMPLETE; 
@@ -102,11 +144,14 @@ Result StaticFileHandler::setup_handler(Connection* conn) {
 
 // 3. Main logic: read the file and prepare the response.
 Result StaticFileHandler::handle_event(Connection* conn) {
-    log(LOG_DEBUG, "StaticFileHandler: Handling event for client_fd %d",
+    log(LOG_DEBUG, "handle_event: Handling event for client_fd %d",
         conn->client_fd_);
 
     if (!conn->static_file_context_ ||
         conn->static_file_context_->file_fd_ < 0) {
+            log(LOG_ERROR,
+                "StaticFileHandler: Invalid static file context for client_fd %d",
+                conn->client_fd_);
             conn->status_ = INTERNAL_SERVER_ERROR;
         return ERROR;
     }

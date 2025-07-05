@@ -4,12 +4,12 @@ CgiHandler::CgiHandler() : AHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
-HttpStatus CgiHandler::handle_event(Connection* conn) {
+Result CgiHandler::handle_event(Connection* conn) {
     (void)conn;
     return OK;
 }
 
-HttpStatus CgiHandler::check_permissions(Connection* conn) {
+Result CgiHandler::check_permissions(Connection* conn) {
     // Check if CGI script exists and is executable
     std::string script_path = parse_absolute_path(conn);
     if (script_path.empty()) {
@@ -57,7 +57,7 @@ HttpStatus CgiHandler::check_permissions(Connection* conn) {
     return OK;  
 }
 
-HttpStatus CgiHandler::setup_handler(Connection* conn) {
+Result CgiHandler::setup_handler(Connection* conn) {
     // Create CGI context
     conn->cgi_context_ = new CgiContext();
     // TODO: Call setup_cgi_execution(conn)?

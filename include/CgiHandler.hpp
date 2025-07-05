@@ -12,13 +12,13 @@ class CgiHandler : public AHandler {
     CgiHandler();
     virtual ~CgiHandler();
 
-    virtual HttpStatus check_permissions(Connection* conn);
-    virtual HttpStatus setup_handler(Connection* conn);
-    virtual HttpStatus handle_event(Connection* conn);
+    virtual Result check_permissions(Connection* conn);
+    virtual Result setup_handler(Connection* conn);
+    virtual Result handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
-    HttpStatus handle_cgi_read(Connection* conn);
-    HttpStatus handle_cgi_write(Connection* conn);
+    Result handle_cgi_read(Connection* conn);
+    Result handle_cgi_write(Connection* conn);
 
     virtual bool is_asynchronous() const { return true; }
 

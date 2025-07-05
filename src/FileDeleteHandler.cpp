@@ -14,11 +14,14 @@ HttpStatus FileDeleteHandler::handle_event(Connection* conn) {
 }
 
 HttpStatus FileDeleteHandler::check_permissions(Connection* conn) {
+    log(LOG_DEBUG,
+        "check_permissions: Checking permissions for client_fd %d",
+        conn->client_fd_);
     // Check if we can access the target directory for deletion
     std::string file_path = parse_absolute_path(conn);
     if (file_path.empty()) {
         log(LOG_ERROR,
-            "FileDeleteHandler: Failed to determine file path for client_fd %d",
+            "check_permissions: Failed to determine file path for client_fd %d",
             conn->client_fd_);
         return BAD_REQUEST;
     }
