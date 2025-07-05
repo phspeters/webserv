@@ -1214,14 +1214,15 @@ bool WebServer::start_response_writing(Connection* conn) {
 }
 
 /*DEBATE refactor
-void WebServer::handle_async_io_event(IOContext* ctx, uint32_t event_flags,
-                                      uint32_t expected_event,
-                                      const char* handler_name,
-                                      bool write_response_on_complete) {
+template <typename HandlerClass>
+void WebServer::handle_async_event(
+    IOContext* ctx, uint32_t event_flags, HandlerClass& handler_obj,
+    Result (HandlerClass::*method_ptr)(Connection*), uint32_t expected_event,
+    const char* handler_name, bool write_response_on_complete) {
     Connection* conn = ctx->conn_;
-    if (!conn || !conn->active_handler_) {
-        log(LOG_FATAL, "%s: Connection or active handler is NULL for fd %d",
-            handler_name, ctx->fd_);
+    if (!conn) {
+        log(LOG_FATAL, "%s: Connection is NULL for fd %d", handler_name,
+            ctx->fd_);
         return;
     }
 
@@ -1229,14 +1230,13 @@ void WebServer::handle_async_io_event(IOContext* ctx, uint32_t event_flags,
         log(LOG_DEBUG, "%s: Handling %s for fd %d", handler_name,
             (expected_event == EPOLLIN ? "EPOLLIN" : "EPOLLOUT"), ctx->fd_);
 
-        // Polymorphically call the active handler's event logic.
-        Result result = conn->active_handler_->handle_event(conn);
+        // Polymorphically call the specific member function on the given
+handler object. Result result = (handler_obj.*method_ptr)(conn);
 
         if (!handle_async_result(result, conn, handler_name)) {
             return; // Stop processing if AGAIN or ERROR.
         }
 
-        // On COMPLETE, optionally start writing the response to the client.
         if (write_response_on_complete) {
             start_response_writing(conn);
         }
@@ -1247,22 +1247,27 @@ void WebServer::handle_async_io_event(IOContext* ctx, uint32_t event_flags,
 }
 
 void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
-    handle_async_io_event(ctx, event_flags, EPOLLOUT, "File upload", true);
+    handle_async_event(ctx, event_flags, file_upload_handler_,
+                       &FileUploadHandler::handle_file_upload_write, EPOLLOUT,
+                       "File upload", true);
 }
 
 void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
-    handle_async_io_event(ctx, event_flags, EPOLLIN, "Static file", true);
+    handle_async_event(ctx, event_flags, static_file_handler_,
+                       &StaticFileHandler::handle_static_file_read, EPOLLIN,
+                       "Static file", true);
 }
 
 void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
-    // For CGI, the response is only ready after we finish reading from the
-pipe. handle_async_io_event(ctx, event_flags, EPOLLIN, "CGI read", true);
+    handle_async_event(ctx, event_flags, cgi_handler_,
+                       &CgiHandler::handle_cgi_read, EPOLLIN, "CGI read",
+                       true);
 }
 
 void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
-    // When we finish writing to the CGI, we don't send a response yet.
-    // We switch to listening for the read event. So, the last parameter is
-false. handle_async_io_event(ctx, event_flags, EPOLLOUT, "CGI write", false);
+    handle_async_event(ctx, event_flags, cgi_handler_,
+                       &CgiHandler::handle_cgi_write, EPOLLOUT, "CGI write",
+                       false);
 }
 
 */
