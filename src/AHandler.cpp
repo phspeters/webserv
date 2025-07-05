@@ -183,12 +183,17 @@ bool AHandler::generate_directory_listing(Connection* conn,
     log(LOG_DEBUG,
         "generate_directory_listing: Generated directory listing for %s",
         dir_path.c_str());
+
+    conn->response_data_->headers_.clear();
+    conn->response_data_->body_data_.clear();
+
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->set_header("Content-Type", "text/html");
     conn->response_data_->set_header("Content-Length",
                                       std::to_string(html.size()));
-    conn->response_data_->set_body(html); // VALIDATE
+    conn->response_data_->body_data_.assign(html.begin(),
+                                html.end());
     conn->status_ = OK;
 
     return true;
