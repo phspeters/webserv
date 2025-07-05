@@ -11,10 +11,10 @@ class AHandler {
    public:
     virtual ~AHandler() {}
 
-    virtual HttpStatus check_permissions(Connection* conn) = 0;
-    virtual HttpStatus setup_handler(Connection* conn) = 0;
+    virtual Result check_permissions(Connection* conn) = 0;
+    virtual Result setup_handler(Connection* conn) = 0;
     //DEBATE: remove and create specific functions? CgiHandler and FileDeleteHandler don't use it
-    virtual HttpStatus handle_event(Connection* conn) = 0;
+    virtual Result handle_event(Connection* conn) = 0;
     virtual void cleanup_handler(Connection* conn) = 0;
     virtual bool is_asynchronous() const { return false; }
 

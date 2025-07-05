@@ -7,7 +7,7 @@ Result ResponseWriter::write_response_to_buffer(Connection* conn) {
 
     HttpResponse* resp = conn->response_data_;
     WriterContext& context = conn->writer_context_;
-    Result status = COMPLETE;
+    Result result = COMPLETE;
 
     while (context.response_writer_state_ != WRITER_DONE) {
         switch (context.response_writer_state_) {
@@ -21,11 +21,11 @@ Result ResponseWriter::write_response_to_buffer(Connection* conn) {
                 if (context.formatted_headers_.empty()) {
                     context.response_writer_state_ = WRITER_DECIDE_BODY_SOURCE;
                 }
-                status = write_response_head(conn);
-                if (status == COMPLETE) {
+                result = write_response_head(conn);
+                if (result == COMPLETE) {
                     context.response_writer_state_ = WRITER_DECIDE_BODY_SOURCE;
                 } else {
-                    return status;
+                    return result;
                 }
                 continue;
             }
@@ -44,8 +44,8 @@ Result ResponseWriter::write_response_to_buffer(Connection* conn) {
             }
 
             case WRITER_WRITING_BODY_FROM_BUFFER: {
-                status = write_response_body_from_buffer(conn);
-                if (status == COMPLETE) {
+                result = write_response_body_from_buffer(conn);
+                if (result == COMPLETE) {
                     if (resp->body_fd_ != -1) {
                         context.response_writer_state_ =
                             WRITER_WRITING_BODY_FROM_FD;
@@ -53,17 +53,17 @@ Result ResponseWriter::write_response_to_buffer(Connection* conn) {
                         context.response_writer_state_ = WRITER_DONE;
                     }
                 } else {
-                    return status;
+                    return result;
                 }
                 continue;
             }
 
             case WRITER_WRITING_BODY_FROM_FD: {
-                status = write_response_body_from_fd(conn);
-                if (status == COMPLETE) {
+                result = write_response_body_from_fd(conn);
+                if (result == COMPLETE) {
                     context.response_writer_state_ = WRITER_DONE;
                 } else {
-                    return status;
+                    return result;
                 }
                 continue;
             }

@@ -179,6 +179,12 @@ HttpStatus ErrorHandler::parse_status_to_response_status(
     HttpStatus status_code = INTERNAL_SERVER_ERROR;
 
     switch (parse_status) {
+        case PARSE_INCOMPLETE:
+            status_code = OK;
+            break;
+        case PARSE_SUCCESS:
+            status_code = OK;
+            break;
         case ERROR:
         case PARSE_INVALID_REQUEST_LINE:
         case PARSE_INVALID_PATH:

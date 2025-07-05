@@ -101,7 +101,10 @@ class WebServer {
     void handle_cgi_read_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_write_event(IOContext* ctx, uint32_t event_flags);
     void handle_file_upload_event(IOContext* ctx, uint32_t event_flags);
-    bool handle_error_response(Connection* conn, HttpStatus status);
+    bool handle_error_response(Connection* conn);
+    bool handle_async_result(Result result, Connection* conn,
+                             const char* context_str);
+    bool start_response_writing(Connection* conn);
 
     bool setup_listener_sockets();
     int create_listener_socket(const std::string& host, int port);
