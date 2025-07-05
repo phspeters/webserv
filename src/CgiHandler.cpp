@@ -53,7 +53,8 @@ Result CgiHandler::check_permissions(Connection* conn) {
         }
     }
     if (!is_valid_extension) {
-        log(LOG_ERROR, "CgiHandler: Invalid script extension '%s' for script '%s'",
+        log(LOG_ERROR,
+            "CgiHandler: Invalid script extension '%s' for script '%s'",
             extension.c_str(), script_path.c_str());
         conn->status_ = FORBIDDEN;
         return ERROR;
@@ -213,7 +214,7 @@ void CgiHandler::cleanup_handler(Connection* conn) {
     // look in the vector of IO contexts and remove the ones related to CGI
     // pipes if (conn->cgi_context_->cgi_pipe_stdin_fd_) {
     //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_);
-    // }   
+    // }
     // if (conn->cgi_context_->cgi_pipe_stdout_io_ctx_) {
     //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdout_io_ctx_);
     // }
@@ -594,7 +595,7 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
         return ERROR;
     }
 
-    if (body_buffer.empty()) {
+    if (conn->request_data_->body_fully_parsed_ && body_buffer.empty()) {
         // All data sent, close the stdin pipe
         close(fd);
         conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
@@ -615,13 +616,13 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
             "CGI: Finished writing to stdin, switching to read mode for client "
             "%d",
             conn->client_fd_);
+        return COMPLETE;
     } else {
         log(LOG_DEBUG,
             "Partial write to CGI stdin pipe for client %d, %zu bytes left",
-            conn->client_fd_, body_buffer.size());
+            conn->client_fd_, body_buffer.readable_bytes());
         return AGAIN;  // Indicate we need to write more later
     }
-    return COMPLETE;
 }
 
 // TODO: This function has to:
@@ -641,25 +642,6 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
         return ERROR;
     }
 
-    if (conn->cgi_context_->cgi_pid_ > 0) {
-        int status;
-        pid_t result = waitpid(conn->cgi_context_->cgi_pid_, &status, WNOHANG);
-
-        if (result == 0) {
-            // Child process is still running - just return and wait
-            log(LOG_TRACE, "CGI process %d still running for client %d",
-                conn->cgi_context_->cgi_pid_, conn->client_fd_);
-            return AGAIN;  // Exit early, epoll will call us again
-        } else if (result > 0) {
-            // Child has terminated - reap it and continue
-            log(LOG_INFO, "CGI process %d terminated for client %d",
-                conn->cgi_context_->cgi_pid_, conn->client_fd_);
-            conn->cgi_context_->cgi_pid_ = -1;  // Mark as reaped
-            // Continue to read remaining output below
-        }
-        // result < 0 means error, but continue anyway (process might be gone)
-    }
-
     Buffer& buffer = conn->cgi_context_->cgi_output_buffer_;
     ssize_t bytes_read =
         buffer.read_from(conn->cgi_context_->cgi_pipe_stdout_fd_);
@@ -669,11 +651,14 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
         conn->status_ = BAD_GATEWAY;
         return ERROR;
     }
+
     if (bytes_read > 0) {
         log(LOG_DEBUG,
             "CGI: Read %zd bytes from stdout for client %d. Total buffer: %zu",
             bytes_read, conn->client_fd_, buffer.readable_bytes());
-        parse_cgi_output(conn);  // This may change the handler state
+        // Check the return of parse_cgi_output
+        ParseStatus status =
+            parse_cgi_output(conn);  // This may change the handler state
         if (conn->status_ != OK) {
             log(LOG_ERROR,
                 "CGI: Error state reached for client %d, cleaning up resources",
@@ -682,28 +667,23 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
         }
         return AGAIN;  // Not EOF, so do not process the rest
     }
-    // --- EOF (bytes_read == 0) ---
+
     log(LOG_DEBUG, "CGI: EOF received from stdout for client %d.",
         conn->client_fd_);
-    if (conn->cgi_context_->cgi_handler_state_ == CGI_READING_FROM_PIPE) {
-        // Headers not fully processed before EOF
-        if (buffer.readable_bytes() == 0 &&
-            conn->response_data_->headers_.empty()) {
-            // No data received - script execution failure
-            log(LOG_WARNING,
-                "CGI: No output received from script for client %d",
-                conn->client_fd_);
-            conn->status_ = INTERNAL_SERVER_ERROR;
-            return ERROR;
-        } else {
-            // Partial data - malformed response
-            log(LOG_WARNING, "CGI: Incomplete headers received for client %d",
-                conn->client_fd_);
-            conn->status_ = BAD_GATEWAY;
-            return ERROR;
-        }
+
+    // Headers not fully processed before EOF
+    // CHECK if this is the right condition to check
+    if (buffer.readable_bytes() == 0 &&
+        conn->response_data_->headers_.empty()) {
+        // No data received - script execution failure
+        log(LOG_WARNING, "CGI: No output received from script for client %d",
+            conn->client_fd_);
+        // CHECK: if we should return 500 or 502
+        conn->status_ = BAD_GATEWAY;
+        return ERROR;
     }
-    // Headers already processed - check Content-Length if present
+
+    // Headers already processed - check Content-Length if present and matches the body size
     std::string content_length_str =
         conn->response_data_->get_header("content-length");
     if (!content_length_str.empty()) {
@@ -721,22 +701,19 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
             return ERROR;
         }
     }
-    // All good - finalize the response
-    conn->status_ = BAD_GATEWAY;
+
     return COMPLETE;
 }
 
 void CgiHandler::parse_cgi_output(Connection* conn) {
     log(LOG_DEBUG,
-        "CGI: Parsing output buffer (size %zu) for client %d, current state: "
-        "%d",
+        "CGI: Parsing output buffer (size %zu) for client %d",
         conn->cgi_context_->cgi_output_buffer_.readable_bytes(),
-        conn->client_fd_, conn->cgi_context_->cgi_handler_state_);
+        conn->client_fd_);
 
     // 1. Parse Headers
     Buffer& buffer = conn->cgi_context_->cgi_output_buffer_;
-    while ((conn->cgi_context_->cgi_handler_state_ != CGI_HEADERS_PARSED) &&
-           (buffer.readable_bytes() > 0)) {
+    while (buffer.readable_bytes() > 0) {
         // Look for CRLF in the buffer
         const char* data = buffer.data();
         size_t data_size = buffer.readable_bytes();

@@ -14,7 +14,6 @@ class AHandler {
     virtual Result check_permissions(Connection* conn) = 0;
     virtual Result setup_handler(Connection* conn) = 0;
     virtual void cleanup_handler(Connection* conn) = 0;
-    virtual bool is_asynchronous() const { return false; }
 
    protected:
     std::string parse_absolute_path(Connection* conn);

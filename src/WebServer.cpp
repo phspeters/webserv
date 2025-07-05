@@ -1039,7 +1039,7 @@ void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
             "handle_file_upload_event: Handling EPOLLOUT for file upload fd %d",
             ctx->fd_);
 
-        Result result = conn->active_handler_->handle_event(conn);
+        Result result = file_upload_handler_.handle_file_upload_write(conn);
         if (!handle_async_result(result, conn, "file upload")) {
             return;
         }
@@ -1073,7 +1073,7 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
             "handle_static_file_event: Handling EPOLLIN for static file fd %d",
             ctx->fd_);
 
-        Result result = conn->active_handler_->handle_event(conn);
+        Result result = static_file_handler_.handle_static_file_read(conn);
         if (!handle_async_result(result, conn, "static file")) {
             return;
         }
@@ -1234,11 +1234,10 @@ void WebServer::handle_async_event(
         log(LOG_DEBUG, "%s: Handling %s for fd %d", handler_name,
             (expected_event == EPOLLIN ? "EPOLLIN" : "EPOLLOUT"), ctx->fd_);
 
-        // Polymorphically call the specific member function on the given
-handler object. Result result = (handler_obj.*method_ptr)(conn);
+        Result result = (handler_obj.*method_ptr)(conn);
 
         if (!handle_async_result(result, conn, handler_name)) {
-            return; // Stop processing if AGAIN or ERROR.
+            return;
         }
 
         if (write_response_on_complete) {

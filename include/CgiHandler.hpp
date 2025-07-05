@@ -14,13 +14,10 @@ class CgiHandler : public AHandler {
 
     virtual Result check_permissions(Connection* conn);
     virtual Result setup_handler(Connection* conn);
-    virtual Result handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
     Result handle_cgi_read(Connection* conn);
     Result handle_cgi_write(Connection* conn);
-
-    virtual bool is_asynchronous() const { return true; }
 
    private:
     bool setup_cgi_execution(Connection* conn);

@@ -109,7 +109,7 @@ Result StaticFileHandler::setup_handler(Connection* conn) {
 }
 
 // 3. Main logic: read the file and prepare the response.
-Result StaticFileHandler::handle_event(Connection* conn) {
+Result StaticFileHandler::handle_static_file_read(Connection* conn) {
     log(LOG_DEBUG, "handle_event: Handling event for client_fd %d",
         conn->client_fd_);
 
