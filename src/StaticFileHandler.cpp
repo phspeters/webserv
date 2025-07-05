@@ -97,6 +97,12 @@ Result StaticFileHandler::setup_handler(Connection* conn) {
 
     // Create and populate the context for this connection
     struct stat file_info;
+    if (fstat(fd, &file_info) == -1) {
+        // fstat failed, this is a server error
+        close(fd);
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
+    }
     conn->static_file_context_ = new StaticFileContext();
     conn->static_file_context_->file_fd_ = fd;
     conn->static_file_context_->bytes_to_send_ = file_info.st_size;
@@ -122,9 +128,7 @@ Result StaticFileHandler::handle_static_file_read(Connection* conn) {
         return ERROR;
     }
 
-    int fd = conn->static_file_context_->file_fd_;
     size_t file_size = conn->static_file_context_->bytes_to_send_;
-
 
     // Determine content type from file extension
     std::string content_type = "application/octet-stream";

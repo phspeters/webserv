@@ -81,7 +81,7 @@ Result FileDeleteHandler::check_permissions(Connection* conn) {
 }
 
 Result FileDeleteHandler::setup_handler(Connection* conn) {
-    HttpStatus status = OK;
+
     log(LOG_DEBUG, "setup_handler: Starting processing for client_fd %d",
         conn->client_fd_);
 

@@ -563,7 +563,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
             ParseStatus status = handle_request_parsing(conn);
             conn->status_ =
                 ErrorHandler::parse_status_to_response_status(status);
-            if (status >= ERROR) {
+            if (status >= PARSE_ERROR) {
                 handle_error_response(conn);
                 return;
             }
@@ -680,13 +680,13 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
         }
 
         // Check status after each step.
-        if (status == AGAIN) {
+        if (status == PARSE_INCOMPLETE) {
             log(LOG_DEBUG, "Parser needs more data for fd %d. Waiting.",
                 conn->client_fd_);
             return status;  // Exit and wait for the next EPOLLIN event.
         }
 
-        if (status >= ERROR) {
+        if (status >= PARSE_ERROR) {
             log(LOG_ERROR, "Parse error %d for fd %d.", status,
                 conn->client_fd_);
             return status;
@@ -1146,7 +1146,7 @@ void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
     }
 }
 
-bool WebServer::handle_error_response(Connection* conn) {
+void WebServer::handle_error_response(Connection* conn) {
     IOContext* client_ctx = conn->io_contexts_[0];
     HttpStatus status = conn->status_;
 
