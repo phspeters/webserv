@@ -36,6 +36,7 @@ struct StaticFileContext {
     off_t offset_;
     size_t bytes_to_send_;
     size_t bytes_sent_;
+    std::string absolute_path_;
 
     StaticFileContext()
         : file_fd_(-1), offset_(0), bytes_to_send_(0), bytes_sent_(0) {}

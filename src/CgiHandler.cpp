@@ -5,7 +5,25 @@ CgiHandler::CgiHandler() : AHandler() {}
 CgiHandler::~CgiHandler() {}
 
 Result CgiHandler::check_permissions(Connection* conn) {
-    // Check if CGI script exists and is executable
+    log(LOG_DEBUG, "CgiHandler: Checking permissions for client_fd %d",
+        conn->client_fd_);
+
+    // Check for location-level redirect first (takes precedence over CGI)
+    if (process_location_redirect(conn)) {
+        return COMPLETE;
+    }
+
+    // Validate request method (must be GET or POST)
+    const std::string& request_method = conn->request_data_->method_;
+    if (request_method != "GET" && request_method != "POST") {
+        log(LOG_ERROR, "CgiHandler: Invalid method '%s' for client_fd %d",
+            request_method.c_str(), conn->client_fd_);
+        conn->response_data_->set_error_header("Allow", "GET, POST");
+        conn->status_ = METHOD_NOT_ALLOWED;
+        return ERROR;
+    }
+
+    // Resolve the absolute path to the CGI script
     std::string script_path = parse_absolute_path(conn);
     if (script_path.empty()) {
         log(LOG_ERROR,
@@ -15,6 +33,33 @@ Result CgiHandler::check_permissions(Connection* conn) {
         return ERROR;
     }
 
+    // Security: Do not allow executing a directory
+    if (script_path[script_path.length() - 1] == '/') {
+        log(LOG_ERROR, "CgiHandler: Attempt to execute a directory: %s",
+            script_path.c_str());
+        conn->status_ = FORBIDDEN;
+        return ERROR;
+    }
+
+    // Check script extension against allowed types
+    bool is_valid_extension = false;
+    std::string extension;
+    size_t dot_pos = script_path.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        extension = script_path.substr(dot_pos + 1);
+        // This should ideally come from the config file
+        if (extension == "php" || extension == "py" || extension == "sh") {
+            is_valid_extension = true;
+        }
+    }
+    if (!is_valid_extension) {
+        log(LOG_ERROR, "CgiHandler: Invalid script extension '%s' for script '%s'",
+            extension.c_str(), script_path.c_str());
+        conn->status_ = FORBIDDEN;
+        return ERROR;
+    }
+
+    // Use a single stat() call to check existence, type, and permissions
     struct stat file_stat;
     if (stat(script_path.c_str(), &file_stat) != 0) {
         if (errno == ENOENT) {
@@ -22,11 +67,11 @@ Result CgiHandler::check_permissions(Connection* conn) {
                 script_path.c_str());
             conn->status_ = NOT_FOUND;
         } else if (errno == EACCES) {
-            log(LOG_ERROR, "CgiHandler: Access denied to script: %s",
+            log(LOG_ERROR, "CgiHandler: Access denied to script path: %s",
                 script_path.c_str());
             conn->status_ = FORBIDDEN;
         } else {
-            log(LOG_ERROR, "CgiHandler: Error accessing script %s: %s",
+            log(LOG_ERROR, "CgiHandler: stat() error for script %s: %s",
                 script_path.c_str(), strerror(errno));
             conn->status_ = INTERNAL_SERVER_ERROR;
         }
@@ -41,7 +86,7 @@ Result CgiHandler::check_permissions(Connection* conn) {
         return ERROR;
     }
 
-    // Check if script is executable
+    // Check if the script is executable by the user
     if (!(file_stat.st_mode & S_IXUSR)) {
         log(LOG_ERROR, "CgiHandler: Script is not executable: %s",
             script_path.c_str());
@@ -49,10 +94,12 @@ Result CgiHandler::check_permissions(Connection* conn) {
         return ERROR;
     }
 
-    log(LOG_DEBUG, "CgiHandler: Permissions check passed for client_fd %d",
-        conn->client_fd_);
+    // All checks passed. Store the validated path for the setup phase.
+    conn->cgi_context_->cgi_script_path_ = script_path;
+    log(LOG_DEBUG, "CgiHandler: Permissions check passed for script: %s",
+        script_path.c_str());
 
-    return validate_cgi_request(conn);
+    return COMPLETE;
 }
 
 Result CgiHandler::setup_handler(Connection* conn) {
@@ -166,7 +213,7 @@ void CgiHandler::cleanup_handler(Connection* conn) {
     // look in the vector of IO contexts and remove the ones related to CGI
     // pipes if (conn->cgi_context_->cgi_pipe_stdin_fd_) {
     //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_);
-    // }
+    // }   
     // if (conn->cgi_context_->cgi_pipe_stdout_io_ctx_) {
     //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdout_io_ctx_);
     // }
@@ -203,11 +250,8 @@ void CgiHandler::cleanup_handler(Connection* conn) {
         conn->client_fd_);
 }
 
-Result CgiHandler::validate_cgi_request(Connection* conn) {
-    // 1. Check redirect
-    if (process_location_redirect(conn)) {
-        return COMPLETE;  // Redirect response was set up, stop processing
-    }
+/* Result CgiHandler::validate_cgi_request(Connection* conn) {
+
 
     // Extract request data
     const std::string& request_uri = conn->request_data_->uri_;
@@ -298,7 +342,8 @@ Result CgiHandler::validate_cgi_request(Connection* conn) {
 
     log(LOG_DEBUG, "CGI request validated for script: %s",
         conn->cgi_context_->cgi_script_path_.c_str());
-}
+    return COMPLETE;
+} */
 
 bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                                  int cgi_to_server_pipe[2]) {
@@ -330,7 +375,7 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
 
 void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
                                     int cgi_to_server_pipe[2]) {
-    // Close the read-end of the pipe to CGI's stdin
+    // Close the write-end of the pipe to CGI's stdin
     close(server_to_cgi_pipe[1]);
     // Close the write-end of the pipe from CGI's stdout
     close(cgi_to_server_pipe[0]);
@@ -540,7 +585,7 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
 
     // Write as much as possible from the buffer to the pipe
     // TODO: change to send if we decide to go with sockets
-    ssize_t bytes_written = write(fd, body_buffer.data(), body_buffer.size());
+    ssize_t bytes_written = body_buffer.write_to(fd);
 
     if (bytes_written < 0) {
         log(LOG_ERROR, "Failed to write to CGI stdin pipe: %s",

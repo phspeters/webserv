@@ -23,7 +23,6 @@ class CgiHandler : public AHandler {
     virtual bool is_asynchronous() const { return true; }
 
    private:
-    Result validate_cgi_request(Connection* conn);
     bool setup_cgi_execution(Connection* conn);
     bool setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                          int cgi_to_server_pipe[2]);
