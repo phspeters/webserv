@@ -18,11 +18,10 @@ struct HttpRequest {
 
     std::map<std::string, std::string> headers_;
 
-    std::vector<char> body_data_;   // Reserved to DEFAUL_CHUNK_SIZE
+    Buffer body_buffer_;
     bool body_fully_parsed_;
 
     size_t content_length_;
-    // std::string content_type_; // TODO: Debate if we need this
 
     std::string path_;
     std::string query_string_;

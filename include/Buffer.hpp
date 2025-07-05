@@ -32,8 +32,7 @@ class Buffer {
     // Unloads data from this buffer, appending it to the destination vector,
     // respecting the vector's capacity. Returns the number of bytes actually
     // unloaded.
-    size_t unload_to(std::vector<char>& dest,
-                     size_t max_bytes = DEFAULT_CHUNK_SIZE);
+    size_t unload_to(Buffer& dest, size_t max_bytes = DEFAULT_CHUNK_SIZE);
 
     // Appends data to the buffer, up to the available writable space.
     size_t append(const char* data, size_t size);
@@ -66,7 +65,7 @@ class Buffer {
     size_t writable_space() const { return buffer_.size() - last_; }
     char* write_ptr() { return &buffer_[last_]; }
     void has_written(size_t bytes_written) { last_ += bytes_written; }
-    
+
     std::vector<char> buffer_;
     size_t pos_;   // Start of readable data.
     size_t last_;  // End of readable data (start of writable space).

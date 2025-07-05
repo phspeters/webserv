@@ -95,7 +95,7 @@ Result CgiHandler::setup_handler(Connection* conn) {
         }
 
         if (request_method == "POST" &&
-            !conn->request_data_->body_data_.empty()) {
+            !conn->request_data_->body_buffer_.empty()) {
             // Register stdin pipe with epoll for EPOLLOUT events
             IOContext* stdin_ctx =
                 conn->add_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_,
@@ -309,7 +309,7 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
         log(LOG_ERROR, "Pipe server_to_cgi_pipe creation error: %s",
             strerror(errno));
         conn->status_ = INTERNAL_SERVER_ERROR;
-        return false; 
+        return false;
     }
 
     if (pipe(cgi_to_server_pipe) == -1) {
@@ -535,7 +535,7 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
         return ERROR;
     }
 
-    std::vector<char>& body_buffer = conn->request_data_->body_data_;
+    Buffer& body_buffer = conn->request_data_->body_buffer_;
     int fd = conn->cgi_context_->cgi_pipe_stdin_fd_;
 
     // Write as much as possible from the buffer to the pipe
@@ -585,8 +585,7 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
 // 3) Set the response line using the status header
 // 4) Set the response body_fd to the output pipe
 Result CgiHandler::handle_cgi_read(Connection* conn) {
-    log(LOG_DEBUG,
-        "CGI: Handling read for client %d on stdout_fd %d",
+    log(LOG_DEBUG, "CGI: Handling read for client %d on stdout_fd %d",
         conn->client_fd_, conn->cgi_context_->cgi_pipe_stdout_fd_);
 
     if (conn->cgi_context_->cgi_pipe_stdout_fd_ < 0) {
@@ -594,7 +593,7 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
             "CGI: Attempt to read from invalid pipe_stdout_fd for client %d.",
             conn->client_fd_);
         conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR; 
+        return ERROR;
     }
 
     if (conn->cgi_context_->cgi_pid_ > 0) {
@@ -631,10 +630,10 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
             bytes_read, conn->client_fd_, buffer.readable_bytes());
         parse_cgi_output(conn);  // This may change the handler state
         if (conn->status_ != OK) {
-           log(LOG_ERROR,
+            log(LOG_ERROR,
                 "CGI: Error state reached for client %d, cleaning up resources",
                 conn->client_fd_);
-            return ERROR;  
+            return ERROR;
         }
         return AGAIN;  // Not EOF, so do not process the rest
     }
@@ -650,13 +649,13 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
                 "CGI: No output received from script for client %d",
                 conn->client_fd_);
             conn->status_ = INTERNAL_SERVER_ERROR;
-            return ERROR; 
+            return ERROR;
         } else {
             // Partial data - malformed response
             log(LOG_WARNING, "CGI: Incomplete headers received for client %d",
                 conn->client_fd_);
             conn->status_ = BAD_GATEWAY;
-            return ERROR; 
+            return ERROR;
         }
     }
     // Headers already processed - check Content-Length if present
@@ -674,12 +673,12 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
                 conn->client_fd_, expected_content_length,
                 conn->response_data_->body_data_.size());
             conn->status_ = BAD_GATEWAY;
-            return ERROR; 
+            return ERROR;
         }
     }
     // All good - finalize the response
     conn->status_ = BAD_GATEWAY;
-    return COMPLETE; 
+    return COMPLETE;
 }
 
 void CgiHandler::parse_cgi_output(Connection* conn) {

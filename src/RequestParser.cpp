@@ -594,7 +594,7 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
     }
 
     size_t unloaded_bytes =
-        buff.unload_to(req->body_data_, body_remaining_bytes);
+        buff.unload_to(req->body_buffer_, body_remaining_bytes);
     body_remaining_bytes -= unloaded_bytes;
 
     log(LOG_DEBUG, "Unloaded %zu bytes to body buffer for connection: %i",
@@ -609,7 +609,8 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
 
     log(LOG_DEBUG,
         "Body parsing incomplete for connection: %i, need %zu more bytes.",
-        conn->client_fd_, req->content_length_ - req->body_data_.size());
+        conn->client_fd_,
+        req->content_length_ - req->body_buffer_.readable_bytes());
     return PARSE_INCOMPLETE;
 }
 
@@ -704,11 +705,9 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     buff.readable_bytes(), context.chunk_remaining_bytes_);
 
                 if (bytes_to_process > 0) {
-                    conn->request_data_->body_data_.insert(
-                        conn->request_data_->body_data_.end(), buff.data(),
-                        buff.data() + bytes_to_process);
-                    buff.consume(bytes_to_process);
-                    context.chunk_remaining_bytes_ -= bytes_to_process;
+                    size_t bytes_unloaded = buff.unload_to(
+                        conn->request_data_->body_buffer_, bytes_to_process);
+                    context.chunk_remaining_bytes_ -= bytes_unloaded;
                 }
 
                 if (context.chunk_remaining_bytes_ == 0) {

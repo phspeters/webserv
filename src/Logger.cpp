@@ -76,8 +76,8 @@ void log_request(log_level level, const Connection* conn) {
         std::cerr << "  " << it->first << ": " << it->second << std::endl;
     }
     std::cerr << "body: " << std::endl;
-    std::cerr.write(conn->request_data_->body_data_.data(),
-                    conn->request_data_->body_data_.size());
+    std::cerr.write(conn->request_data_->body_buffer_.data(),
+                    conn->request_data_->body_buffer_.readable_bytes());
     std::cerr << "\n====================================\n"
               << RESET << std::endl;
 }

@@ -16,7 +16,7 @@ bool AHandler::process_location_redirect(Connection* conn) {
 
     // Set up redirect response
     conn->response_data_->set_header("Location", location->redirect_);
-    conn->status_ = MOVED_PERMANENTLY;  
+    conn->status_ = MOVED_PERMANENTLY;
     return true;
 }
 
@@ -87,7 +87,7 @@ bool AHandler::process_directory_redirect(Connection* conn,
         }
 
         conn->response_data_->set_header("Location", redirect_url);
-        conn->status_ = MOVED_PERMANENTLY; 
+        conn->status_ = MOVED_PERMANENTLY;
         return true;
     }
 
@@ -97,7 +97,6 @@ bool AHandler::process_directory_redirect(Connection* conn,
 bool AHandler::process_directory_index(Connection* conn,
                                        std::string& absolute_path,
                                        bool& need_autoindex) {
-
     // Get location config
     const Location* location = conn->location_match_;
     std::string index = location->index_;
@@ -126,7 +125,7 @@ bool AHandler::process_directory_index(Connection* conn,
     log(LOG_DEBUG,
         "process_directory_index: No index file and autoindex disabled for %s",
         absolute_path.c_str());
-    return false;  
+    return false;
 }
 
 bool AHandler::generate_directory_listing(Connection* conn,
@@ -149,7 +148,8 @@ bool AHandler::generate_directory_listing(Connection* conn,
     html += "<a href=\"../\">../</a>\n";
 
     // Read and store directory entries to sort them later
-    std::vector<std::pair<std::string, bool> > entries; // Pair: <name, is_directory>
+    std::vector<std::pair<std::string, bool> >
+        entries;  // Pair: <name, is_directory>
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
         std::string name = entry->d_name;
@@ -190,10 +190,10 @@ bool AHandler::generate_directory_listing(Connection* conn,
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->set_header("Content-Type", "text/html");
-    conn->response_data_->set_header("Content-Length",
-                                      std::to_string(html.size()));
-    conn->response_data_->body_data_.assign(html.begin(),
-                                html.end());
+    std::ostringstream content_stream;
+    content_stream << html.size();
+    conn->response_data_->set_header("Content-Length", content_stream.str());
+    conn->response_data_->body_data_.assign(html.begin(), html.end());
     conn->status_ = OK;
 
     return true;
