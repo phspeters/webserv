@@ -20,20 +20,20 @@ class MultipartParser {
 };
 
 struct MultipartContext {
-    MultipartContext() : state_(SEARCH_BOUNDARY), is_file_part_(false), boundary_len_(0) {}
+    MultipartContext() : state_(SEARCH_INITIAL_BOUNDARY), is_file_part_(false), boundary_match_index_(0) {}
 
     MultipartState state_;
     std::string boundary_;
     std::string part_headers_;
     bool is_file_part_;  
-    size_t boundary_len_;
+    size_t boundary_match_index_;
 
     void reset() {
-        state_ = SEARCH_BOUNDARY;
+        state_ = SEARCH_INITIAL_BOUNDARY;
         boundary_.clear();
         part_headers_.clear();
         is_file_part_ = false;
-        boundary_len_ = 0;
+        boundary_match_index_ = 0;
     }
 };
 
