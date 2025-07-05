@@ -11,23 +11,23 @@ class AHandler {
    public:
     virtual ~AHandler() {}
 
-    virtual HttpStatus check_permissions(Connection* conn) = 0;
-    virtual HttpStatus setup_handler(Connection* conn) = 0;
+    virtual Result check_permissions(Connection* conn) = 0;
+    virtual Result setup_handler(Connection* conn) = 0;
     //DEBATE: remove and create specific functions? CgiHandler and FileDeleteHandler don't use it
-    virtual HttpStatus handle_event(Connection* conn) = 0;
+    virtual Result handle_event(Connection* conn) = 0;
     virtual void cleanup_handler(Connection* conn) = 0;
     virtual bool is_asynchronous() const { return false; }
 
    protected:
     std::string parse_absolute_path(Connection* conn);
-    HttpStatus process_location_redirect(Connection* conn);
+    bool process_location_redirect(Connection* conn);
 
-    HttpStatus process_directory_redirect(Connection* conn,
+    bool process_directory_redirect(Connection* conn,
                                               std::string& absolute_path);
-    HttpStatus process_directory_index(Connection* conn,
+    bool process_directory_index(Connection* conn,
                                            std::string& absolute_path,
                                            bool& need_autoindex);
-    HttpStatus generate_directory_listing(Connection* conn,
+    bool generate_directory_listing(Connection* conn,
                                               const std::string& dir_path);
 
 };  // class Handler

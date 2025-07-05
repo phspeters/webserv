@@ -18,9 +18,9 @@ class StaticFileHandler : public AHandler {
     // - Opens file, prepares response headers (status, content-type, length).
     // - Sets up Connection state for sending (file FD, offset, bytes).
     // - Uses ResponseWriter to format headers into Connection write buffer.
-    virtual HttpStatus check_permissions(Connection* conn);
-    virtual HttpStatus setup_handler(Connection* conn);
-    virtual HttpStatus handle_event(Connection* conn);
+    virtual Result check_permissions(Connection* conn);
+    virtual Result setup_handler(Connection* conn);
+    virtual Result handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
     virtual bool is_asynchronous() const { return true; }
 
@@ -29,7 +29,6 @@ class StaticFileHandler : public AHandler {
     StaticFileHandler(const StaticFileHandler&);
     StaticFileHandler& operator=(const StaticFileHandler&);
 
-    std::string absolute_path_;
 };  // class StaticFileHandler
 
 struct StaticFileContext {

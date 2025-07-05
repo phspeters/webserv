@@ -4,17 +4,18 @@ StaticFileHandler::StaticFileHandler() {}
 
 StaticFileHandler::~StaticFileHandler() {}
 
-HttpStatus StaticFileHandler::check_permissions(Connection* conn) {
+Result StaticFileHandler::check_permissions(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Checking permissions for client_fd %d",
         conn->client_fd_);
 
     if (conn->request_data_->method_ != "GET") {
         conn->response_data_->set_error_header("Allow", "GET");
-        return METHOD_NOT_ALLOWED;
+        conn->status_ = METHOD_NOT_ALLOWED;
+        return COMPLETE;
     }
 
     if (process_location_redirect(conn)) {
-        return MOVED_PERMANENTLY;
+        return COMPLETE;
     }
 
     std::string absolute_path = parse_absolute_path(conn);
@@ -22,99 +23,72 @@ HttpStatus StaticFileHandler::check_permissions(Connection* conn) {
     if (absolute_path.empty() ||
         absolute_path[absolute_path.length() - 1] == '/') {
         if (process_directory_redirect(conn, absolute_path)) {
-            return REDIRECT;
+            return COMPLETE;
         }
 
         bool need_autoindex = false;
         if (process_directory_index(conn, absolute_path, need_autoindex)) {
             if (need_autoindex) {
+                // The request URI points to a directory.
+                // The server configuration for that directory does not find an index file AND has autoindex on;
                 generate_directory_listing(conn, absolute_path);
-                return AUTOINDEX_GENERATED;
+                return COMPLETE;
             }
         } else {
-            return FORBIDDEN;
+            conn->status_ = FORBIDDEN;
+            return ERROR;
         }
     }
 
     struct stat file_info;
     if (stat(absolute_path.c_str(), &file_info) == -1) {
-        if (errno == ENOENT || errno == ENOTDIR) return NOT_FOUND;
-        if (errno == EACCES) return FORBIDDEN;
-        return INTERNAL_SERVER_ERROR;
+        if (errno == ENOENT || errno == ENOTDIR) {
+            conn->status_ = NOT_FOUND;
+        }
+        else if (errno == EACCES) {
+            conn->status_ = FORBIDDEN;
+        } else {
+            conn->status_ = INTERNAL_SERVER_ERROR;
+        }   
+        return ERROR;
     }
 
     if (!S_ISREG(file_info.st_mode)) {
-        return FORBIDDEN;
+        conn->status_ = FORBIDDEN;
+        return ERROR;
     }
-
-    // Store validated info in the request for setup_handler to use.
-    conn->request_data_->validated_path_ = absolute_path;
-    conn->request_data_->validated_file_size_ = file_info.st_size;
 
     log(LOG_DEBUG,
         "StaticFileHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
-    return OK;
+
+    return COMPLETE;
 }
 
 
-// 2. Setup resources: open file and prepare for serving.
-HttpStatus StaticFileHandler::setup_handler(Connection* conn) {
+Result StaticFileHandler::setup_handler(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Setting up handler for client_fd %d",
         conn->client_fd_);
 
-    // Resolve the absolute path from the request URI
     std::string absolute_path = parse_absolute_path(conn);
 
-    // Handle directory-related logic (redirects, index files, autoindex)
-    if (absolute_path.empty() ||
-        absolute_path[absolute_path.length() - 1] == '/') {
-        // Redirect if URI is a directory but lacks a trailing slash
-        if (process_directory_redirect(conn, absolute_path) == MOVED_PERMANENTLY) {
-            return MOVED_PERMANENTLY;
-        }
+    std::string index_file = conn->location_match_->index_;
+    absolute_path = absolute_path + index_file;
 
-        // Check for index files or generate autoindex listing
-        bool need_autoindex = false;
-        if (process_directory_index(conn, absolute_path, need_autoindex) == OK) {
-            if (need_autoindex) {
-                HttpStatus status = generate_directory_listing(conn, absolute_path);
-                return status;
-            }
-        } else {
-            // Error (e.g., 403 Forbidden if no index and autoindex is off)
-            // what should be returned here?
-            return;
-        }
-    }
-
-    // At this point, we should have a path to a specific file
-    // Open the file and get its metadata
     int fd = open(absolute_path.c_str(), O_RDONLY);
     if (fd == -1) {
         if (errno == ENOENT) {
-            return NOT_FOUND;
+            conn->status_ = NOT_FOUND;
         } else if (errno == EACCES) {
-            return FORBIDDEN;
+            conn->status_ = FORBIDDEN;
         } else {
-            return INTERNAL_SERVER_ERROR;
+            conn->status_ = INTERNAL_SERVER_ERROR;
         }
-    }
-
-    // Get file info (size, type)
-    struct stat file_info;
-    if (fstat(fd, &file_info) == -1) {
-        close(fd);
-        return INTERNAL_SERVER_ERROR;
-    }
-
-    // Ensure it's a regular file
-    if (!S_ISREG(file_info.st_mode)) {
-        close(fd);
-        return FORBIDDEN;
+        return ERROR;
     }
 
     // Create and populate the context for this connection
+    struct stat file_info;
     conn->static_file_context_ = new StaticFileContext();
     conn->static_file_context_->file_fd_ = fd;
     conn->static_file_context_->bytes_to_send_ = file_info.st_size;
@@ -123,31 +97,23 @@ HttpStatus StaticFileHandler::setup_handler(Connection* conn) {
         "StaticFileHandler: Setup complete for client_fd %d, file_fd %d",
         conn->client_fd_, fd);
     
-    return OK; 
+    return COMPLETE; 
 }
 
 // 3. Main logic: read the file and prepare the response.
-HttpStatus StaticFileHandler::handle_event(Connection* conn) {
+Result StaticFileHandler::handle_event(Connection* conn) {
     log(LOG_DEBUG, "StaticFileHandler: Handling event for client_fd %d",
         conn->client_fd_);
 
     if (!conn->static_file_context_ ||
         conn->static_file_context_->file_fd_ < 0) {
-        return INTERNAL_SERVER_ERROR;
+            conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
     }
 
     int fd = conn->static_file_context_->file_fd_;
     size_t file_size = conn->static_file_context_->bytes_to_send_;
 
-    // Read the entire file content into a buffer
-    //std::vector<char> file_content(file_size);
-    //ssize_t bytes_read = read(fd, &file_content[0], file_size);
-
-    //if (bytes_read < 0 || static_cast<size_t>(bytes_read) != file_size) {
-    //    ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-    // 
-    //    return;
-    //}
 
     // Determine content type from file extension
     std::string content_type = "application/octet-stream";
@@ -180,20 +146,17 @@ HttpStatus StaticFileHandler::handle_event(Connection* conn) {
     size_stream << file_size;
     conn->response_data_->set_header("Content-Length", size_stream.str());
 
-    //conn->response_data_->body_data_.assign(file_content.begin(),
-    //                                        file_content.end());
-
-    //// Mark the connection as ready for writing
-
     log(LOG_INFO, "StaticFileHandler: File ready to be served for client_fd %d",
         conn->client_fd_);
 
-    return OK;
+    return COMPLETE;
 }
 
-// 4. Clean up resources associated with the handler.
 void StaticFileHandler::cleanup_handler(Connection* conn) {
+    
     if (!conn || !conn->static_file_context_) {
+        log(LOG_DEBUG, "StaticFileHandler: No cleanup needed for client_fd %d",
+            conn ? conn->client_fd_ : -1);
         return;
     }
 

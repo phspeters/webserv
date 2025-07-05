@@ -1,6 +1,6 @@
 #include "common.hpp"
 
-HttpStatus AHandler::process_location_redirect(Connection* conn) {
+bool AHandler::process_location_redirect(Connection* conn) {
     const Location* location = conn->location_match_;
 
     // Check if this location has a redirect
@@ -8,7 +8,7 @@ HttpStatus AHandler::process_location_redirect(Connection* conn) {
         log(LOG_DEBUG,
             "process_location_redirect: No redirect configured for location %s",
             location->path_.c_str());
-        return OK;  // No redirect
+        return false;  // No redirect
     }
 
     log(LOG_INFO, "REDIRECT: Location %s redirecting to %s",
@@ -16,7 +16,8 @@ HttpStatus AHandler::process_location_redirect(Connection* conn) {
 
     // Set up redirect response
     conn->response_data_->set_header("Location", location->redirect_);
-    return MOVED_PERMANENTLY;
+    conn->status_ = MOVED_PERMANENTLY;  
+    return true;
 }
 
 std::string AHandler::parse_absolute_path(Connection* conn) {
@@ -24,7 +25,6 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     std::string request_root = request_location->root_;
     const std::string& request_path = conn->request_data_->path_;
 
-    // --CHECK If the root starts with /, removed it
     // BIA: TALVEZ ISSO VOLTE!
     if (request_root[0] == '/') {
         request_root = request_root.substr(1);
@@ -59,7 +59,7 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     return (absolute_path);
 }
 
-HttpStatus AHandler::process_directory_redirect(Connection* conn,
+bool AHandler::process_directory_redirect(Connection* conn,
                                           std::string& absolute_path) {
     std::string path = conn->request_data_->path_;
 
@@ -71,7 +71,7 @@ HttpStatus AHandler::process_directory_redirect(Connection* conn,
     if (stat(absolute_path.c_str(), &path_stat) != 0 ||
         !S_ISDIR(path_stat.st_mode)) {
         // Not a directory or couldn't stat
-        return OK;
+        return false;
     }
 
     // If URI doesn't end with slash, redirect to add the slash (nginx behavior)
@@ -87,35 +87,29 @@ HttpStatus AHandler::process_directory_redirect(Connection* conn,
         }
 
         conn->response_data_->set_header("Location", redirect_url);
-        return MOVED_PERMANENTLY;
+        conn->status_ = MOVED_PERMANENTLY; 
+        return true;
     }
 
-    return OK;  // No redirect, but path modified
+    return false;
 }
 
-// Handle directory path resolution (index file or autoindex)
-HttpStatus AHandler::process_directory_index(Connection* conn,
+bool AHandler::process_directory_index(Connection* conn,
                                        std::string& absolute_path,
                                        bool& need_autoindex) {
-    // Ensure absolute_path ends with /
-    // if (absolute_path[absolute_path.length() - 1] != '/') {
-    //     absolute_path += '/';
-    // }
 
     // Get location config
     const Location* location = conn->location_match_;
     std::string index = location->index_;
     if (!index.empty()) {
-        std::string index_path = absolute_path;
+        std::string index_path = absolute_path + index;
         struct stat index_stat;
         log(LOG_FATAL, "process_directory_index: Checking for index file at %s",
             index_path.c_str());
         // Check if index file exists and is a regular file
         if (stat(index_path.c_str(), &index_stat) == 0 &&
             S_ISREG(index_stat.st_mode)) {
-            // Index file exists, update path to use it
-            absolute_path = index_path;
-            return OK;  // Found and using index file
+            return true;  // Found and using index file
         }
     }
 
@@ -126,175 +120,70 @@ HttpStatus AHandler::process_directory_index(Connection* conn,
             "process_directory_index: No index file found, autoindex enabled "
             "for %s",
             absolute_path.c_str());
-        return OK;  // Will use autoindex
+        return true;  // Will use autoindex
     }
 
-    // No index file and autoindex is disabled
-    // Fluxogram 403 - autoindex off - call error handler
     log(LOG_DEBUG,
         "process_directory_index: No index file and autoindex disabled for %s",
         absolute_path.c_str());
-    return FORBIDDEN;  
+    return false;  
 }
 
-HttpStatus AHandler::generate_directory_listing(Connection* conn,
+bool AHandler::generate_directory_listing(Connection* conn,
                                           const std::string& dir_path) {
-    // Open the directory
     DIR* dir = opendir(dir_path.c_str());
-    log(LOG_DEBUG, "AHandler::generate_directory_listing: Opening directory %s",
-        dir_path.c_str());
-
-    // Fluxogram 500 - request resource not found - call error handler
     if (!dir) {
         log(LOG_ERROR, "Failed to open directory for listing: %s",
             strerror(errno));
-        return INTERNAL_SERVER_ERROR;
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return false;
     }
 
-    // Start building HTML for directory listing
-    std::string html =
-        "<!DOCTYPE html>\n"
-        "<html>\n"
-        "<head>\n"
-        "    <title>Index of " +
-        conn->request_data_->path_ +
-        "</title>\n"
-        "    <style>\n"
-        "        body { font-family: Arial, sans-serif; margin: 0; padding: "
-        "20px; color: #333; }\n"
-        "        h1 { border-bottom: 1px solid #eee; padding-bottom: 10px; "
-        "font-size: 24px; }\n"
-        "        table { border-collapse: collapse; width: 100%; }\n"
-        "        th { text-align: left; padding: 8px; border-bottom: 1px solid "
-        "#ddd; color: #666; }\n"
-        "        td { padding: 8px; border-bottom: 1px solid #eee; }\n"
-        "        a { text-decoration: none; color: #0366d6; }\n"
-        "        a:hover { text-decoration: underline; }\n"
-        "        .name { width: 70%; }\n"
-        "        .size { width: 30%; text-align: right; color: #666; }\n"
-        "        .parent { margin-bottom: 10px; display: block; }\n"
-        "    </style>\n"
-        "</head>\n"
-        "<body>\n"
-        "    <h1>Index of " +
-        conn->request_data_->path_ + "</h1>\n";
+    // Minimalist HTML structure, similar to Nginx
+    std::string html = "<html>\n<head><title>Index of " +
+                       conn->request_data_->path_ +
+                       "</title></head>\n<body>\n<h1>Index of " +
+                       conn->request_data_->path_ + "</h1><hr><pre>";
 
-    // Add parent directory link unless at root
-    if (conn->request_data_->path_ != "/") {
-        html += "    <a class=\"parent\" href=\"../\">Parent Directory</a>\n";
-    }
+    // Add parent directory link
+    html += "<a href=\"../\">../</a>\n";
 
-    html +=
-        "    <table>\n"
-        "        <tr>\n"
-        "            <th class=\"name\">Name</th>\n"
-        "            <th class=\"size\">Size</th>\n"
-        "        </tr>\n";
-
-    // Read and store directory entries
+    // Read and store directory entries to sort them later
+    std::vector<std::pair<std::string, bool> > entries; // Pair: <name, is_directory>
     struct dirent* entry;
-    std::vector<std::string> dir_names;
-    std::vector<std::string> file_names;
-
     while ((entry = readdir(dir)) != NULL) {
         std::string name = entry->d_name;
-
-        // Skip "." and ".."
         if (name == "." || name == "..") {
             continue;
         }
-
-        // Get file stats
-        struct stat st;
         std::string full_path = dir_path + name;
-
+        struct stat st;
         if (stat(full_path.c_str(), &st) == 0) {
-            // Check if it's a directory
-            if (S_ISDIR(st.st_mode)) {
-                dir_names.push_back(name);
-            } else {
-                file_names.push_back(name);
-            }
+            entries.push_back(std::make_pair(name, S_ISDIR(st.st_mode)));
         }
     }
+    closedir(dir);
 
-    // Sort directories and files alphabetically
-    std::sort(dir_names.begin(), dir_names.end());
-    std::sort(file_names.begin(), file_names.end());
+    // Sort entries alphabetically
+    std::sort(entries.begin(), entries.end());
 
-    // Process directories first
-    for (size_t i = 0; i < dir_names.size(); ++i) {
-        std::string name = dir_names[i];
-
-        html +=
-            "        <tr>\n"
-            "            <td class=\"name\"><a href=\"" +
-            name + "/\">" + name +
-            "/</a></td>\n"
-            "            <td class=\"size\">-</td>\n"
-            "        </tr>\n";
+    // Add sorted entries to the HTML
+    for (size_t i = 0; i < entries.size(); ++i) {
+        std::string name = entries[i].first;
+        bool is_dir = entries[i].second;
+        if (is_dir) {
+            name += "/";
+        }
+        html += "<a href=\"" + name + "\">" + name + "</a>\n";
     }
 
-    // Then process files
-    for (size_t i = 0; i < file_names.size(); ++i) {
-        std::string name = file_names[i];
-        std::string full_path = dir_path + name;
-        struct stat st;
+    html += "</pre><hr></body>\n</html>";
 
-        if (stat(full_path.c_str(), &st) != 0) {
-            continue;  // Skip if stat fails
-        }
-
-        // Format file size
-        std::string size_str;
-        std::ostringstream oss;
-
-        if (st.st_size < 1024) {
-            oss << st.st_size << " B";
-        } else if (st.st_size < 1024 * 1024) {
-            oss << (st.st_size / 1024) << " KB";
-        } else if (st.st_size < 1024 * 1024 * 1024) {
-            oss << (st.st_size / (1024 * 1024)) << " MB";
-        } else {
-            oss << (st.st_size / (1024 * 1024 * 1024)) << " GB";
-        }
-        size_str = oss.str();
-
-        html +=
-            "        <tr>\n"
-            "            <td class=\"name\"><a href=\"" +
-            name + "\">" + name +
-            "</a></td>\n"
-            "            <td class=\"size\">" +
-            size_str +
-            "</td>\n"
-            "        </tr>\n";
-    }
-
-    // Count total entries
-    std::ostringstream count_str;
-    count_str << (dir_names.size() + file_names.size());
-
-    // Close HTML
-    html +=
-        "    </table>\n"
-        "    <div style=\"margin-top: 20px; color: #666; font-size: 12px;\">\n"
-        "        Webserv - " +
-        count_str.str() +
-        " items\n"
-        "    </div>\n"
-        "</body>\n"
-        "</html>";
-
-    // Set response
-    // Fluxogram 200
+    // Set the response data for a 200 OK status
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->set_header("Content-Type", "text/html");
-    conn->response_data_->body_data_.assign(html.begin(), html.end());
+    conn->status_ = OK;
 
-    // Clean up
-    closedir(dir);
-
-    return OK;  
+    return true;
 }

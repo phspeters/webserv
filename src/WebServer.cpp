@@ -1093,7 +1093,7 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
         log(LOG_DEBUG, "handle_static_file_event: Handling EPOLLIN for static file fd %d", ctx->fd_);
 
         if (conn && conn->active_handler_) {
-            HttpStatus response_status = conn->active_handler_->handle_event(conn);
+            Result result = conn->active_handler_->handle_event(conn);
         } else {
             log(LOG_FATAL,
                 "handle_static_file_event: Connection or active handler is "
