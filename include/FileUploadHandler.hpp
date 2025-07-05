@@ -12,36 +12,24 @@ class FileUploadHandler : public AHandler {
     FileUploadHandler();
     virtual ~FileUploadHandler();
 
-    virtual HttpStatus check_permissions(Connection* conn);
-    virtual HttpStatus setup_handler(Connection* conn);
-    virtual HttpStatus handle_event(Connection* conn);
+    virtual Result check_permissions(Connection* conn);
+    virtual Result setup_handler(Connection* conn);
+    virtual Result handle_event(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
     virtual bool is_asynchronous() const { return true; }
 
    private:
-    // Request validation and processing
-    // bool validate_request(Connection* conn, std::string& boundary);
-    HttpStatus process_trailing_slash_redirect(Connection* conn);
+    MultipartParser multipart_parser_;
 
-    // Response generation
+    bool process_trailing_slash_redirect(Connection* conn);
     void send_success_response(Connection* conn);
-
-    // File saving operations
     bool copy_temp_to_final_file(const std::string& temp_path,
                                  const std::string& final_path);
-    // bool save_uploaded_file(Connection* conn, const std::string& filename,
-    //                         const std::vector<char>& data);
-    // bool write_file_to_disk(Connection* conn, const std::string& file_path,
-    //                         const std::vector<char>& data);
-
-    // Directory operations
     std::string get_upload_directory(Connection* conn);
-    HttpStatus ensure_upload_directory_exists(
+    bool ensure_upload_directory_exists(
         Connection* conn, const std::string& upload_dir);
-    HttpStatus create_directory_recursive(Connection* conn,
+    bool create_directory_recursive(Connection* conn,
                                               const std::string& path);
-
-    // Utility methods
     std::string sanitize_filename(const std::string& filename);
 
     // Prevent copying
@@ -55,7 +43,8 @@ struct FileUploadContext {
     std::string filename_;
     Buffer upload_buffer_;
     bool upload_complete;
-    MultipartParser parser_;
+
+    MultipartContext multipart_context_;
 
     FileUploadContext() : file_fd_(-1), upload_complete(false) {}
 };

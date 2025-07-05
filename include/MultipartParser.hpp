@@ -10,7 +10,7 @@ class MultipartParser {
     MultipartParser();
     ~MultipartParser();
 
-    ParseStatus parse(Connection* conn);
+    ParseStatus parse_multipart(Connection* conn);
     static std::string extract_boundary(const std::string& content_type);
 
    private:
@@ -20,15 +20,19 @@ class MultipartParser {
 };
 
 struct MultipartContext {
-    MultipartContext() : state_(SEARCH_BOUNDARY), boundary_len_(0) {}
+    MultipartContext() : state_(SEARCH_BOUNDARY), is_file_part_(false), boundary_len_(0) {}
 
     MultipartState state_;
     std::string boundary_;
+    std::string part_headers_;
+    bool is_file_part_;  
     size_t boundary_len_;
 
     void reset() {
         state_ = SEARCH_BOUNDARY;
         boundary_.clear();
+        part_headers_.clear();
+        is_file_part_ = false;
         boundary_len_ = 0;
     }
 };

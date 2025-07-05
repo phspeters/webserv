@@ -6,7 +6,7 @@ FileUploadHandler::FileUploadHandler() : AHandler() {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
-HttpStatus FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
+bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
     std::string uri = conn->request_data_->uri_;
     const Location* location = conn->location_match_;
 
@@ -14,12 +14,11 @@ HttpStatus FileUploadHandler::process_trailing_slash_redirect(Connection* conn) 
     if (!location->path_.empty() &&
         location->path_[location->path_.length() - 1] == '/' && !uri.empty() &&
         uri[uri.length() - 1] != '/') {
-
         conn->response_data_->set_header("Location", uri + "/");
-
-        return MOVED_PERMANENTLY;
+        conn->status_ = MOVED_PERMANENTLY;
+        return true;
     }
-    return OK;
+    return false;
 }
 
 void FileUploadHandler::send_success_response(Connection* conn) {
@@ -52,18 +51,17 @@ std::string FileUploadHandler::get_upload_directory(Connection* conn) {
     return upload_dir;
 }
 
-HttpStatus FileUploadHandler::ensure_upload_directory_exists(
+bool FileUploadHandler::ensure_upload_directory_exists(
     Connection* conn, const std::string& upload_dir) {
     struct stat st;
     if (stat(upload_dir.c_str(), &st) == 0) {
-        return  OK;  // Directory already exists
+        return true;  // Directory already exists
     }
 
-    // Directory doesn't exist, create it recursively
     return create_directory_recursive(conn, upload_dir);
 }
 
-HttpStatus FileUploadHandler::create_directory_recursive(Connection* conn,
+bool FileUploadHandler::create_directory_recursive(Connection* conn,
                                                    const std::string& path) {
     size_t pos = 0;
     while ((pos = path.find('/', pos + 1)) != std::string::npos) {
@@ -71,10 +69,11 @@ HttpStatus FileUploadHandler::create_directory_recursive(Connection* conn,
             std::string parent_dir = path.substr(0, pos);
             if (mkdir(parent_dir.c_str(), 0755) != 0 && errno != EEXIST) {
                 if (errno == EACCES || errno == EPERM) {
-                    return FORBIDDEN; 
+                    conn->status_ = FORBIDDEN;
                 } else {
-                    return INTERNAL_SERVER_ERROR;
+                    conn->status_ = INTERNAL_SERVER_ERROR;
                 }
+                return false;
             }
         }
     }
@@ -82,13 +81,13 @@ HttpStatus FileUploadHandler::create_directory_recursive(Connection* conn,
     // Create final directory
     if (mkdir(path.c_str(), 0755) != 0 && errno != EEXIST) {
         if (errno == EACCES || errno == EPERM) {
-            return FORBIDDEN;
+            conn->status_ = FORBIDDEN;
         } else {
-            return INTERNAL_SERVER_ERROR;
+            conn->status_ = INTERNAL_SERVER_ERROR;
         }
+        return false;
     }
-
-    return OK;
+    return true;
 }
 
 std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
@@ -165,36 +164,46 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
     return true;
 }
 
-HttpStatus FileUploadHandler::check_permissions(Connection* conn) {
+Result FileUploadHandler::check_permissions(Connection* conn) {
     std::string content_length =
         conn->request_data_->get_header("content-length");
     if (content_length.empty()) {
-        return BAD_REQUEST;
+        conn->status_ = BAD_REQUEST;
+        return ERROR;
     }
     std::string content_type = conn->request_data_->get_header("content-type");
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
-        return UNSUPPORTED_MEDIA_TYPE;
+        conn->status_ = UNSUPPORTED_MEDIA_TYPE;
+        return ERROR;
     }
+
+    std::string boundary =  conn->file_upload_context_->multipart_context_.boundary_;
+    boundary = multipart_parser_.extract_boundary(content_type);
+    if (boundary.empty()) {
+        log(LOG_ERROR, "No multipart boundary found for client_fd %d",
+            conn->client_fd_);
+        conn->status_ = BAD_REQUEST;
+        return ERROR;
+    }
+
+    conn->status_ = OK;
     log(LOG_DEBUG,
         "FileUploadHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
-        
-    return OK;
+    return COMPLETE;
 }
 
-HttpStatus FileUploadHandler::setup_handler(Connection* conn) {
+Result FileUploadHandler::setup_handler(Connection* conn) {
     // Redirect if needed
-    if (process_trailing_slash_redirect(conn) == MOVED_PERMANENTLY) {
-        return MOVED_PERMANENTLY;
+    if (process_trailing_slash_redirect(conn)) {
+        return COMPLETE;
     }
 
     // Generate temporary file name
     std::string upload_dir = get_upload_directory(conn);
-    HttpStatus status = ensure_upload_directory_exists(conn, upload_dir);
-    if (status == FORBIDDEN) {
-        return FORBIDDEN;
-    } else if (status == INTERNAL_SERVER_ERROR) {
-        return INTERNAL_SERVER_ERROR;
+
+    if (!ensure_upload_directory_exists(conn, upload_dir)) {
+        return ERROR;  // Directory creation failed
     }
 
     std::stringstream ss;
@@ -203,7 +212,8 @@ HttpStatus FileUploadHandler::setup_handler(Connection* conn) {
     int file_fd =
         open(temp_filename.c_str(), O_WRONLY | O_CREAT | O_NONBLOCK, 0644);
     if (file_fd < 0) {
-        return INTERNAL_SERVER_ERROR;
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
     }
 
     // Initialize context
@@ -214,22 +224,24 @@ HttpStatus FileUploadHandler::setup_handler(Connection* conn) {
         "FileUploadHandler: Setup complete for client_fd %d, file_fd %d",
         conn->client_fd_, file_fd);
 
-    return OK;
+    return COMPLETE;
 }
 
 // TODO: Handle multipart parsing inside handle_event
-HttpStatus FileUploadHandler::handle_event(Connection* conn) {
+Result FileUploadHandler::handle_event(Connection* conn) {
     // Consume from upload_buffer_ and write to temporary file
     if (!conn->file_upload_context_) {
         log(LOG_FATAL,
             "FileUploadHandler: No file upload context for client_fd %d",
             conn->client_fd_);
-        return INTERNAL_SERVER_ERROR;
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
     }
 
-    ParseStatus status = conn->file_upload_context_->parser_.parse(conn);
-    if (status == ERROR) {
-        return BAD_REQUEST;
+    ParseStatus status = multipart_parser_.parse_multipart(conn);
+    if (status >= PARSE_ERROR) {
+        conn->status_ = ErrorHandler::parse_status_to_response_status(status);
+        return ERROR;
     }
 
     // Write any parsed file data to the temp file
@@ -238,17 +250,23 @@ HttpStatus FileUploadHandler::handle_event(Connection* conn) {
     if (!buffer.empty()) {
         ssize_t written = buffer.write_to(file_fd);
         if (written < 0) {
-            return INTERNAL_SERVER_ERROR;
+            conn->status_ = INTERNAL_SERVER_ERROR;
+            return ERROR;
         }
-        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d", written, file_fd);
+        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d",
+            written, file_fd);
     }
 
-        if (conn->file_upload_context_->upload_complete) {
+    if (status == PARSE_INCOMPLETE) {
+        return AGAIN;
+    }
+
+    if (conn->file_upload_context_->upload_complete) {
         // Close the temp file before copying
         int file_fd = conn->file_upload_context_->file_fd_;
         if (file_fd >= 0) {
             close(file_fd);
-            conn->file_upload_context_->file_fd_ = -1; // Mark as closed
+            conn->file_upload_context_->file_fd_ = -1;  // Mark as closed
         }
 
         // Determine final file path
@@ -262,7 +280,8 @@ HttpStatus FileUploadHandler::handle_event(Connection* conn) {
         // Copy temp file to final destination
         if (!copy_temp_to_final_file(conn->file_upload_context_->temp_path_,
                                      final_path)) {
-            return INTERNAL_SERVER_ERROR;
+            conn->status_ = INTERNAL_SERVER_ERROR;
+            return ERROR;
         }
         log(LOG_INFO,
             "FileUploadHandler: Copied temp file to final file '%s' for "
@@ -270,110 +289,14 @@ HttpStatus FileUploadHandler::handle_event(Connection* conn) {
             final_path.c_str(), conn->client_fd_);
 
         send_success_response(conn);
+        return COMPLETE;
     }
-    return OK;
+    return AGAIN;
 }
 
 void FileUploadHandler::cleanup_handler(Connection* conn) {
-
     delete conn->file_upload_context_;
     conn->file_upload_context_ = NULL;
 
     return;
 }
-
-/* currently not being used
-bool FileUploadHandler::validate_request(Connection* conn,
-                                         std::string& boundary) {
-    if (!conn->request_data_ || !conn->response_data_) {
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return false;
-    }
-
-    std::string content_length =
-        conn->request_data_->get_header("content-length");
-    if (content_length.empty()) {
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return false;
-    }
-    // CHECK - Modification CAROL
-    // if (conn->request_data_->body_.size() >
-    // conn->virtual_server_->client_max_body_size_) {
-    //     ErrorHandler::generate_error_response(conn,
-    //     PAYLOAD_TOO_LARGE); return false;
-    // }
-
-    std::string content_type = conn->request_data_->get_header("content-type");
-    if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
-        ErrorHandler::generate_error_response(conn, UNSUPPORTED_MEDIA_TYPE);
-        return false;
-    }
-
-    boundary = RequestParser::extract_boundary(content_type);
-    if (boundary.empty()) {
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return false;
-    }
-
-    return true;
-}
-
-bool FileUploadHandler::write_file_to_disk(Connection* conn,
-                                           const std::string& file_path,
-                                           const std::vector<char>& data) {
-    if (data.empty()) {
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-        return false;
-    }
-
-    std::ofstream file(file_path.c_str(), std::ios::binary);
-
-    if (!file.is_open()) {
-        if (errno == EACCES || errno == EPERM) {
-            ErrorHandler::generate_error_response(conn, FORBIDDEN);
-        } else if (errno == ENOSPC) {
-            ErrorHandler::generate_error_response(conn, INSUFFICIENT_STORAGE);
-        } else {
-            ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        }
-        return false;
-    }
-
-    // Write data
-    file.write(&data[0], data.size());
-
-    // Check for write errors
-    if (file.fail() || file.bad()) {
-        file.close();
-        // Try to remove partially written file
-        std::remove(file_path.c_str());
-
-        ErrorHandler::generate_error_response(conn, INTERNAL_SERVER_ERROR);
-        return false;
-    }
-
-    file.close();
-    return true;
-}
-
-bool FileUploadHandler::save_uploaded_file(Connection* conn,
-                                           const std::string& filename,
-                                           const std::vector<char>& data) {
-    std::string upload_dir = get_upload_directory(conn);
-
-    if (!ensure_upload_directory_exists(conn, upload_dir)) {
-        return false;
-    }
-
-    std::string safe_filename = sanitize_filename(filename);
-    if (safe_filename.empty()) {
-        ErrorHandler::generate_error_response(conn, BAD_REQUEST);
-
-        return false;
-    }
-
-    std::string full_path = upload_dir + safe_filename;
-
-    return write_file_to_disk(conn, full_path, data);
-}
-*/

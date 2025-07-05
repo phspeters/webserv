@@ -11,7 +11,7 @@ Result StaticFileHandler::check_permissions(Connection* conn) {
     if (conn->request_data_->method_ != "GET") {
         conn->response_data_->set_error_header("Allow", "GET");
         conn->status_ = METHOD_NOT_ALLOWED;
-        return COMPLETE;
+        return ERROR;
     }
 
     if (process_location_redirect(conn)) {
