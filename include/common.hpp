@@ -89,6 +89,27 @@ enum WriterState {
     WRITER_DONE
 };
 
+enum ParseStatus {
+    PARSE_INCOMPLETE,
+    PARSE_SUCCESS,
+    PARSE_ERROR,
+    PARSE_INVALID_REQUEST_LINE,
+    PARSE_METHOD_NOT_IMPLEMENTED,
+    PARSE_METHOD_NOT_ALLOWED,
+    PARSE_INVALID_PATH,
+    PARSE_INVALID_QUERY_STRING,
+    PARSE_VERSION_NOT_SUPPORTED,
+    PARSE_REQUEST_TOO_LONG,
+    PARSE_MISSING_HOST_HEADER,
+    PARSE_HEADER_TOO_LONG,
+    PARSE_TOO_MANY_HEADERS,
+    PARSE_MISSING_CONTENT_LENGTH,
+    PARSE_INVALID_CONTENT_LENGTH,
+    PARSE_CONTENT_TOO_LARGE,
+    PARSE_UNKNOWN_ENCODING,
+    PARSE_INVALID_CHUNK_SIZE
+};
+
 enum HttpStatus {
     // 2xx - Success
     OK = 200,          // Request succeeded
@@ -124,6 +145,8 @@ enum HttpStatus {
     INSUFFICIENT_STORAGE = 507         // Insufficient Storage
 };
 
+enum Result { COMPLETE, AGAIN, ERROR };
+
 enum FdType {
     FD_LISTENER,
     FD_CLIENT_SOCKET,
@@ -134,8 +157,6 @@ enum FdType {
 };
 
 enum LocType { LOC_DEFAULT, LOC_EXTENSION };
-
-enum Result { COMPLETE, AGAIN, ERROR };
 
 #include "AHandler.hpp"
 #include "Buffer.hpp"

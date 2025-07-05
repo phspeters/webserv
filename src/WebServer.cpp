@@ -561,10 +561,10 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
         if (conn->conn_state_ == CONN_READING_REQUEST ||
             conn->conn_state_ == CONN_GENERATING_RESPONSE) {
             ParseStatus status = handle_request_parsing(conn);
+            conn->status_ =
+                ErrorHandler::parse_status_to_response_status(status);
             if (status >= ERROR) {
-                handle_error_response(
-                    conn, ErrorHandler::parse_status_to_response_status(
-                              status));  // TEMP?
+                handle_error_response(conn);
                 return;
             }
             log_request(LOG_TRACE, conn);
@@ -625,7 +625,7 @@ bool WebServer::handle_keep_alive(Connection* conn) {
 }
 
 ParseStatus WebServer::handle_request_parsing(Connection* conn) {
-    ParseStatus status = COMPLETE;
+    ParseStatus status = PARSE_SUCCESS;
 
     while (true) {
         ParserState& state = conn->parser_context_.parser_state_;
@@ -633,21 +633,21 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
         switch (state) {
             case PARSER_READING_REQUEST_LINE:
                 status = request_parser_.parse_request_line(conn);
-                if (status == COMPLETE) {
+                if (status == PARSE_SUCCESS) {
                     state = PARSER_READING_HEADERS;
                 }
                 break;
 
             case PARSER_READING_HEADERS:
                 status = request_parser_.parse_headers(conn);
-                if (status == COMPLETE) {
+                if (status == PARSE_SUCCESS) {
                     state = PARSER_PROCESSING_REQUEST;
                 }
                 break;
 
             case PARSER_PROCESSING_REQUEST:
                 status = process_request(conn);  // Validate headers, etc.
-                if (status == COMPLETE) {
+                if (status == PARSE_SUCCESS) {
                     // Determine if we need to read a body and how
                     state = determine_body_handling_state(conn);
                 }
@@ -655,14 +655,14 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
 
             case PARSER_READING_CONTENT_BODY:
                 status = request_parser_.parse_content_body(conn);
-                if (status == COMPLETE) {
+                if (status == PARSE_SUCCESS) {
                     state = PARSER_COMPLETE;
                 }
                 break;
 
             case PARSER_READING_CHUNKED_BODY:
                 status = request_parser_.parse_chunked_body(conn);
-                if (status == COMPLETE) {
+                if (status == PARSE_SUCCESS) {
                     state = PARSER_COMPLETE;
                 }
                 break;
@@ -670,12 +670,12 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
             case PARSER_COMPLETE:
                 log(LOG_DEBUG, "Request parsing complete for fd %d.",
                     conn->client_fd_);
-                return COMPLETE;
+                return PARSE_SUCCESS;
 
             default:
                 log(LOG_ERROR, "Unknown parser state for fd %d.",
                     conn->client_fd_);
-                status = ERROR;
+                status = PARSE_ERROR;
                 break;
         }
 
@@ -702,14 +702,14 @@ ParseStatus WebServer::process_request(Connection* conn) {
         match_location(conn->virtual_server_, conn->request_data_->path_);
 
     ParseStatus status = validate_version(conn);
-    if (status != COMPLETE) {
+    if (status != PARSE_SUCCESS) {
         log(LOG_ERROR, "Invalid HTTP version in request for connection: %i",
             conn->client_fd_);
         return status;
     }
 
     status = validate_method(conn);
-    if (status != COMPLETE) {
+    if (status != PARSE_SUCCESS) {
         log(LOG_ERROR,
             "Invalid or unsupported method in request for connection: %i",
             conn->client_fd_);
@@ -717,7 +717,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
     }
 
     status = validate_body_handling(conn);
-    if (status != COMPLETE) {
+    if (status != PARSE_SUCCESS) {
         log(LOG_ERROR, "Invalid body handling in request for connection: %i",
             conn->client_fd_);
         return status;
@@ -725,23 +725,22 @@ ParseStatus WebServer::process_request(Connection* conn) {
 
     conn->active_handler_ = choose_handler(conn);
 
-    HttpStatus response_status =
-        conn->active_handler_->check_permissions(conn);
-    if (response_status != OK) {
-        handle_error_response(conn, response_status);
-        return ERROR;
+    Result result = conn->active_handler_->check_permissions(conn);
+    if (result != OK) {
+        handle_error_response(conn);
+        return PARSE_ERROR;
     }
 
-    response_status = conn->active_handler_->setup_handler(conn);
+    result = conn->active_handler_->setup_handler(conn);
     // DEBATE: Can setup_handler return status != OK legitimaly?
-    if (response_status >= BAD_REQUEST) {
-        handle_error_response(conn, response_status);
-        return ERROR;
+    if (result >= BAD_REQUEST) {
+        handle_error_response(conn);
+        return PARSE_ERROR;
     }
 
     if (conn->active_handler_->is_asynchronous()) {
         conn->conn_state_ = CONN_GENERATING_RESPONSE;
-        return COMPLETE;
+        return PARSE_SUCCESS;
     } else {
         conn->conn_state_ = CONN_WRITING_RESPONSE;
         response_writer_.write_response_to_buffer(conn);
@@ -753,7 +752,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
                 conn->client_fd_);
             close_client_connection(conn);
         }
-        return COMPLETE;
+        return PARSE_SUCCESS;
     }
 }
 
@@ -798,7 +797,7 @@ ParseStatus WebServer::validate_version(Connection* conn) {
 
     // Only HTTP/1.0 or HTTP/1.1 allowed
     if (version == "HTTP/1.0" || version == "HTTP/1.1") {
-        return COMPLETE;
+        return PARSE_SUCCESS;
     }
 
     log(LOG_ERROR, "Invalid HTTP version '%s' in request for connection: %i",
@@ -824,7 +823,7 @@ ParseStatus WebServer::validate_method(Connection* conn) {
              location->allowed_methods_.begin();
          it != location->allowed_methods_.end(); ++it) {
         if (*it == method) {
-            return COMPLETE;
+            return PARSE_SUCCESS;
         }
     }
     log(LOG_ERROR, "Method '%s' not allowed for location: %s", method.c_str(),
@@ -890,7 +889,7 @@ ParseStatus WebServer::validate_body_handling(Connection* conn) {
     }
     log(LOG_DEBUG, "Body handling validation successful for connection: %i",
         conn->client_fd_);
-    return COMPLETE;
+    return PARSE_SUCCESS;
 }
 
 AHandler* WebServer::choose_handler(Connection* conn) {
@@ -1022,12 +1021,8 @@ void WebServer::match_host_header(Connection* conn) {
     return;
 }
 
-// CHECK: This function needs to call handle_event in a loop until the whole
-// file has been saved When it's done, the flow continues to call
-// write_response_to_buffer, set epoll flags and change conn state
 void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
     Connection* conn = ctx->conn_;
-    IOContext* client_ctx = ctx->conn_->io_contexts_[0];
     if (!conn || !conn->active_handler_) {
         log(LOG_FATAL,
             "handle_file_upload_event: Connection or active handler is "
@@ -1036,44 +1031,21 @@ void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
     }
 
     if (event_flags & EPOLLOUT) {
-        conn->active_handler_->handle_event(conn);
-        //Result result = conn->active_handler_->handle_event(conn);
-        //switch (result) {
-        //    case AGAIN:
-        //        log(LOG_DEBUG,
-        //            "handle_file_upload_event: File upload completed for "
-        //            "client_fd %d",
-        //            conn->client_fd_);
-        //        return;
-        //    case ERROR:
-        //        log(LOG_ERROR,
-        //            "handle_file_upload_event: Error during file upload for "
-        //            "client_fd %d",
-        //            conn->client_fd_);
-        //        handle_error_response(conn, INTERNAL_SERVER_ERROR);
-        //        return;
-        //    case COMPLETE:
-        //        log(LOG_DEBUG,
-        //            "handle_file_upload_event: File upload completed for "
-        //            "client_fd %d",
-        //            conn->client_fd_);
-        //        break;
-        //}
+        log(LOG_DEBUG,
+            "handle_file_upload_event: Handling EPOLLOUT for file upload fd %d",
+            ctx->fd_);
 
-        response_writer_.write_response_to_buffer(conn);
-        if (!conn->write_buffer_.empty()) {
-            if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
-                log(LOG_ERROR,
-                    "handle_file_upload_event: Failed to update epoll events "
-                    "for client_fd %d",
-                    conn->client_fd_);
-                close_client_connection(conn);
-            }
-            conn->conn_state_ = CONN_WRITING_RESPONSE;
-        } else {
-            log(LOG_DEBUG,
-                "handle_file_upload_event: No data to write for client_fd %d",
+        Result result = conn->active_handler_->handle_event(conn);
+        if (!handle_async_result(result, conn, "file upload")) {
+            return;
+        }
+
+        if (!start_response_writing(conn)) {
+            log(LOG_ERROR,
+                "handle_file_upload_event: Failed to start response writing "
+                "for client_fd %d",
                 conn->client_fd_);
+            return;
         }
     } else {
         log(LOG_FATAL,
@@ -1083,39 +1055,31 @@ void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
     }
 }
 
-// CHECK: This function has to setup the HttpResponse (response line, headers,
-// body_fd) when done, let ResponseWriter serialize and yada yada
 void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
     Connection* conn = ctx->conn_;
-    IOContext* client_ctx = conn->io_contexts_[0];
+    if (!conn || !conn->active_handler_) {
+        log(LOG_FATAL,
+            "handle_statis_file_event: Connection or active handler is "
+            "NULL");
+        return;
+    }
 
     if (event_flags & EPOLLIN) {
-        log(LOG_DEBUG, "handle_static_file_event: Handling EPOLLIN for static file fd %d", ctx->fd_);
+        log(LOG_DEBUG,
+            "handle_static_file_event: Handling EPOLLIN for static file fd %d",
+            ctx->fd_);
 
-        if (conn && conn->active_handler_) {
-            Result result = conn->active_handler_->handle_event(conn);
-        } else {
-            log(LOG_FATAL,
-                "handle_static_file_event: Connection or active handler is "
-                "NULL");
+        Result result = conn->active_handler_->handle_event(conn);
+        if (!handle_async_result(result, conn, "static file")) {
             return;
         }
 
-        response_writer_.write_response_to_buffer(conn);
-        if (!conn->write_buffer_.empty()) {
-            if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
-                log(LOG_ERROR,
-                    "handle_static_file_event: Failed to update client_fd "
-                    "%d for writing",
-                    conn->client_fd_);
-                close_client_connection(conn);
-            }
-            conn->conn_state_ = CONN_WRITING_RESPONSE;
-            
-        } else {
-            log(LOG_DEBUG,
-            "handle_static_file_event: No data to write for client_fd %d",
-            conn->client_fd_);
+        if (!start_response_writing(conn)) {
+            log(LOG_ERROR,
+                "handle_static_file_event: Failed to start response writing "
+                "for client_fd %d",
+                conn->client_fd_);
+            return;
         }
     } else {
         log(LOG_FATAL,
@@ -1125,13 +1089,7 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
     }
 }
 
-// CHECK: this function need to loop handle_cgi_read until response is ready
-// (Response line, headers and body_fd set) Then let ResponseWriter do its thing
 void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
-    // event_flags is not necessary here because this handler is only registered
-    // for EPOLLIN events on the CGI pipe.
-    (void)event_flags;
-
     Connection* conn = ctx->conn_;
     if (!conn || !conn->active_handler_) {
         log(LOG_FATAL,
@@ -1139,36 +1097,31 @@ void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
         return;
     }
 
-    // TODO: check return status
-    cgi_handler_.handle_cgi_read(conn);
-
-    // Write the response to the buffer if ready
-    response_writer_.write_response_to_buffer(conn);
-    IOContext* client_ctx = conn->io_contexts_[0];
-    if (!conn->write_buffer_.empty()) {
-        if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
-            log(LOG_ERROR,
-                "handle_cgi_read_event: Failed to update epoll events for "
-                "client_fd %d",
-                conn->client_fd_);
-            close_client_connection(conn);
-        }
-        conn->conn_state_ = CONN_WRITING_RESPONSE;
-    } else {
+    if (event_flags & EPOLLIN) {
         log(LOG_DEBUG,
-            "handle_cgi_read_event: No data to write for client_fd %d",
-            conn->client_fd_);
+            "handle_cgi_read_event: Handling EPOLLIN for cgi pipe fd %d",
+            ctx->fd_);
+
+        Result result = cgi_handler_.handle_cgi_read(conn);
+        if (!handle_async_result(result, conn, "static file")) {
+            return;
+        }
+
+        if (!start_response_writing(conn)) {
+            log(LOG_ERROR,
+                "handle_cgi_read_event: Failed to start response writing "
+                "for client_fd %d",
+                conn->client_fd_);
+            return;
+        }
+    } else {
+        log(LOG_FATAL,
+            "handle_cgi_read_event: Invalid event flags for CGI read event: %u",
+            event_flags);
     }
 }
 
-// CHECK: This function has to loop handle_cgi_write until all the request body
-// has been sent Then the job is done because cleanup_handler will free the
-// resources
 void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
-    // event_flags is not necessary here because this handler is only registered
-    // for EPOLLOUT events on the CGI pipe.
-    (void)event_flags;
-
     Connection* conn = ctx->conn_;
     if (!conn || !conn->active_handler_) {
         log(LOG_FATAL,
@@ -1176,21 +1129,22 @@ void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
         return;
     }
 
-    // TODO: check return status
-    cgi_handler_.handle_cgi_write(conn);
-
-    // If we're done, cleanup fds and context? Maybe do it later when both event
-    // are done?
-
-    // If the CGI handler changed state to reading, we don't need to do anything
-    // else The handler will have already registered the stdout pipe for reading
-    // If there's still data to write, the handler will keep the current state
-    // and epoll will call this handler again when the pipe is ready for more
-    // writing
+    if (event_flags & EPOLLOUT) {
+        Result result = cgi_handler_.handle_cgi_write(conn);
+        if (!handle_async_result(result, conn, "static file")) {
+            return;
+        }
+    } else {
+        log(LOG_FATAL,
+            "handle_cgi_write_event: Invalid event flags for CGI read event: "
+            "%u",
+            event_flags);
+    }
 }
 
-bool WebServer::handle_error_response(Connection* conn, HttpStatus status) {
+bool WebServer::handle_error_response(Connection* conn) {
     IOContext* client_ctx = conn->io_contexts_[0];
+    HttpStatus status = conn->status_;
 
     ErrorHandler::generate_error_response(conn, status);
     response_writer_.write_response_to_buffer(conn);
@@ -1210,23 +1164,110 @@ bool WebServer::handle_error_response(Connection* conn, HttpStatus status) {
     }
 }
 
-//bool WebServer::handle_async_result(Result result, Connection* conn,
-//                                    const char* context_str) {
-//    switch (result) {
-//        case AGAIN:
-//            log(LOG_DEBUG, "%s: Incomplete action, waiting.", context_str);
-//            return false; // false means "stop processing"
+bool WebServer::handle_async_result(Result result, Connection* conn,
+                                    const char* context_str) {
+    switch (result) {
+        case AGAIN:
+            log(LOG_DEBUG, "%s: Incomplete action, waiting.", context_str);
+            return false;  // false means "stop processing"
 
-//        case ERROR:
-//            log(LOG_ERROR, "%s: Encountered an error.", context_str);
-//            handle_error_response(conn, INTERNAL_SERVER_ERROR);
-//            return false; // false means "stop processing"
+        case ERROR:
+            log(LOG_ERROR, "%s: Encountered an error.", context_str);
+            conn->status_ = INTERNAL_SERVER_ERROR;
+            handle_error_response(conn);
+            return false;  // false means "stop processing"
 
-//        case COMPLETE:
-//            log(LOG_DEBUG, "%s: Finished succesfully.", context_str);
-//            return true;
-//    }
+        case COMPLETE:
+            log(LOG_DEBUG, "%s: Finished succesfully.", context_str);
+            return true;
+    }
 
-//    log(LOG_FATAL, "%s: Unknown result from handler.", context_str);
-//    return false;
-//}
+    log(LOG_FATAL, "%s: Unknown result from handler.", context_str);
+    return false;
+}
+
+bool WebServer::start_response_writing(Connection* conn) {
+    Result result = response_writer_.write_response_to_buffer(conn);
+    if (result == ERROR) {
+        log(LOG_TRACE,
+            "start_response_writing: Write buffer is empty for client_fd %d. "
+            "Response might be empty or complete.",
+            conn->client_fd_);
+        close_client_connection(conn);
+        return false;
+    }
+
+    IOContext* client_ctx = conn->io_contexts_[0];
+    if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
+        log(LOG_TRACE,
+            "start_response_writing: Failed to update epoll events for "
+            "client_fd %d",
+            conn->client_fd_);
+        close_client_connection(conn);
+        return false;
+    }
+
+    conn->conn_state_ = CONN_WRITING_RESPONSE;
+    log(LOG_DEBUG, "start_response_writing: Prepared client_fd %d for writing.",
+        conn->client_fd_);
+    return true;
+}
+
+/*DEBATE refactor
+template <typename HandlerClass>
+void WebServer::handle_async_event(
+    IOContext* ctx, uint32_t event_flags, HandlerClass& handler_obj,
+    Result (HandlerClass::*method_ptr)(Connection*), uint32_t expected_event,
+    const char* handler_name, bool write_response_on_complete) {
+    Connection* conn = ctx->conn_;
+    if (!conn) {
+        log(LOG_FATAL, "%s: Connection is NULL for fd %d", handler_name,
+            ctx->fd_);
+        return;
+    }
+
+    if (event_flags & expected_event) {
+        log(LOG_DEBUG, "%s: Handling %s for fd %d", handler_name,
+            (expected_event == EPOLLIN ? "EPOLLIN" : "EPOLLOUT"), ctx->fd_);
+
+        // Polymorphically call the specific member function on the given
+handler object. Result result = (handler_obj.*method_ptr)(conn);
+
+        if (!handle_async_result(result, conn, handler_name)) {
+            return; // Stop processing if AGAIN or ERROR.
+        }
+
+        if (write_response_on_complete) {
+            start_response_writing(conn);
+        }
+    } else {
+        log(LOG_FATAL, "%s: Invalid event flags %u for fd %d", handler_name,
+            event_flags, ctx->fd_);
+    }
+}
+
+void WebServer::handle_file_upload_event(IOContext* ctx, uint32_t event_flags) {
+    handle_async_event(ctx, event_flags, file_upload_handler_,
+                       &FileUploadHandler::handle_file_upload_write, EPOLLOUT,
+                       "File upload", true);
+}
+
+void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
+    handle_async_event(ctx, event_flags, static_file_handler_,
+                       &StaticFileHandler::handle_static_file_read, EPOLLIN,
+                       "Static file", true);
+}
+
+void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
+    handle_async_event(ctx, event_flags, cgi_handler_,
+                       &CgiHandler::handle_cgi_read, EPOLLIN, "CGI read",
+                       true);
+}
+
+void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
+    handle_async_event(ctx, event_flags, cgi_handler_,
+                       &CgiHandler::handle_cgi_write, EPOLLOUT, "CGI write",
+                       false);
+}
+
+*/
