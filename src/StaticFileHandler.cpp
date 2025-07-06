@@ -5,7 +5,7 @@ StaticFileHandler::StaticFileHandler() {}
 StaticFileHandler::~StaticFileHandler() {}
 
 Result StaticFileHandler::check_permissions(Connection* conn) {
-    log(LOG_DEBUG, "check_permissions: Checking permissions for client_fd %d",
+    log(LOG_DEBUG, "StaticFileHandler: check_permissions: Checking permissions for client_fd %d",
         conn->client_fd_);
 
     if (conn->request_data_->method_ != "GET") {
@@ -16,7 +16,7 @@ Result StaticFileHandler::check_permissions(Connection* conn) {
 
     if (process_location_redirect(conn)) {
         log(LOG_DEBUG,
-            "check_permissions: Processed location redirect for client_fd %d",
+            "StaticFileHandler: check_permissions: Processed location redirect for client_fd %d",
             conn->client_fd_);
         return COMPLETE;
     }
@@ -24,7 +24,7 @@ Result StaticFileHandler::check_permissions(Connection* conn) {
     std::string absolute_path = parse_absolute_path(conn);
     if (absolute_path.empty()) {
         log(LOG_ERROR,
-            "check_permissions: Empty absolute path for client_fd %d",
+            "StaticFileHandler: check_permissions: Empty absolute path for client_fd %d",
             conn->client_fd_);
         conn->status_ = INTERNAL_SERVER_ERROR;
         return ERROR;
@@ -72,13 +72,13 @@ Result StaticFileHandler::check_permissions(Connection* conn) {
     conn->static_file_context_->absolute_path_ = absolute_path;
 
     log(LOG_DEBUG,
-        "check_permissions: Permissions check passed for client_fd %d",
+        "StaticFileHandler: check_permissions: Permissions check passed for client_fd %d",
         conn->client_fd_);
     return COMPLETE;
 }
 
 Result StaticFileHandler::setup_handler(Connection* conn) {
-    log(LOG_DEBUG, "setup_handler: Setting up handler for client_fd %d",
+    log(LOG_DEBUG, "StaticFileHandler: setup_handler: Setting up handler for client_fd %d",
         conn->client_fd_);
 
     std::string absolute_path = conn->static_file_context_->absolute_path_;
@@ -107,7 +107,7 @@ Result StaticFileHandler::setup_handler(Connection* conn) {
     conn->static_file_context_->file_fd_ = fd;
     conn->static_file_context_->bytes_to_send_ = file_info.st_size;
 
-    log(LOG_INFO, "setup_handler: Setup complete for client_fd %d, file_fd %d",
+    log(LOG_DEBUG, "StaticFileHandler: setup_handler: Setup complete for client_fd %d, file_fd %d",
         conn->client_fd_, fd);
 
     return COMPLETE;
@@ -115,13 +115,13 @@ Result StaticFileHandler::setup_handler(Connection* conn) {
 
 // 3. Main logic: read the file and prepare the response.
 Result StaticFileHandler::handle_static_file_read(Connection* conn) {
-    log(LOG_DEBUG, "handle_event: Handling event for client_fd %d",
+    log(LOG_DEBUG, "StaticFileHandler: handle_static_file_read: Handling event for client_fd %d",
         conn->client_fd_);
 
     if (!conn->static_file_context_ ||
         conn->static_file_context_->file_fd_ < 0) {
         log(LOG_ERROR,
-            "StaticFileHandler: Invalid static file context for client_fd %d",
+            "StaticFileHandler: handle_static_file_read: Invalid static file context for client_fd %d",
             conn->client_fd_);
         conn->status_ = INTERNAL_SERVER_ERROR;
         return ERROR;
@@ -160,7 +160,7 @@ Result StaticFileHandler::handle_static_file_read(Connection* conn) {
     size_stream << file_size;
     conn->response_data_->set_header("Content-Length", size_stream.str());
 
-    log(LOG_INFO, "StaticFileHandler: File ready to be served for client_fd %d",
+    log(LOG_INFO, "StaticFileHandler: handle_static_file_read: File ready to be served for client_fd %d",
         conn->client_fd_);
 
     return COMPLETE;
