@@ -20,7 +20,6 @@ class CgiHandler : public AHandler {
     Result handle_cgi_write(Connection* conn);
 
    private:
-    bool setup_cgi_execution(Connection* conn);
     bool setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                          int cgi_to_server_pipe[2]);
     void handle_child_pipes(int server_to_cgi_pipe[2],
@@ -30,7 +29,9 @@ class CgiHandler : public AHandler {
     bool handle_parent_pipes(Connection* conn, int server_to_cgi_pipe[2],
                              int cgi_to_server_pipe[2]);
     Result parse_cgi_output(Connection* conn);
+    void commit_cgi_header(HttpResponse* response, const CgiContext* context);
     bool set_status_line(Connection* conn);
+	void set_cgi_body_handling(Connection* conn);
 
     // Prevent copying
     CgiHandler(const CgiHandler&);
@@ -46,8 +47,23 @@ struct CgiContext {
     std::vector<std::string> cgi_envp_;
     Buffer cgi_output_buffer_;
 
+    unsigned int state_;
+    const char* key_start_;
+    const char* key_end_;
+    const char* value_start_;
+    const char* value_end_;
+    bool uses_crlf;  // true if the CGI output uses CRLF line endings
+
     CgiContext()
-        : cgi_pid_(-1), cgi_pipe_stdin_fd_(-1), cgi_pipe_stdout_fd_(-1) {}
+        : cgi_pid_(-1),
+          cgi_pipe_stdin_fd_(-1),
+          cgi_pipe_stdout_fd_(-1),
+          state_(0),
+          key_start_(NULL),
+          key_end_(NULL),
+          value_start_(NULL),
+          value_end_(NULL),
+          uses_crlf(false) {}
 };
 
 #endif  // CGIHANDLER_HPP

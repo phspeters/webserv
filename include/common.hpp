@@ -188,5 +188,7 @@ bool is_cgi_extension(const std::string& request_uri);
 std::string get_file_extension(const std::string& uri_path);
 std::string join(const std::vector<std::string>& vec, const std::string& sep);
 bool set_non_blocking(int fd);
+bool is_token_char(char c);
+bool is_line_ending_char(char c);
 
 #endif

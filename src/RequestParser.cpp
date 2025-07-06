@@ -558,16 +558,6 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
     return PARSE_INCOMPLETE;
 }
 
-// It checks if a character is a valid "tchar" according to RFC 7230.
-bool RequestParser::is_token_char(char c) {
-    // Check for alphanumeric characters
-    if (isalnum(c)) {
-        return true;
-    }
-    // Check against the list of allowed special characters.
-    return strchr("!#$%&'*+-.^_`|~", c) != NULL;
-}
-
 void RequestParser::commit_header(HttpRequest* request,
                                   const ParserContext& context) {
     std::string header_name(context.key_start_,

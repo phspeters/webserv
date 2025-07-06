@@ -119,8 +119,7 @@ std::string get_file_extension(const std::string& uri_path) {
 std::string join(const std::vector<std::string>& vec, const std::string& sep) {
     std::ostringstream oss;
     for (size_t i = 0; i < vec.size(); ++i) {
-        if (i != 0)
-            oss << sep;
+        if (i != 0) oss << sep;
         oss << vec[i];
     }
     return oss.str();
@@ -141,4 +140,18 @@ bool set_non_blocking(int fd) {
     }
 
     return true;
+}
+
+// It checks if a character is a valid "tchar" according to RFC 7230.
+bool is_token_char(char c) {
+    // Check for alphanumeric characters
+    if (isalnum(c)) {
+        return true;
+    }
+    // Check against the list of allowed special characters.
+    return strchr("!#$%&'*+-.^_`|~", c) != NULL;
+}
+
+bool is_line_ending_char(char c) {
+    return c == '\r' || c == '\n';
 }

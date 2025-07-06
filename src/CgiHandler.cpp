@@ -493,11 +493,6 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
     }
 }
 
-// TODO: This function has to:
-// 1) Read from the pipe
-// 2) Parse the headers and put remaining data in body_data_
-// 3) Set the response line using the status header
-// 4) Set the response body_fd to the output pipe
 Result CgiHandler::handle_cgi_read(Connection* conn) {
     log(LOG_DEBUG, "CGI: Handling read for client %d on stdout_fd %d",
         conn->client_fd_, conn->cgi_context_->cgi_pipe_stdout_fd_);
@@ -531,7 +526,20 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
                 conn->client_fd_);
             return ERROR;
         }
-        return AGAIN;  // Not EOF, so do not process the rest
+        if (result == AGAIN) {
+            log(LOG_DEBUG, "CGI: Need more data for client %d",
+                conn->client_fd_);
+            return AGAIN;  // Haven't found end of headers yet
+        }
+
+        if (!set_status_line(conn)) {
+            log(LOG_ERROR, "CGI: Failed to set status line for client %d",
+                conn->client_fd_);
+            conn->status_ = INTERNAL_SERVER_ERROR;
+            return ERROR;
+        }
+
+        set_cgi_body_handling(conn);
     }
 
     log(LOG_DEBUG, "CGI: EOF received from stdout for client %d.",
@@ -549,155 +557,164 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
         return ERROR;
     }
 
-    // Headers already processed - check Content-Length if present and matches
-    // the body size
-    std::string content_length_str =
-        conn->response_data_->get_header("content-length");
-    if (!content_length_str.empty()) {
-        char* end_ptr;
-        size_t expected_content_length =
-            std::strtoul(content_length_str.c_str(), &end_ptr, 10);
-        if (expected_content_length !=
-            conn->response_data_->body_data_.size()) {
-            log(LOG_ERROR,
-                "CGI: Content-Length mismatch for client %d. Expected %zu, got "
-                "%zu",
-                conn->client_fd_, expected_content_length,
-                conn->response_data_->body_data_.size());
-            conn->status_ = BAD_GATEWAY;
-            return ERROR;
-        }
-    }
-
     return COMPLETE;
 }
 
 Result CgiHandler::parse_cgi_output(Connection* conn) {
-    log(LOG_DEBUG, "CGI: Parsing output buffer (size %zu) for client %d",
-        conn->cgi_context_->cgi_output_buffer_.readable_bytes(),
-        conn->client_fd_);
+    log(LOG_DEBUG, "Parsing cgi output for connection: %i", conn->client_fd_);
 
-    // 1. Parse Headers
-    Buffer& buffer = conn->cgi_context_->cgi_output_buffer_;
-    while (buffer.readable_bytes() > 0) {
-        // Look for CRLF in the buffer
-        const char* data = buffer.data();
-        size_t data_size = buffer.readable_bytes();
-        const char* crlf_pos =
-            std::search(data, data + data_size, CRLF, &CRLF[2]);
+    enum CgiParseState {
+        CGI_LINE_START,
+        CGI_NAME,
+        CGI_SPACE_BEFORE_VALUE,
+        CGI_VALUE,
+        CGI_VALUE_ALMOST_DONE,
+        CGI_HEADERS_ALMOST_DONE,
+    };
 
-        if (crlf_pos == data + data_size) {
-            // No complete header line found in current buffer
-            log(LOG_DEBUG,
-                "CGI: Incomplete header line for client %d. Waiting for more "
-                "data.",
-                conn->client_fd_);
-            return AGAIN;  // Need more data
+    Buffer& buff = conn->cgi_context_->cgi_output_buffer_;
+    CgiContext* context = conn->cgi_context_;
+    unsigned int& state = context->state_;
+
+    while (buff.readable_bytes() > 0) {
+        const char ch = buff.peek();
+
+        switch (state) {
+            case CGI_LINE_START:
+                if (is_line_ending_char(ch)) {
+                    state = CGI_HEADERS_ALMOST_DONE;
+                    // Don't consume yet - let HEADERS_ALMOST_DONE handle it
+                    continue;
+                }
+
+                if (!is_token_char(ch)) {
+                    return ERROR;
+                }
+
+                context->key_start_ = buff.data();
+                state = CGI_NAME;
+                // Skip the buff.consume(1) at the end of the loop
+                continue;
+
+            case CGI_NAME:
+                if (ch == ':') {
+                    if (buff.data() == context->key_start_) {
+                        return ERROR;
+                    }
+                    context->key_end_ = buff.data();
+                    state = CGI_SPACE_BEFORE_VALUE;
+                } else if (!is_token_char(ch)) {
+                    return ERROR;
+                } else if (static_cast<size_t>(buff.data() -
+                                               context->key_start_) >=
+                           http_limits::MAX_HEADER_NAME_LENGTH) {
+                    return ERROR;
+                }
+                break;
+
+            case CGI_SPACE_BEFORE_VALUE:
+                if (ch == ' ' || ch == '\t') {
+                    break;
+                }
+
+                if (is_line_ending_char(ch)) {
+                    context->value_start_ = NULL;
+                    context->value_end_ = NULL;
+                    state = CGI_VALUE_ALMOST_DONE;
+                    // Don't consume yet - let VALUE_ALMOST_DONE handle it
+                    continue;
+                }
+
+                context->value_start_ = buff.data();
+                state = CGI_VALUE;
+                continue;  // Re-evaluate this character in the new VALUE state.
+
+            case CGI_VALUE:
+                if (is_line_ending_char(ch)) {
+                    context->value_end_ = buff.data();
+                    state = CGI_VALUE_ALMOST_DONE;
+                    // Don't consume yet - let VALUE_ALMOST_DONE handle it
+                    continue;
+                }
+
+                // A header value can contain any visible ASCII character,
+                // spaces, and horizontal tabs. It MUST NOT contain other
+                // control characters. (RFC 7230, Section 3.2)
+                if (iscntrl(ch) && ch != '\t') {
+                    return ERROR;
+                }
+
+                if (static_cast<size_t>(buff.data() - context->value_start_) >
+                    http_limits::MAX_HEADER_VALUE_LENGTH) {
+                    return ERROR;
+                }
+                break;
+
+            case CGI_VALUE_ALMOST_DONE:
+                if (ch == '\r') {
+                    // Skip \r, expect \n next (or treat as line ending if
+                    // standalone)
+                    break;
+                } else if (ch == '\n') {
+                    commit_cgi_header(conn->response_data_, context);
+                    context->key_start_ = NULL;
+                    context->key_end_ = NULL;
+                    context->value_start_ = NULL;
+                    context->value_end_ = NULL;
+                    state = CGI_LINE_START;
+                } else {
+                    return ERROR;
+                }
+                break;
+
+            case CGI_HEADERS_ALMOST_DONE:
+                if (ch == '\r') {
+                    // Skip \r, expect \n next (or treat as end if standalone)
+                    break;
+                } else if (ch == '\n') {
+                    buff.consume(1);
+                    return COMPLETE;
+                } else {
+                    return ERROR;
+                }
         }
 
-        size_t line_length = crlf_pos - data;
-        if (line_length == 0) {  // Empty line (CRLFCRLF)
-            log(LOG_DEBUG, "CGI: End of headers found for client %d.",
-                conn->client_fd_);
-            buffer.consume(2);  // Consume CRLF
-            break;              // Move to body parsing
-        }
+        // Consume the character and move to the next one in the buffer
+        buff.consume(1);
+    }
+    // If we exit the loop, it's because the buffer is empty. We need more
+    // data.
+    return AGAIN;
+}
 
-        std::string header_line(data, line_length);
-        log(LOG_TRACE, "CGI header line: %s", header_line.c_str());
+void CgiHandler::commit_cgi_header(HttpResponse* response,
+                                   const CgiContext* context) {
+    std::string header_name(context->key_start_,
+                            context->key_end_ - context->key_start_);
 
-        // Process the header line
-        size_t colon_pos = header_line.find(':');
-        if (colon_pos == std::string::npos || colon_pos == 0) {
-            log(LOG_ERROR, "CGI: Invalid header line for client %d: '%s'",
-                conn->client_fd_, header_line.c_str());
-            conn->status_ = BAD_GATEWAY;
-            return ERROR;
-        }
-
-        std::string header_name = header_line.substr(0, colon_pos);
-        // Check for invalid characters in key and convert to lowercase
-        for (size_t i = 0; i < header_name.size(); ++i) {
-            unsigned char c = static_cast<unsigned char>(header_name[i]);
-
-            // RFC 7230: field-name = token
-            // token = 1*tchar
-            // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "."
-            // / "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
-            if (!(isalnum(c) || strchr("!#$%&'*+-.^_`|~", c))) {
-                log(LOG_ERROR, "Invalid character '%c' in CGI header name: %s",
-                    static_cast<char>(c), header_name.c_str());
-                conn->status_ = BAD_GATEWAY;
-                return ERROR;
-            }
-
-            header_name[i] = std::tolower(c);
-        }
-
-        std::string header_value = header_line.substr(colon_pos + 1);
-        size_t value_start = header_value.find_first_not_of(" \t");
-        if (value_start != std::string::npos) {
-            header_value = header_value.substr(value_start);
-        }
-
-        // Store the header in response_data
-        conn->response_data_->set_header(header_name, header_value);
-        buffer.consume(line_length + 2);  // Remove the line from the buffer
+    std::string header_value;
+    if (context->value_start_ && context->value_end_) {
+        header_value.assign(context->value_start_,
+                            context->value_end_ - context->value_start_);
     }
 
-    // 2. Parse Body
-    std::string content_length_str =
-        conn->response_data_->get_header("content-length");
-    if (!content_length_str.empty()) {
-        // Content-Length header is present, read the body
-        char* end_ptr;
-        size_t content_length =
-            std::strtoul(content_length_str.c_str(), &end_ptr, 10);
-        if (*end_ptr != '\0' || content_length == 0) {
-            log(LOG_ERROR,
-                "Invalid Content-Length header value '%s' for client %d",
-                content_length_str.c_str(), conn->client_fd_);
-            conn->status_ = BAD_GATEWAY;
-            return ERROR;
-        }
-        if (content_length > buffer.readable_bytes()) {
-            log(LOG_DEBUG,
-                "Waiting for more CGI output data, expected %zu bytes, got %zu",
-                content_length, buffer.readable_bytes());
-            return AGAIN;  // Not enough data for body, wait for more
-        }
-
-        // We have enough data for the body
-        const char* body_data = buffer.data();
-        conn->response_data_->body_data_.insert(
-            conn->response_data_->body_data_.end(), body_data,
-            body_data + content_length);
-        buffer.consume(content_length);  // Remove body from buffer
-        log(LOG_DEBUG, "CGI body read successfully, size: %zu bytes",
-            conn->response_data_->body_data_.size());
-        return COMPLETE;
-    } else {
-        // No Content-Length header, append the rest of the buffer as body
-        log(LOG_DEBUG,
-            "No Content-Length header found in CGI response for client %d. "
-            "Appending rest of buffer as body.",
-            conn->client_fd_);
-        const char* body_data = buffer.data();
-        size_t body_size = buffer.readable_bytes();
-        conn->response_data_->body_data_.insert(
-            conn->response_data_->body_data_.end(), body_data,
-            body_data + body_size);
-        buffer.consume(body_size);
-    }
-    return COMPLETE;
+    response->set_header(header_name, header_value);
 }
 
 bool CgiHandler::set_status_line(Connection* conn) {
+    log(LOG_DEBUG, "Setting status line for client %d", conn->client_fd_);
+
     std::string status_str = conn->response_data_->get_header("status");
     if (!status_str.empty()) {
+        // Handle both "200" and "200 OK" formats
+        size_t space_pos = status_str.find(' ');
+        std::string status_code_str = (space_pos != std::string::npos)
+                                          ? status_str.substr(0, space_pos)
+                                          : status_str;
+
         char* end_ptr;
-        size_t status = std::strtoul(status_str.c_str(), &end_ptr, 10);
-        if (*end_ptr != '\0' || status == 0) {
+        size_t status = std::strtoul(status_code_str.c_str(), &end_ptr, 10);
+        if (*end_ptr != '\0' || status == 0 || status > 599) {
             log(LOG_ERROR, "Invalid Status header value '%s' for client %d",
                 status_str.c_str(), conn->client_fd_);
             return false;
@@ -713,4 +730,33 @@ bool CgiHandler::set_status_line(Connection* conn) {
     conn->response_data_->version_ = conn->request_data_->version_;
 
     return true;
+}
+
+void CgiHandler::set_cgi_body_handling(Connection* conn) {
+    log(LOG_DEBUG, "Determining CGI body handling for client %d",
+        conn->client_fd_);
+
+    Buffer& buffer = conn->cgi_context_->cgi_output_buffer_;
+
+    // Check if there's remaining data in the buffer after headers
+    if (buffer.readable_bytes() > 0) {
+        log(LOG_DEBUG,
+            "CGI: Found %zu bytes of body data in buffer for client %d",
+            buffer.readable_bytes(), conn->client_fd_);
+
+        // Transfer remaining buffer data to response body
+        conn->response_data_->body_data_.assign(
+            buffer.data(), buffer.data() + buffer.readable_bytes());
+        buffer.consume(buffer.readable_bytes());
+
+        log(LOG_DEBUG,
+            "CGI: Transferred %zu bytes from output buffer to response body "
+            "for client %d",
+            conn->response_data_->body_data_.size(), conn->client_fd_);
+    }
+
+    conn->response_data_->body_fd_ = conn->cgi_context_->cgi_pipe_stdout_fd_;
+
+    log(LOG_DEBUG, "CGI: Body handling setup complete for client %d",
+        conn->client_fd_);
 }
