@@ -7,15 +7,6 @@ static const size_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024;  // 1MB
 static const size_t DEFAULT_LOCATION_MAX_BODY_SIZE = 0;
 static const std::string DEFAULT_SERVER_NAME = "default_server";
 
-// Error page defaults
-static const int DEFAULT_404_ERROR_CODE = 404;
-static const std::string DEFAULT_404_ERROR_PAGE =
-    "<html><body><h1>Error: 404</h1><p>Not Found.</p></body></html>";
-static const int DEFAULT_500_ERROR_CODE = 500;
-static const std::string DEFAULT_500_ERROR_PAGE =
-    "<html><body><h1>Error: 500</h1><p>Internal Server "
-    "Error.</p></body></html>";
-
 // Location defaults
 static const bool DEFAULT_AUTOINDEX = false;
 static const bool DEFAULT_CGI_ENABLED = false;
@@ -41,16 +32,17 @@ VirtualServer::VirtualServer()
       listen_specified_(false),
       client_max_body_size_(DEFAULT_MAX_BODY_SIZE) {
     host_ = DEFAULT_HOST;
-    server_names_.push_back(DEFAULT_SERVER_NAME);
-    error_pages_[DEFAULT_404_ERROR_CODE] = DEFAULT_404_ERROR_PAGE;
-    error_pages_[DEFAULT_500_ERROR_CODE] = DEFAULT_500_ERROR_PAGE;
+    server_names_.push_back(DEFAULT_SERVER_NAME);;
 }
 
 bool VirtualServer::parse_server_block(std::ifstream& file) {
     std::string line;
+    int brace_level = 1; // We are already inside one brace: 'server {'
+    
 
     while (std::getline(file, line)) {
         line = trim(line);
+
 
         if (line.empty() || line[0] == '#') {
             continue;
@@ -58,6 +50,7 @@ bool VirtualServer::parse_server_block(std::ifstream& file) {
 
         // Check for block end
         if (line == "}") {
+            std::cout << "Server block parsed successfully." << std::endl;
             return true;
         }
 
@@ -133,13 +126,14 @@ bool VirtualServer::parse_location_block(std::ifstream& file,
         }
 
         std::string key, value;
-        if (parse_directive(locLine, key, value)) {
-            if (!add_directive_value(location, key, value)) {
-                return false;  // Reject if directive isn't recognized
-            }
+        if (!(parse_directive(locLine, key, value))) {
+            return false;  
+        }
+
+        if (!add_directive_value(location, key, value)) {
+            return false;  
         }
     }
-
     return false;
 }
 
@@ -317,7 +311,14 @@ bool VirtualServer::add_directive_value(Location& location,
             location.root_ = value;
         }
     } else if (key == "autoindex") {
-        location.autoindex_ = (value == "on");
+         if (value == "on") {
+            location.autoindex_ = true;
+        } else if (value == "off") {
+            location.autoindex_ = false;
+        } else {
+            log(LOG_ERROR, "Invalid value for autoindex: '%s'. Must be 'on' or 'off'.", value.c_str());
+            return false;
+        }
     } else if (key == "allow_methods") {
         // Clear default methods first
         location.allowed_methods_.clear();
@@ -384,7 +385,8 @@ bool VirtualServer::parse_directive(const std::string& line, std::string& key,
     // Find the end of the value (either semicolon or end of line)
     size_t valueEnd = effectiveLine.find(';', valueStart);
     if (valueEnd == std::string::npos) {
-        valueEnd = effectiveLine.length();
+        log(LOG_ERROR, "Invalid directive: missing semicolon: \"%s\"", line.c_str());
+        return false;
     }
 
     value = effectiveLine.substr(valueStart, valueEnd - valueStart);

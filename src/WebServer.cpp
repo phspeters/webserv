@@ -86,6 +86,10 @@ bool WebServer::parse_config_file(const std::string& filename) {
 
                 virtual_servers_.push_back(virtual_server);
             }
+            else {
+                log(LOG_ERROR, "Error parsing server block");
+                return false;
+            }
 
             log_virtual_server(LOG_TRACE, virtual_server);
 
