@@ -9,6 +9,11 @@ Result ResponseWriter::write_response_to_buffer(Connection* conn) {
     WriterContext& context = conn->writer_context_;
     Result result = COMPLETE;
 
+    log(LOG_DEBUG,
+        "write_response_to_buffer: filling response buffer for connection %d, "
+        "response %p",
+        conn->client_fd_, resp);
+
     while (context.response_writer_state_ != WRITER_DONE) {
         switch (context.response_writer_state_) {
             case WRITER_START: {

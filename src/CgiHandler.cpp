@@ -104,7 +104,6 @@ Result CgiHandler::check_permissions(Connection* conn) {
 }
 
 Result CgiHandler::setup_handler(Connection* conn) {
-    conn->cgi_context_ = new CgiContext();
     const std::string& request_method = conn->request_data_->method_;
 
     // Setup pipes

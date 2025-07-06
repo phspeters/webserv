@@ -730,7 +730,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
         handle_error_response(conn);
         return PARSE_ERROR;
     }
-    
+
     if (conn->is_asynchronous_) {
         conn->conn_state_ = CONN_GENERATING_RESPONSE;
         return PARSE_SUCCESS;
@@ -746,7 +746,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
         conn->conn_state_ = CONN_GENERATING_RESPONSE;
         return PARSE_SUCCESS;
     }
-    
+
     conn->conn_state_ = CONN_WRITING_RESPONSE;
     response_writer_.write_response_to_buffer(conn);
     IOContext* client_ctx = conn->io_contexts_[0];
@@ -814,8 +814,7 @@ ParseStatus WebServer::validate_method(Connection* conn) {
         conn->client_fd_);
 
     std::string method = conn->request_data_->method_;
-    if (method != "GET" && method != "POST" &&
-        method != "DELETE") {
+    if (method != "GET" && method != "POST" && method != "DELETE") {
         log(LOG_ERROR, "Invalid HTTP method '%s' in request for connection: %i",
             method.c_str(), conn->client_fd_);
         return PARSE_METHOD_NOT_IMPLEMENTED;
@@ -912,12 +911,14 @@ AHandler* WebServer::choose_handler(Connection* conn) {
         log(LOG_DEBUG,
             "choose_handler: Using CgiHandler for client_fd %d, path %s",
             conn->client_fd_, matching_location->path_.c_str());
+        conn->cgi_context_ = new CgiContext();
         return &cgi_handler_;
     } else if (request_method == "POST") {
         log(LOG_DEBUG,
             "choose_handler: Using FileUploadHandler for client_fd %d, "
             "path %s",
             conn->client_fd_, matching_location->path_.c_str());
+        conn->file_upload_context_ = new FileUploadContext();
         return &file_upload_handler_;
     } else if (request_method == "DELETE") {
         log(LOG_DEBUG,
@@ -929,6 +930,7 @@ AHandler* WebServer::choose_handler(Connection* conn) {
             "choose_handler: Using StaticFileHandler for client_fd %d, "
             "path %s",
             conn->client_fd_, matching_location->path_.c_str());
+        conn->static_file_context_ = new StaticFileContext();
         return &static_file_handler_;
     }
 }

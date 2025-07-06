@@ -1,6 +1,7 @@
 #include "common.hpp"
 
-// curl -v -F "file=@/webserv/var/www/files/cutecat.png" http://localhost:8080/upload
+// curl -v -F "file=@/webserv/var/www/files/cutecat.png"
+// http://localhost:8080/upload
 
 FileUploadHandler::FileUploadHandler() : AHandler() {}
 
@@ -177,7 +178,8 @@ Result FileUploadHandler::check_permissions(Connection* conn) {
         return ERROR;
     }
 
-    std::string boundary =  conn->file_upload_context_->multipart_context_.boundary_;
+    std::string boundary =
+        conn->file_upload_context_->multipart_context_.boundary_;
     boundary = multipart_parser_.extract_boundary(content_type);
     if (boundary.empty()) {
         log(LOG_ERROR, "No multipart boundary found for client_fd %d",
@@ -186,7 +188,7 @@ Result FileUploadHandler::check_permissions(Connection* conn) {
         return ERROR;
     }
 
-     // Redirect if needed
+    // Redirect if needed
     if (process_trailing_slash_redirect(conn)) {
         return COMPLETE;
     }
@@ -218,7 +220,6 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
     }
 
     // Initialize context
-    conn->file_upload_context_ = new FileUploadContext();
     conn->file_upload_context_->file_fd_ = file_fd;
     conn->file_upload_context_->temp_path_ = temp_filename;
     log(LOG_INFO,
