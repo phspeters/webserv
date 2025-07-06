@@ -1,0 +1,43 @@
+### ============================================
+### WEBSERV: FILE DELETE HANDLER TEST SUITE
+### ============================================
+### Description: Tests for handling DELETE requests to remove files.
+### Assumes a server on port 8080 with a location like:
+###   location /delete/ {
+###       allow_methods DELETE;
+###       root /var/www/delete_zone;
+###   }
+### Also assumes a directory structure on the server:
+###   /var/www/delete_zone/
+###     - deletable_file.txt
+###     - protected_file.txt (chmod 444, in a writable directory)
+###     /a_directory/
+###     /no_parent_write_perms/ (chmod 555)
+###       - unreachable.txt
+### ============================================
+
+### Variables
+@host = localhost
+@port = 8080
+@baseUrl = http://{{host}}:{{port}}
+@userAgent = WebServ-Test-Client/1.0
+
+### ============================================
+### Section 1: Successful Deletion
+### ============================================
+
+### Test 1.1: Delete an existing, accessible file
+# PRE-REQUISITE: Create a file at /var/www/delete_zone/deletable_file.txt
+# EXPECTS: 204 No Content. The response body should be empty.
+DELETE {{baseUrl}}/delete/deletable_file.txt
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 2: Client Error Handling (4xx)
+### ============================================
+
+### Test 2.1: File Not Found
+# Attempting to delete a file that does not exist.
+# EXPECTS: 404 Not Found
+DELETE

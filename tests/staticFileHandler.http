@@ -1,0 +1,382 @@
+### ============================================
+### WEBSERV: STATIC FILE HANDLER TEST SUITE
+### ============================================
+### Description: In-depth tests for serving static files and directories.
+### Assumes a server running on port 8090 with a file structure like:
+###   /var/www/html/
+###     - index.html
+###     - style.css
+###     - script.js
+###     - cutecat.png
+###     - no_read_permissions.txt (chmod 000)
+###     /subdir/
+###       - page.html
+###     /autoindex_on/
+###       - file1.txt
+###       - file2.txt
+###     /autoindex_off_no_index/
+###       - secret.txt
+### ============================================
+
+### Variables
+@host = localhost
+@port = 8090
+@baseUrl = http://{{host}}:{{port}}
+@userAgent = WebServ-Test-Client/1.0
+
+### ============================================
+### Section 1: Basic File Retrieval (200 OK)
+### ============================================
+
+### Test 1.1: Get root index file
+# Expects: 200 OK with content of index.html
+GET {{baseUrl}}/index.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 1.2: Get a CSS file
+# Expects: 200 OK with Content-Type: text/css
+GET {{baseUrl}}/style.css
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 1.3: Get a JavaScript file
+# Expects: 200 OK with Content-Type: application/javascript
+GET {{baseUrl}}/script.js
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 1.4: Get a PNG image
+# Expects: 200 OK with Content-Type: image/png
+GET {{baseUrl}}/cutecat.png
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 1.5: Get a file from a subdirectory
+# Expects: 200 OK with content of page.html
+GET {{baseUrl}}/subdir/page.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 2: Directory Handling
+### ============================================
+
+### Test 2.1: Request directory root with implicit index
+# A GET on "/" should serve the index file from the root location.
+# Expects: 200 OK with content of index.html
+GET {{baseUrl}}/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 2.2: Request subdirectory without trailing slash
+# Should trigger a 301 redirect to add the trailing slash.
+# Expects: 301 Moved Permanently, Location: /subdir/
+GET {{baseUrl}}/subdir
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 2.3: Request subdirectory with trailing slash
+# Should serve the index file from that subdirectory.
+# Expects: 200 OK with content of subdir/index.html (if it exists)
+GET {{baseUrl}}/subdir/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 2.4: Directory with autoindex ON
+# Location is configured with "autoindex on" and has no index file.
+# Expects: 200 OK with an HTML body listing directory contents.
+GET {{baseUrl}}/autoindex_on/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 2.5: Directory with autoindex OFF and no index file
+# Location is configured with "autoindex off" and has no index file.
+# Expects: 403 Forbidden
+GET {{baseUrl}}/autoindex_off_no_index/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 3: Error Handling (4xx Status Codes)
+### ============================================
+
+### Test 3.1: File Not Found
+# Requesting a file that does not exist.
+# Expects: 404 Not Found
+GET {{baseUrl}}/non_existent_file.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 3.2: Directory Not Found
+# Requesting a directory that does not exist.
+# Expects: 404 Not Found
+GET {{baseUrl}}/non_existent_directory/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 3.3: File with No Read Permissions
+# Requesting a file that exists but server lacks read permissions for.
+# Expects: 403 Forbidden
+GET {{baseUrl}}/no_read_permissions.txt
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 3.4: Path Traversal Attempt
+# Attempting to access a file outside of the configured root directory.
+# Expects: 400 Bad Request or 404 Not Found
+GET {{baseUrl}}/../../../../etc/passwd
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 3.5: Method Not Allowed
+# Using POST on a resource handled by StaticFileHandler.
+# Expects: 405 Method Not Allowed with an "Allow: GET" header.
+POST {{baseUrl}}/index.html
+Host: example.com
+User-Agent: {{userAgent}}
+Content-Type: text/plain
+Content-Length: 4
+
+test
+
+### Test 3.6: Method Not Allowed (DELETE)
+# Using DELETE on a resource handled by StaticFileHandler.
+# Expects: 405 Method Not Allowed with an "Allow: GET" header.
+DELETE {{baseUrl}}/index.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 4: Redirects
+### ============================================
+
+### Test 4.1: Location-level Redirect
+# Assumes a location block like: location /old-page.html { redirect 301 /new-page.html; }
+# Expects: 301 Moved Permanently, Location: /new-page.html
+GET {{baseUrl}}/old-page.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 4.2: Directory Trailing Slash Redirect with Query String
+# The redirect should preserve the query string.
+# Expects: 301 Moved Permanently, Location: /subdir/?param=value
+GET {{baseUrl}}/subdir?param=value
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 5: Edge Cases
+### ============================================
+
+### Test 5.1: Request with URL-encoded characters
+# Server should correctly decode the path.
+# Expects: 200 OK with content of style.css
+GET {{baseUrl}}/%73%74%79%6c%65%2e%63%73%73
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 5.2: Request for a file with a space in the name
+# Assumes a file named "my file.txt" exists.
+# Expects: 200 OK
+GET {{baseUrl}}/my%20file.txt
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 5.3: Request for a hidden file (dotfile)
+# Depending on server rules, this might be allowed or forbidden.
+# Expects: 200 OK or 403 Forbidden/404 Not Found
+GET {{baseUrl}}/.hiddenfile
+Host: example.com
+User-Agent: {{userAgent}}
+```// filepath: tests/static_handler_tests.http
+### ============================================
+### WEBSERV: STATIC FILE HANDLER TEST SUITE
+### ============================================
+### Description: In-depth tests for serving static files and directories.
+### Assumes a server running on port 8090 with a file structure like:
+###   /var/www/html/
+###     - index.html
+###     - style.css
+###     - script.js
+###     - cutecat.png
+###     - no_read_permissions.txt (chmod 000)
+###     /subdir/
+###       - page.html
+###     /autoindex_on/
+###       - file1.txt
+###       - file2.txt
+###     /autoindex_off_no_index/
+###       - secret.txt
+### ============================================
+
+### Variables
+@host = localhost
+@port = 8090
+@baseUrl = http://{{host}}:{{port}}
+@userAgent = WebServ-Test-Client/1.0
+
+### ============================================
+### Section 1: Basic File Retrieval (200 OK)
+### ============================================
+
+### Test 1.1: Get root index file
+# Expects: 200 OK with content of index.html
+GET {{baseUrl}}/index.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 1.2: Get a CSS file
+# Expects: 200 OK with Content-Type: text/css
+GET {{baseUrl}}/style.css
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 1.3: Get a JavaScript file
+# Expects: 200 OK with Content-Type: application/javascript
+GET {{baseUrl}}/script.js
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 1.4: Get a PNG image
+# Expects: 200 OK with Content-Type: image/png
+GET {{baseUrl}}/cutecat.png
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 1.5: Get a file from a subdirectory
+# Expects: 200 OK with content of page.html
+GET {{baseUrl}}/subdir/page.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 2: Directory Handling
+### ============================================
+
+### Test 2.1: Request directory root with implicit index
+# A GET on "/" should serve the index file from the root location.
+# Expects: 200 OK with content of index.html
+GET {{baseUrl}}/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 2.2: Request subdirectory without trailing slash
+# Should trigger a 301 redirect to add the trailing slash.
+# Expects: 301 Moved Permanently, Location: /subdir/
+GET {{baseUrl}}/subdir
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 2.3: Request subdirectory with trailing slash
+# Should serve the index file from that subdirectory.
+# Expects: 200 OK with content of subdir/index.html (if it exists)
+GET {{baseUrl}}/subdir/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 2.4: Directory with autoindex ON
+# Location is configured with "autoindex on" and has no index file.
+# Expects: 200 OK with an HTML body listing directory contents.
+GET {{baseUrl}}/autoindex_on/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 2.5: Directory with autoindex OFF and no index file
+# Location is configured with "autoindex off" and has no index file.
+# Expects: 403 Forbidden
+GET {{baseUrl}}/autoindex_off_no_index/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 3: Error Handling (4xx Status Codes)
+### ============================================
+
+### Test 3.1: File Not Found
+# Requesting a file that does not exist.
+# Expects: 404 Not Found
+GET {{baseUrl}}/non_existent_file.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 3.2: Directory Not Found
+# Requesting a directory that does not exist.
+# Expects: 404 Not Found
+GET {{baseUrl}}/non_existent_directory/
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 3.3: File with No Read Permissions
+# Requesting a file that exists but server lacks read permissions for.
+# Expects: 403 Forbidden
+GET {{baseUrl}}/no_read_permissions.txt
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 3.4: Path Traversal Attempt
+# Attempting to access a file outside of the configured root directory.
+# Expects: 400 Bad Request or 404 Not Found
+GET {{baseUrl}}/../../../../etc/passwd
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 3.5: Method Not Allowed
+# Using POST on a resource handled by StaticFileHandler.
+# Expects: 405 Method Not Allowed with an "Allow: GET" header.
+POST {{baseUrl}}/index.html
+Host: example.com
+User-Agent: {{userAgent}}
+Content-Type: text/plain
+Content-Length: 4
+
+test
+
+### Test 3.6: Method Not Allowed (DELETE)
+# Using DELETE on a resource handled by StaticFileHandler.
+# Expects: 405 Method Not Allowed with an "Allow: GET" header.
+DELETE {{baseUrl}}/index.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 4: Redirects
+### ============================================
+
+### Test 4.1: Location-level Redirect
+# Assumes a location block like: location /old-page.html { redirect 301 /new-page.html; }
+# Expects: 301 Moved Permanently, Location: /new-page.html
+GET {{baseUrl}}/old-page.html
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 4.2: Directory Trailing Slash Redirect with Query String
+# The redirect should preserve the query string.
+# Expects: 301 Moved Permanently, Location: /subdir/?param=value
+GET {{baseUrl}}/subdir?param=value
+Host: example.com
+User-Agent: {{userAgent}}
+
+### ============================================
+### Section 5: Edge Cases
+### ============================================
+
+### Test 5.1: Request with URL-encoded characters
+# Server should correctly decode the path.
+# Expects: 200 OK with content of style.css
+GET {{baseUrl}}/%73%74%79%6c%65%2e%63%73%73
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 5.2: Request for a file with a space in the name
+# Assumes a file named "my file.txt" exists.
+# Expects: 200 OK
+GET {{baseUrl}}/my%20file.txt
+Host: example.com
+User-Agent: {{userAgent}}
+
+### Test 5.3: Request for a hidden file (dotfile)
+# Depending on server rules, this might be allowed or forbidden.
+# Expects: 200 OK or 403 Forbidden/404 Not Found
+GET {{baseUrl}}/.hiddenfile
+Host:

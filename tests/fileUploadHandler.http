@@ -1,0 +1,705 @@
+### ============================================
+### WEBSERV: FILE UPLOAD HANDLER TEST SUITE
+### ============================================
+### Description: Tests for multipart/form-data file uploads.
+### Assumes a server on port 8080 with a location like:
+###   location /upload/ {
+###       allow_methods POST;
+###       root /var/www/uploads;
+###       client_max_body_size 5M;
+###   }
+### Also assumes you have a directory `tests/upload_files/` with:
+###   - small.txt
+###   - image.png
+###   - empty.txt
+### ============================================
+
+### Variables
+@host = localhost
+@port = 8080
+@baseUrl = http://{{host}}:{{port}}
+@userAgent = WebServ-Test-Client/1.0
+@boundary = ----WebAppBoundaryABC123
+
+### ============================================
+### Section 1: Successful Uploads
+### ============================================
+
+### Test 1.1: Upload a small text file
+# Expects: 201 Created with a success HTML page.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="small.txt"
+Content-Type: text/plain
+
+This is a small test file for upload.
+
+--{{boundary}}--
+
+### Test 1.2: Upload a binary file (image)
+# Expects: 201 Created.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="image.png"
+Content-Type: image/png
+
+<@ ./tests/upload_files/image.png
+--{{boundary}}--
+
+### Test 1.3: Upload a file with a name to be sanitized
+# Filename has spaces and special characters.
+# Expects: 201 Created. The file on the server should be named something like "file_with_spaces___and_chars.txt".
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="file with spaces &@!.txt"
+Content-Type: text/plain
+
+Testing filename sanitization.
+--{{boundary}}--
+
+### Test 1.4: Upload an empty file
+# Expects: 201 Created. The server should create an empty file.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="empty.txt"
+Content-Type: application/octet-stream
+
+<@ ./tests/upload_files/empty.txt
+--{{boundary}}--
+
+### ============================================
+### Section 2: Client Error Handling (4xx)
+### ============================================
+
+### Test 2.1: Missing Content-Type header
+# The handler requires a Content-Type.
+# Expects: 415 Unsupported Media Type
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Length: 100
+
+Some data.
+
+### Test 2.2: Incorrect Content-Type header
+# The handler requires multipart/form-data.
+# Expects: 415 Unsupported Media Type
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: application/json
+Content-Length: 18
+
+{"key": "value"}
+
+### Test 2.3: Missing boundary in Content-Type
+# The multipart parser needs a boundary to work.
+# Expects: 400 Bad Request
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data
+Content-Length: 100
+
+--boundary
+...
+--boundary--
+
+### Test 2.4: Missing Content-Length header
+# Uploads must have a Content-Length.
+# Expects: 411 Length Required (or 400 Bad Request depending on server strictness)
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+data
+--{{boundary}}--
+
+### Test 2.5: Malformed multipart body (no closing boundary)
+# The parser should time out or detect an error.
+# Expects: 400 Bad Request
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="malformed.txt"
+Content-Type: text/plain
+
+This request is intentionally broken and will not be closed properly.
+
+### Test 2.6: Upload exceeds client_max_body_size
+# Assumes client_max_body_size is set to a small value like 1K for this test.
+# Expects: 413 Payload Too Large
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="large_file.txt"
+Content-Type: text/plain
+
+This is a large block of text designed to exceed a small client_max_body_size limit.
+... (repeat this line many times) ...
+This is a large block of text designed to exceed a small client_max_body_size limit.
+--{{boundary}}--
+
+### ============================================
+### Section 3: Redirects
+### ============================================
+
+### Test 3.1: Request to upload location without trailing slash
+# The handler should redirect to add the slash.
+# Expects: 301 Moved Permanently, Location: /upload/
+POST {{baseUrl}}/upload
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+Content-Length: 150
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="redirect_test.txt"
+Content-Type: text/plain
+
+test
+--{{boundary}}--
+```// filepath: tests/upload_handler_tests.http
+### ============================================
+### WEBSERV: FILE UPLOAD HANDLER TEST SUITE
+### ============================================
+### Description: Tests for multipart/form-data file uploads.
+### Assumes a server on port 8080 with a location like:
+###   location /upload/ {
+###       allow_methods POST;
+###       root /var/www/uploads;
+###       client_max_body_size 5M;
+###   }
+### Also assumes you have a directory `tests/upload_files/` with:
+###   - small.txt
+###   - image.png
+###   - empty.txt
+### ============================================
+
+### Variables
+@host = localhost
+@port = 8080
+@baseUrl = http://{{host}}:{{port}}
+@userAgent = WebServ-Test-Client/1.0
+@boundary = ----WebAppBoundaryABC123
+
+### ============================================
+### Section 1: Successful Uploads
+### ============================================
+
+### Test 1.1: Upload a small text file
+# Expects: 201 Created with a success HTML page.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="small.txt"
+Content-Type: text/plain
+
+This is a small test file for upload.
+
+--{{boundary}}--
+
+### Test 1.2: Upload a binary file (image)
+# Expects: 201 Created.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="image.png"
+Content-Type: image/png
+
+<@ ./tests/upload_files/image.png
+--{{boundary}}--
+
+### Test 1.3: Upload a file with a name to be sanitized
+# Filename has spaces and special characters.
+# Expects: 201 Created. The file on the server should be named something like "file_with_spaces___and_chars.txt".
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="file with spaces &@!.txt"
+Content-Type: text/plain
+
+Testing filename sanitization.
+--{{boundary}}--
+
+### Test 1.4: Upload an empty file
+# Expects: 201 Created. The server should create an empty file.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="empty.txt"
+Content-Type: application/octet-stream
+
+<@ ./tests/upload_files/empty.txt
+--{{boundary}}--
+
+### ============================================
+### Section 2: Client Error Handling (4xx)
+### ============================================
+
+### Test 2.1: Missing Content-Type header
+# The handler requires a Content-Type.
+# Expects: 415 Unsupported Media Type
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Length: 100
+
+Some data.
+
+### Test 2.2: Incorrect Content-Type header
+# The handler requires multipart/form-data.
+# Expects: 415 Unsupported Media Type
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: application/json
+Content-Length: 18
+
+{"key": "value"}
+
+### Test 2.3: Missing boundary in Content-Type
+# The multipart parser needs a boundary to work.
+# Expects: 400 Bad Request
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data
+Content-Length: 100
+
+--boundary
+...
+--boundary--
+
+### Test 2.4: Missing Content-Length header
+# Uploads must have a Content-Length.
+# Expects: 411 Length Required (or 400 Bad Request depending on server strictness)
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+data
+--{{boundary}}--
+
+### Test 2.5: Malformed multipart body (no closing boundary)
+# The parser should time out or detect an error.
+# Expects: 400 Bad Request
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="malformed.txt"
+Content-Type: text/plain
+
+This request is intentionally broken and will not be closed properly.
+
+### Test 2.6: Upload exceeds client_max_body_size
+# Assumes client_max_body_size is set to a small value like 1K for this test.
+# Expects: 413 Payload Too Large
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="large_file.txt"
+Content-Type: text/plain
+
+This is a large block of text designed to exceed a small client_max_body_size limit.
+... (repeat this line many times) ...
+This is a large block of text designed to exceed a small client_max_body_size limit.
+--{{boundary}}--
+
+### ============================================
+### Section 3: Redirects
+### ============================================
+
+### Test 3.1: Request to upload location without trailing slash
+# The handler should redirect to add the slash.
+# Expects: 301 Moved Permanently, Location: /upload/
+POST {{baseUrl}}/upload
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+Content-Length: 150
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="redirect_test.txt"
+Content-Type: text/plain
+
+test
+--{{boundary}}--### ============================================
+### WEBSERV: FILE UPLOAD HANDLER TEST SUITE
+### ============================================
+### Description: Tests for multipart/form-data file uploads.
+### Assumes a server on port 8080 with a location like:
+###   location /upload/ {
+###       allow_methods POST;
+###       root /var/www/uploads;
+###       client_max_body_size 5M;
+###   }
+### Also assumes you have a directory `tests/upload_files/` with:
+###   - small.txt
+###   - image.png
+###   - empty.txt
+### ============================================
+
+### Variables
+@host = localhost
+@port = 8080
+@baseUrl = http://{{host}}:{{port}}
+@userAgent = WebServ-Test-Client/1.0
+@boundary = ----WebAppBoundaryABC123
+
+### ============================================
+### Section 1: Successful Uploads
+### ============================================
+
+### Test 1.1: Upload a small text file
+# Expects: 201 Created with a success HTML page.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="small.txt"
+Content-Type: text/plain
+
+This is a small test file for upload.
+
+--{{boundary}}--
+
+### Test 1.2: Upload a binary file (image)
+# Expects: 201 Created.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="image.png"
+Content-Type: image/png
+
+<@ ./tests/upload_files/image.png
+--{{boundary}}--
+
+### Test 1.3: Upload a file with a name to be sanitized
+# Filename has spaces and special characters.
+# Expects: 201 Created. The file on the server should be named something like "file_with_spaces___and_chars.txt".
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="file with spaces &@!.txt"
+Content-Type: text/plain
+
+Testing filename sanitization.
+--{{boundary}}--
+
+### Test 1.4: Upload an empty file
+# Expects: 201 Created. The server should create an empty file.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="empty.txt"
+Content-Type: application/octet-stream
+
+<@ ./tests/upload_files/empty.txt
+--{{boundary}}--
+
+### ============================================
+### Section 2: Client Error Handling (4xx)
+### ============================================
+
+### Test 2.1: Missing Content-Type header
+# The handler requires a Content-Type.
+# Expects: 415 Unsupported Media Type
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Length: 100
+
+Some data.
+
+### Test 2.2: Incorrect Content-Type header
+# The handler requires multipart/form-data.
+# Expects: 415 Unsupported Media Type
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: application/json
+Content-Length: 18
+
+{"key": "value"}
+
+### Test 2.3: Missing boundary in Content-Type
+# The multipart parser needs a boundary to work.
+# Expects: 400 Bad Request
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data
+Content-Length: 100
+
+--boundary
+...
+--boundary--
+
+### Test 2.4: Missing Content-Length header
+# Uploads must have a Content-Length.
+# Expects: 411 Length Required (or 400 Bad Request depending on server strictness)
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+data
+--{{boundary}}--
+
+### Test 2.5: Malformed multipart body (no closing boundary)
+# The parser should time out or detect an error.
+# Expects: 400 Bad Request
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="malformed.txt"
+Content-Type: text/plain
+
+This request is intentionally broken and will not be closed properly.
+
+### Test 2.6: Upload exceeds client_max_body_size
+# Assumes client_max_body_size is set to a small value like 1K for this test.
+# Expects: 413 Payload Too Large
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="large_file.txt"
+Content-Type: text/plain
+
+This is a large block of text designed to exceed a small client_max_body_size limit.
+... (repeat this line many times) ...
+This is a large block of text designed to exceed a small client_max_body_size limit.
+--{{boundary}}--
+
+### ============================================
+### Section 3: Redirects
+### ============================================
+
+### Test 3.1: Request to upload location without trailing slash
+# The handler should redirect to add the slash.
+# Expects: 301 Moved Permanently, Location: /upload/
+POST {{baseUrl}}/upload
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+Content-Length: 150
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="redirect_test.txt"
+Content-Type: text/plain
+
+test
+--{{boundary}}--
+```// filepath: tests/upload_handler_tests.http
+### ============================================
+### WEBSERV: FILE UPLOAD HANDLER TEST SUITE
+### ============================================
+### Description: Tests for multipart/form-data file uploads.
+### Assumes a server on port 8080 with a location like:
+###   location /upload/ {
+###       allow_methods POST;
+###       root /var/www/uploads;
+###       client_max_body_size 5M;
+###   }
+### Also assumes you have a directory `tests/upload_files/` with:
+###   - small.txt
+###   - image.png
+###   - empty.txt
+### ============================================
+
+### Variables
+@host = localhost
+@port = 8080
+@baseUrl = http://{{host}}:{{port}}
+@userAgent = WebServ-Test-Client/1.0
+@boundary = ----WebAppBoundaryABC123
+
+### ============================================
+### Section 1: Successful Uploads
+### ============================================
+
+### Test 1.1: Upload a small text file
+# Expects: 201 Created with a success HTML page.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="small.txt"
+Content-Type: text/plain
+
+This is a small test file for upload.
+
+--{{boundary}}--
+
+### Test 1.2: Upload a binary file (image)
+# Expects: 201 Created.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="image.png"
+Content-Type: image/png
+
+<@ ./tests/upload_files/image.png
+--{{boundary}}--
+
+### Test 1.3: Upload a file with a name to be sanitized
+# Filename has spaces and special characters.
+# Expects: 201 Created. The file on the server should be named something like "file_with_spaces___and_chars.txt".
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="file with spaces &@!.txt"
+Content-Type: text/plain
+
+Testing filename sanitization.
+--{{boundary}}--
+
+### Test 1.4: Upload an empty file
+# Expects: 201 Created. The server should create an empty file.
+POST {{baseUrl}}/upload/
+Content-Type: multipart/form-data; boundary={{boundary}}
+User-Agent: {{userAgent}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="empty.txt"
+Content-Type: application/octet-stream
+
+<@ ./tests/upload_files/empty.txt
+--{{boundary}}--
+
+### ============================================
+### Section 2: Client Error Handling (4xx)
+### ============================================
+
+### Test 2.1: Missing Content-Type header
+# The handler requires a Content-Type.
+# Expects: 415 Unsupported Media Type
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Length: 100
+
+Some data.
+
+### Test 2.2: Incorrect Content-Type header
+# The handler requires multipart/form-data.
+# Expects: 415 Unsupported Media Type
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: application/json
+Content-Length: 18
+
+{"key": "value"}
+
+### Test 2.3: Missing boundary in Content-Type
+# The multipart parser needs a boundary to work.
+# Expects: 400 Bad Request
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data
+Content-Length: 100
+
+--boundary
+...
+--boundary--
+
+### Test 2.4: Missing Content-Length header
+# Uploads must have a Content-Length.
+# Expects: 411 Length Required (or 400 Bad Request depending on server strictness)
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+data
+--{{boundary}}--
+
+### Test 2.5: Malformed multipart body (no closing boundary)
+# The parser should time out or detect an error.
+# Expects: 400 Bad Request
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="malformed.txt"
+Content-Type: text/plain
+
+This request is intentionally broken and will not be closed properly.
+
+### Test 2.6: Upload exceeds client_max_body_size
+# Assumes client_max_body_size is set to a small value like 1K for this test.
+# Expects: 413 Payload Too Large
+POST {{baseUrl}}/upload/
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+
+--{{boundary}}
+Content-Disposition: form-data; name="file"; filename="large_file.txt"
+Content-Type: text/plain
+
+This is a large block of text designed to exceed a small client_max_body_size limit.
+... (repeat this line many times) ...
+This is a large block of text designed to exceed a small client_max_body_size limit.
+--{{boundary}}--
+
+### ============================================
+### Section 3: Redirects
+### ============================================
+
+### Test 3.1: Request to upload location without trailing slash
+# The handler should redirect to add the slash.
+# Expects: 301 Moved Permanently, Location: /upload/
+POST {{baseUrl}}/upload
+User-Agent: {{userAgent}}
+Content-Type: multipart/form-data; boundary={{boundary}}
+Content-Length: 150
+
+--{{boundary}}
+Content-Disposition: form-data; name="file";
