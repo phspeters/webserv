@@ -13,7 +13,7 @@ class AHandler {
 
     virtual Result handle(Connection* conn) = 0;
     virtual void cleanup_handler(Connection* conn) = 0;
-    
+
     virtual bool is_asynchronous() const = 0;
 
    protected:

@@ -2,8 +2,7 @@
 
 void ErrorHandler::generate_error_response(Connection* conn,
                                            ParseStatus parse_status) {
-    HttpStatus response_status =
-        parse_status_to_response_status(parse_status);
+    HttpStatus response_status = parse_status_to_response_status(parse_status);
     generate_error_response(conn, response_status);
 }
 

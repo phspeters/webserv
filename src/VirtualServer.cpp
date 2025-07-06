@@ -37,10 +37,9 @@ VirtualServer::VirtualServer()
 
 bool VirtualServer::parse_server_block(std::ifstream& file) {
     std::string line;
-    
+
     while (std::getline(file, line)) {
         line = trim(line);
-
 
         if (line.empty() || line[0] == '#') {
             continue;
@@ -125,11 +124,11 @@ bool VirtualServer::parse_location_block(std::ifstream& file,
 
         std::string key, value;
         if (!(parse_directive(locLine, key, value))) {
-            return false;  
+            return false;
         }
 
         if (!add_directive_value(location, key, value)) {
-            return false;  
+            return false;
         }
     }
     return false;
@@ -257,7 +256,7 @@ bool VirtualServer::parse_server_name(const std::string& value) {
 }
 
 bool VirtualServer::parse_error_page(const std::string& value) {
-std::istringstream iss(value);
+    std::istringstream iss(value);
     std::vector<int> codes;
     std::string token;
     int code;
@@ -279,8 +278,7 @@ std::istringstream iss(value);
     }
 
     if (path[0] != '/') {
-        log(LOG_ERROR, "error_page path must start with '/': %s",
-            path.c_str());
+        log(LOG_ERROR, "error_page path must start with '/': %s", path.c_str());
         return false;
     }
 
@@ -309,12 +307,14 @@ bool VirtualServer::add_directive_value(Location& location,
             location.root_ = value;
         }
     } else if (key == "autoindex") {
-         if (value == "on") {
+        if (value == "on") {
             location.autoindex_ = true;
         } else if (value == "off") {
             location.autoindex_ = false;
         } else {
-            log(LOG_ERROR, "Invalid value for autoindex: '%s'. Must be 'on' or 'off'.", value.c_str());
+            log(LOG_ERROR,
+                "Invalid value for autoindex: '%s'. Must be 'on' or 'off'.",
+                value.c_str());
             return false;
         }
     } else if (key == "allow_methods") {
@@ -383,7 +383,8 @@ bool VirtualServer::parse_directive(const std::string& line, std::string& key,
     // Find the end of the value (either semicolon or end of line)
     size_t valueEnd = effectiveLine.find(';', valueStart);
     if (valueEnd == std::string::npos) {
-        log(LOG_ERROR, "Invalid directive: missing semicolon: \"%s\"", line.c_str());
+        log(LOG_ERROR, "Invalid directive: missing semicolon: \"%s\"",
+            line.c_str());
         return false;
     }
 

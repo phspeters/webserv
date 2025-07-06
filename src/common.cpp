@@ -152,6 +152,4 @@ bool is_token_char(char c) {
     return strchr("!#$%&'*+-.^_`|~", c) != NULL;
 }
 
-bool is_line_ending_char(char c) {
-    return c == '\r' || c == '\n';
-}
+bool is_line_ending_char(char c) { return c == '\r' || c == '\n'; }

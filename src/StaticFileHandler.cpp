@@ -211,8 +211,9 @@ std::string StaticFileHandler::determine_content_type(const std::string& path) {
 }
 
 void StaticFileHandler::cleanup_handler(Connection* conn) {
-    if (!conn ) {
-        log(LOG_FATAL, "StaticFileHandler: Cleanup called with NULL connection");
+    if (!conn) {
+        log(LOG_FATAL,
+            "StaticFileHandler: Cleanup called with NULL connection");
         return;
     }
 
