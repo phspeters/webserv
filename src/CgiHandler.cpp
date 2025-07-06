@@ -584,7 +584,7 @@ Result CgiHandler::parse_cgi_output(Connection* conn) {
         const char* data = buffer.data();
         size_t data_size = buffer.readable_bytes();
         const char* crlf_pos =
-            std::search(data, data + data_size, CRLF, CRLF + 2);
+            std::search(data, data + data_size, CRLF, &CRLF[2]);
 
         if (crlf_pos == data + data_size) {
             // No complete header line found in current buffer
