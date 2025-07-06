@@ -32,7 +32,7 @@ VirtualServer::VirtualServer()
       listen_specified_(false),
       client_max_body_size_(DEFAULT_MAX_BODY_SIZE) {
     host_ = DEFAULT_HOST;
-    server_names_.push_back(DEFAULT_SERVER_NAME);;
+    server_names_.push_back(DEFAULT_SERVER_NAME);
 }
 
 bool VirtualServer::parse_server_block(std::ifstream& file) {

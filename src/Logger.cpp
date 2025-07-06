@@ -15,7 +15,7 @@ int log(log_level level, const char* msg, ...) {
     std::string timestamp = get_current_gmt_time();
 
     if (level == LOG_TRACE)
-        std::cerr << WHITE << "[TRACE]\t";
+        std::cerr << LIGHT_GREY << "[TRACE]\t";
     else if (level == LOG_DEBUG)
         std::cerr << WHITE << "[DEBUG]\t";
     else if (level == LOG_INFO)
@@ -48,7 +48,7 @@ void log_request(log_level level, const Connection* conn) {
     std::string timestamp = get_current_gmt_time();
 
     if (level == LOG_TRACE)
-        std::cerr << WHITE << "[TRACE]\t";
+        std::cerr << LIGHT_GREY << "[TRACE]\t";
     else if (level == LOG_DEBUG)
         std::cerr << WHITE << "[DEBUG]\t";
     else if (level == LOG_INFO)
@@ -65,7 +65,7 @@ void log_request(log_level level, const Connection* conn) {
     std::cerr << timestamp;
 
     std::cerr << "\n==== INCOMING REQUEST (fd: " << conn->client_fd_
-              << ") ====\n\n";
+              << ") ====\n";
     std::cerr << "method: " << conn->request_data_->method_ << std::endl;
     std::cerr << "uri: " << conn->request_data_->uri_ << std::endl;
     std::cerr << "version: " << conn->request_data_->version_ << std::endl;
@@ -78,7 +78,7 @@ void log_request(log_level level, const Connection* conn) {
     std::cerr << "body: " << std::endl;
     std::cerr.write(conn->request_data_->body_buffer_.data(),
                     conn->request_data_->body_buffer_.readable_bytes());
-    std::cerr << "\n====================================\n"
+    std::cerr << "===================================="
               << RESET << std::endl;
 }
 
@@ -95,7 +95,7 @@ void log_response(log_level level, Connection* conn) {
     std::string timestamp = get_current_gmt_time();
 
     if (level == LOG_TRACE)
-        std::cerr << WHITE << "[TRACE]\t";
+        std::cerr << LIGHT_GREY << "[TRACE]\t";
     else if (level == LOG_DEBUG)
         std::cerr << WHITE << "[DEBUG]\t";
     else if (level == LOG_INFO)
@@ -137,7 +137,7 @@ int log_buffer(log_level level, const Buffer& buffer) {
     std::string timestamp = get_current_gmt_time();
 
     if (level == LOG_TRACE)
-        std::cerr << WHITE << "[TRACE]\t";
+        std::cerr << LIGHT_GREY << "[TRACE]\t";
     else if (level == LOG_DEBUG)
         std::cerr << WHITE << "[DEBUG]\t";
     else if (level == LOG_INFO)
@@ -153,9 +153,9 @@ int log_buffer(log_level level, const Buffer& buffer) {
 
     std::cerr << timestamp;
 
-    std::cerr << "========== BUFFER START ==========" << std::endl;
+    std::cerr << "\n========== BUFFER START ==========\n";
     int bytes_written = write(1, buffer.data(), buffer.readable_bytes());
-    std::cerr << "=========== BUFFER END ===========" << std::endl;
+    std::cerr << "=========== BUFFER END ===========";
 
     if (bytes_written < 0) {
         std::cerr << "Error writing to buffer" << std::endl;
@@ -179,7 +179,7 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
     std::string timestamp = get_current_gmt_time();
 
     if (level == LOG_TRACE)
-        std::cerr << WHITE << "[TRACE]\t";
+        std::cerr << LIGHT_GREY << "[TRACE]\t";
     else if (level == LOG_DEBUG)
         std::cerr << WHITE << "[DEBUG]\t";
     else if (level == LOG_INFO)
@@ -195,7 +195,7 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
 
     std::cerr << timestamp;
 
-    std::cout << "=========== VIRTUAL SERVER ==========" << std::endl;
+    std::cout << "\n=========== VIRTUAL SERVER ==========" << std::endl;
     std::cout << "Host: " << virtual_server.host_ << std::endl;
     std::cout << "Port: " << virtual_server.port_ << std::endl;
 

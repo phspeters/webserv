@@ -577,6 +577,8 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
 
     if (event_flags & EPOLLOUT) {
         if (conn->conn_state_ == CONN_WRITING_RESPONSE) {
+            log_buffer(LOG_TRACE, conn->write_buffer_);
+            log(LOG_FATAL, "Response body fd %d", conn->response_data_->body_fd_);
             ssize_t bytes_sent = conn->write_buffer_.write_to(conn->client_fd_);
             if (bytes_sent <= 0) {
                 log(LOG_ERROR,

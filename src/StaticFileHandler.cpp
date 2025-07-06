@@ -160,6 +160,12 @@ Result StaticFileHandler::handle_static_file_read(Connection* conn) {
     size_stream << file_size;
     conn->response_data_->set_header("Content-Length", size_stream.str());
 
+	// Set the response body to be the file content
+	conn->response_data_->body_fd_ = conn->static_file_context_->file_fd_;
+
+	// Set the response body to be the file content
+	conn->response_data_->body_fd_ = conn->static_file_context_->file_fd_;
+
     log(LOG_INFO, "StaticFileHandler: handle_static_file_read: File ready to be served for client_fd %d",
         conn->client_fd_);
 
