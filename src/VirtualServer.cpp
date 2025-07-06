@@ -37,9 +37,7 @@ VirtualServer::VirtualServer()
 
 bool VirtualServer::parse_server_block(std::ifstream& file) {
     std::string line;
-    int brace_level = 1; // We are already inside one brace: 'server {'
     
-
     while (std::getline(file, line)) {
         line = trim(line);
 
