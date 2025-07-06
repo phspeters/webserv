@@ -98,7 +98,7 @@ Result FileDeleteHandler::setup_handler(Connection* conn) {
     
     conn->response_data_->status_code_ = 204;
     conn->response_data_->set_header("Content-Length", "0");
-    conn->response_data_->set_header("Server", "webserv/1.0");
+    conn->response_data_->set_header("Server", "webserv/4.2");
     conn->response_data_->status_message_ = "No Content";
     conn->response_data_->content_length_ = 0;
     conn->response_data_->body_data_.clear();

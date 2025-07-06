@@ -265,17 +265,44 @@ bool VirtualServer::parse_server_name(const std::string& value) {
 }
 
 bool VirtualServer::parse_error_page(const std::string& value) {
-    std::istringstream iss(value);
+std::istringstream iss(value);
+    std::vector<int> codes;
+    std::string token;
     int code;
-    std::string path;
-    if (iss >> code >> path) {
-        error_pages_[code] = path;
-        if (!has_valid_error_pages()) {
-            return false;
+
+    while (iss >> token) {
+        std::istringstream token_stream(token);
+        if (token_stream >> code && token_stream.eof()) {
+            codes.push_back(code);
+        } else {
+            break;
         }
     }
-    log(LOG_ERROR, "Error parsing error_page directive: %s", value.c_str());
-    return false;
+
+    const std::string& path = token;
+
+    if (codes.empty() || path.empty()) {
+        log(LOG_ERROR, "Invalid error_page format: %s", value.c_str());
+        return false;
+    }
+
+    if (path[0] != '/') {
+        log(LOG_ERROR, "error_page path must start with '/': %s",
+            path.c_str());
+        return false;
+    }
+
+    for (size_t i = 0; i < codes.size(); ++i) {
+        int current_code = codes[i];
+        if (current_code < 300 || current_code > 599) {
+            log(LOG_ERROR, "Invalid error_page code %d (must be 300-599)",
+                current_code);
+            return false;
+        }
+        error_pages_[current_code] = path;
+    }
+
+    return true;
 }
 
 bool VirtualServer::add_directive_value(Location& location,
@@ -284,8 +311,8 @@ bool VirtualServer::add_directive_value(Location& location,
     if (key == "root") {
         // Modification - Carol
         if (value[0] == '/') {
-            location.root_ = value.substr(
-                1);  // "/var/www/example.com" becomes "var/www/example.com"
+            location.root_ = value.substr(1);
+            // "/var/www/example.com" becomes "var/www/example.com"
         } else {
             location.root_ = value;
         }
@@ -408,38 +435,6 @@ bool VirtualServer::has_valid_locations() const {
     return true;
 }
 
-bool VirtualServer::has_valid_error_pages() const {
-    for (std::map<int, std::string>::const_iterator it = error_pages_.begin();
-         it != error_pages_.end(); ++it) {
-        const std::string& error_page_path = it->second;
-
-        // Check if the error page file exists and is readable
-        struct stat file_stat;
-
-        // Call stat() to initialize the file_stat struct.
-        if (stat(error_page_path.c_str(), &file_stat) != 0) {
-            log(LOG_ERROR,
-                "Error page file does not exist or cannot be stat'd: %s",
-                error_page_path.c_str());
-            return false;
-        }
-
-        if (!S_ISREG(file_stat.st_mode)) {
-            log(LOG_ERROR, "Error page path is not a regular file: %s",
-                error_page_path.c_str());
-            return false;
-        }
-
-        if (access(error_page_path.c_str(), R_OK) != 0) {
-            log(LOG_ERROR, "No read permission for error page: %s",
-                error_page_path.c_str());
-            return false;
-        }
-    }
-
-    return true;
-}
-
 bool VirtualServer::is_valid() const {
     if (!listen_specified_) {
         log(LOG_ERROR, "Listen directive is mandatory");
@@ -457,11 +452,6 @@ bool VirtualServer::is_valid() const {
     if (!has_valid_locations()) {
         return false;
     }
-
-    // TODO: Uncomment or erase this check
-    //  if (!has_valid_error_pages()) {
-    //      return false;
-    //  }
 
     return true;
 }

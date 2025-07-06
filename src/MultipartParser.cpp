@@ -24,170 +24,203 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
     const std::string subsequent_boundary = "\r\n--" + multipart_ctx->boundary_;
 
     while (buff.readable_bytes() > 0) {
-        if (state == ACCUMULATE_PART_DATA) {
-            const char* data_start = buff.data();
-
-            const char* boundary_start = static_cast<const char*>(memchr(
-                data_start, subsequent_boundary[0], buff.readable_bytes()));
-
-            if (boundary_start) {
-                size_t data_len = boundary_start - data_start;
-                if (multipart_ctx->is_file_part_ && data_len > 0) {
-                    upload_ctx->upload_buffer_.append(data_start, data_len);
-                }
-
-                buff.consume(data_len);
-
-                state = MATCH_BOUNDARY;
-                continue;
-            } else {
-                size_t safe_len = 0;
-                if (buff.readable_bytes() > subsequent_boundary.length()) {
-                    safe_len =
-                        buff.readable_bytes() - subsequent_boundary.length();
-                }
-
-                if (multipart_ctx->is_file_part_ && safe_len > 0) {
-                    upload_ctx->upload_buffer_.append(data_start, safe_len);
-                    buff.consume(safe_len);
-                }
-
-                return PARSE_INCOMPLETE;
-            }
-        }
-
         const char ch = buff.peek();
 
         switch (state) {
-            case SEARCH_INITIAL_BOUNDARY:
+            case FIND_INITIAL_BOUNDARY: {
                 if (ch ==
                     initial_boundary[multipart_ctx->boundary_match_index_]) {
                     multipart_ctx->boundary_match_index_++;
                     if (multipart_ctx->boundary_match_index_ ==
                         initial_boundary.length()) {
-                        state = BOUNDARY_ALMOST_DONE;
                         multipart_ctx->boundary_match_index_ = 0;
+                        state = CHECK_BOUNDARY_TYPE;
                     }
                 } else {
                     log(LOG_ERROR,
-                        "Multipart body did not start with initial boundary.");
+                        "Initial boundary not found at start of multipart "
+                        "body");
                     return PARSE_ERROR;
                 }
                 break;
+            }
 
-            case READ_PART_HEADERS:
-                const char* eoh_marker = "\r\n\r\n";
-                const char* eoh_pos = static_cast<const char*>(
-                    memmem(buff.data(), buff.readable_bytes(), eoh_marker, 4));
-
-                if (eoh_pos) {
-                    size_t headers_len = eoh_pos - buff.data();
-                    multipart_ctx->part_headers_.append(buff.data(),
-                                                        headers_len);
-
-                    if (multipart_ctx->part_headers_.length() >
-                        http_limits::MAX_REQUEST_HEAD_LENGTH) {
-                        log(LOG_WARNING, "Multipart part header is too long.");
-                        return PARSE_ERROR;
+            case READ_HEADERS: {
+                // Simple end-of-headers detection: look for \r\n\r\n
+                static const char* eoh_pattern = "\r\n\r\n";
+                if (ch == eoh_pattern[multipart_ctx->boundary_match_index_]) {
+                    multipart_ctx->boundary_match_index_++;
+                    if (multipart_ctx->boundary_match_index_ == 4) {
+                        // Found end of headers
+                        parse_part_headers(multipart_ctx->part_headers_,
+                                           upload_ctx);
+                        multipart_ctx->part_headers_.clear();
+                        multipart_ctx->boundary_match_index_ = 0;
+                        multipart_ctx->data_start_ =
+                            NULL;  // Reset data start pointer
+                        state = READ_DATA;
                     }
-
-                    buff.consume(headers_len + 4);
-
-                    std::string& headers = multipart_ctx->part_headers_;
-                    size_t filename_pos = headers.find("filename=\"");
-                    if (filename_pos != std::string::npos) {
-                        multipart_ctx->is_file_part_ = true;
-                        size_t start = filename_pos + 10;
-                        size_t end = headers.find('"', start);
-                        if (end != std::string::npos) {
-                            upload_ctx->filename_ =
-                                headers.substr(start, end - start);
-                        }
-                    } else {
-                        multipart_ctx->is_file_part_ = false;
-                    }
-
-                    multipart_ctx->part_headers_.clear();
-                    state = ACCUMULATE_PART_DATA;
-
-                    continue;
                 } else {
-                    multipart_ctx->part_headers_.append(buff.data(),
-                                                        buff.readable_bytes());
-                    buff.consume(buff.readable_bytes());
+                    // Reset match index and add all the characters we thought
+                    // were matching
+                    for (size_t i = 0; i < multipart_ctx->boundary_match_index_;
+                         ++i) {
+                        multipart_ctx->part_headers_ += eoh_pattern[i];
+                    }
+                    multipart_ctx->part_headers_ += ch;
+                    multipart_ctx->boundary_match_index_ = 0;
 
+                    // Check for header size limit
                     if (multipart_ctx->part_headers_.length() >
                         http_limits::MAX_REQUEST_HEAD_LENGTH) {
-                        log(LOG_WARNING, "Multipart part header is too long.");
+                        log(LOG_WARNING, "Multipart part header is too long");
                         return PARSE_ERROR;
                     }
+                }
+                break;
+            }
 
-                    return PARSE_INCOMPLETE;
+            case READ_DATA: {
+                if (multipart_ctx->data_start_ == NULL) {
+                    multipart_ctx->data_start_ = buff.data();
                 }
 
-            case MATCH_BOUNDARY:
                 if (ch ==
                     subsequent_boundary[multipart_ctx->boundary_match_index_]) {
+                    // Potential boundary match
+                    if (multipart_ctx->boundary_match_index_ == 0) {
+                        // First character of boundary - set data_end pointer
+                        multipart_ctx->data_end_ = buff.data();
+                    }
                     multipart_ctx->boundary_match_index_++;
+
                     if (multipart_ctx->boundary_match_index_ ==
                         subsequent_boundary.length()) {
-                        state = VALIDATE_FINAL_BOUNDARY;
+                        // Full boundary matched - commit the data
+                        commit_part_data(multipart_ctx, upload_ctx);
                         multipart_ctx->boundary_match_index_ = 0;
+                        state = CHECK_BOUNDARY_TYPE;
                     }
                 } else {
-                    if (multipart_ctx->is_file_part_) {
-                        upload_ctx->upload_buffer_.append(
-                            subsequent_boundary.c_str(),
-                            multipart_ctx->boundary_match_index_);
-                        upload_ctx->upload_buffer_.append(&ch, 1);
+                    // Not a boundary match
+                    if (multipart_ctx->boundary_match_index_ > 0) {
+                        // We were in the middle of matching a boundary, but it
+                        // failed The data we thought was a boundary is actually
+                        // part of the file
+                        multipart_ctx->boundary_match_index_ = 0;
+                        // Continue accumulating data
                     }
-                    multipart_ctx->boundary_match_index_ = 0;
-                    state = ACCUMULATE_PART_DATA;
                 }
                 break;
+            }
 
-            case VALIDATE_FINAL_BOUNDARY:
+            case CHECK_BOUNDARY_TYPE: {
                 if (ch == '-') {
-                    state = END_MULTIPART;
+                    state = EXPECT_FINAL_DASH;
                 } else if (ch == '\r') {
-                    state = BOUNDARY_ALMOST_DONE;
+                    state = EXPECT_NEWLINE;
                 } else {
+                    log(LOG_ERROR, "Invalid character after boundary");
                     return PARSE_ERROR;
                 }
                 break;
+            }
 
-            case BOUNDARY_ALMOST_DONE:
+            case EXPECT_NEWLINE: {
                 if (ch == '\n') {
-                    state = READ_PART_HEADERS;
+                    state = READ_HEADERS;
                 } else {
+                    log(LOG_ERROR, "Expected \\n after \\r in boundary");
                     return PARSE_ERROR;
                 }
                 break;
+            }
 
-            case END_MULTIPART:
+            case EXPECT_FINAL_DASH: {
                 if (ch == '-') {
                     upload_ctx->upload_complete = true;
                     conn->request_data_->body_fully_parsed_ = true;
-                    state = FINAL_BOUNDARY_ALMOST_DONE;
+                    state = EXPECT_TRAILING_CR;
                 } else {
+                    log(LOG_ERROR, "Expected second '-' in final boundary");
                     return PARSE_ERROR;
                 }
                 break;
+            }
 
-            case FINAL_BOUNDARY_ALMOST_DONE:
+            case EXPECT_TRAILING_CR: {
                 if (ch == '\r') {
-                    buff.consume(1);
+                    state = EXPECT_TRAILING_LF;
+                } else {
+                    // Trailing CR is optional, so we can treat it as a normal
+                    // character
                     return PARSE_SUCCESS;
                 }
-                return PARSE_SUCCESS;
+                break;
+            }
 
-            case MULTIPART_ERROR:
+            case EXPECT_TRAILING_LF: {
+                if (ch == '\n') {
+                    return PARSE_SUCCESS;
+                } else {
+                    log(LOG_ERROR, "Expected \\n after \\r in final boundary");
+                    return PARSE_ERROR;
+                }
+                break;
+            }
+
+            default: {
+                log(LOG_FATAL, "Unknown multipart parser state");
                 return PARSE_ERROR;
+            }
         }
+
         buff.consume(1);
     }
 
+    // End of buffer reached
+    if (state == READ_DATA && multipart_ctx->boundary_match_index_ == 0) {
+        // We're accumulating data and not in the middle of a boundary match
+        // Commit all the data we've seen so far
+        multipart_ctx->data_end_ = buff.data();
+        commit_part_data(multipart_ctx, upload_ctx);
+    }
+
     return PARSE_INCOMPLETE;
+}
+
+void MultipartParser::commit_part_data(MultipartContext* multipart_ctx,
+                                       FileUploadContext* upload_ctx) {
+    if (multipart_ctx->is_file_part_ && multipart_ctx->data_start_ &&
+        multipart_ctx->data_end_) {
+        size_t data_len = multipart_ctx->data_end_ - multipart_ctx->data_start_;
+        if (data_len > 0) {
+            upload_ctx->upload_buffer_.append(multipart_ctx->data_start_,
+                                              data_len);
+        }
+    }
+    multipart_ctx->data_start_ = NULL;
+    multipart_ctx->data_end_ = NULL;
+}
+
+void MultipartParser::parse_part_headers(const std::string& headers,
+                                         FileUploadContext* upload_ctx) {
+    size_t filename_pos = headers.find("filename=\"");
+    if (filename_pos != std::string::npos) {
+        upload_ctx->multipart_context_.is_file_part_ = true;
+        size_t start = filename_pos + 10;
+        size_t end = headers.find('"', start);
+        if (end != std::string::npos) {
+            upload_ctx->filename_ = headers.substr(start, end - start);
+        } else {
+            // Malformed filename attribute - treat as non-file part
+            upload_ctx->multipart_context_.is_file_part_ = false;
+            upload_ctx->filename_.clear();
+        }
+    } else {
+        upload_ctx->multipart_context_.is_file_part_ = false;
+        upload_ctx->filename_.clear();
+    }
 }
 
 std::string MultipartParser::extract_boundary(const std::string& content_type) {

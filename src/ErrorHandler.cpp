@@ -59,7 +59,7 @@ void ErrorHandler::generate_error_response(Connection* conn,
     // Set additional headers
     resp->set_header("content-type", "text/html; charset=UTF-8");
     resp->set_header("connection", "close");
-    resp->set_header("server", "webserv/1.0");
+    resp->set_header("server", "Webserv/4.2");
     resp->set_header("date", get_current_gmt_time());
 
     // Set error-specific headers if any
@@ -165,7 +165,7 @@ std::string ErrorHandler::generate_default_error_page(
             "complete your request.\n"
          << "        </div>\n"
          << "        <div class=\"footer\">\n"
-         << "            webserv/1.0\n"
+         << "            webserv/4.2\n"
          << "        </div>\n"
          << "    </div>\n"
          << "</body>\n"
@@ -185,7 +185,7 @@ HttpStatus ErrorHandler::parse_status_to_response_status(
         case PARSE_SUCCESS:
             status_code = OK;
             break;
-        case ERROR:
+        case PARSE_ERROR:
         case PARSE_INVALID_REQUEST_LINE:
         case PARSE_INVALID_PATH:
         case PARSE_INVALID_QUERY_STRING:

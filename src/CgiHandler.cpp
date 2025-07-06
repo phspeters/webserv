@@ -104,14 +104,12 @@ Result CgiHandler::check_permissions(Connection* conn) {
 }
 
 Result CgiHandler::setup_handler(Connection* conn) {
-    // Create CGI context
     conn->cgi_context_ = new CgiContext();
-    // Ensure request_method is accessible
     const std::string& request_method = conn->request_data_->method_;
 
     // Setup pipes
-    int server_to_cgi_pipe[2];  // pipe for server to write to CGI's stdin
-    int cgi_to_server_pipe[2];  // pipe for CGI's stdout to be read by server
+    int server_to_cgi_pipe[2];
+    int cgi_to_server_pipe[2];
     if (!setup_cgi_pipes(conn, server_to_cgi_pipe, cgi_to_server_pipe)) {
         conn->status_ = INTERNAL_SERVER_ERROR;
         return ERROR;
@@ -129,12 +127,10 @@ Result CgiHandler::setup_handler(Connection* conn) {
         conn->status_ = INTERNAL_SERVER_ERROR;
         return ERROR;
     } else if (pid == 0) {
-        // This code runs ONLY in the CHILD process
         handle_child_pipes(server_to_cgi_pipe, cgi_to_server_pipe);
         std::vector<char*> envp = create_cgi_envp(conn);
         execute_cgi_script(conn, envp.data());
     } else {
-        // This code runs ONLY in the PARENT process
         conn->cgi_context_->cgi_pid_ = pid;
         if (!handle_parent_pipes(conn, server_to_cgi_pipe,
                                  cgi_to_server_pipe)) {
@@ -144,7 +140,6 @@ Result CgiHandler::setup_handler(Connection* conn) {
 
         if (request_method == "POST" &&
             !conn->request_data_->body_buffer_.empty()) {
-            // Register stdin pipe with epoll for EPOLLOUT events
             IOContext* stdin_ctx =
                 conn->add_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_,
                                      FD_CGI_PIPE_WRITE, EPOLLOUT);
@@ -163,18 +158,15 @@ Result CgiHandler::setup_handler(Connection* conn) {
                 "stdin_fd %d",
                 conn->client_fd_, conn->cgi_context_->cgi_pipe_stdin_fd_);
         } else {
-            // If it's a GET request or an empty POST, we can close the stdin
-            // pipe
             if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
                 close(conn->cgi_context_->cgi_pipe_stdin_fd_);
-                conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;  // Mark as closed
+                conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
                 log(LOG_DEBUG,
                     "CGI: Closed stdin pipe immediately for "
                     "non-POST/empty-POST for client %d",
                     conn->client_fd_);
             }
 
-            // Register stdout pipe with epoll for EPOLLIN events
             IOContext* stdout_ctx =
                 conn->add_io_context(conn->cgi_context_->cgi_pipe_stdout_fd_,
                                      FD_CGI_PIPE_READ, EPOLLIN);
@@ -198,7 +190,7 @@ Result CgiHandler::setup_handler(Connection* conn) {
     log(LOG_DEBUG, "CgiHandler: Setup complete for client_fd %d",
         conn->client_fd_);
 
-    return COMPLETE;  // Successfully forked and parent setup initiated
+    return COMPLETE;
 }
 
 void CgiHandler::cleanup_handler(Connection* conn) {
@@ -219,23 +211,19 @@ void CgiHandler::cleanup_handler(Connection* conn) {
     //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdout_io_ctx_);
     // }
 
-    // Always try to reap/kill any remaining child process
     if (conn->cgi_context_->cgi_pid_ > 0) {
         int status;
         pid_t result = waitpid(conn->cgi_context_->cgi_pid_, &status, WNOHANG);
 
         if (result == 0) {
-            // Child is still running - kill it
             log(LOG_INFO,
                 "Killing remaining CGI child process %d for client %d",
                 conn->cgi_context_->cgi_pid_, conn->client_fd_);
             kill(conn->cgi_context_->cgi_pid_, SIGKILL);
-            // Wait for it to die after SIGKILL
             waitpid(conn->cgi_context_->cgi_pid_, &status, 0);
         }
     }
 
-    // Clean up pipe file descriptors
     if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
         close(conn->cgi_context_->cgi_pipe_stdin_fd_);
     }
@@ -243,7 +231,6 @@ void CgiHandler::cleanup_handler(Connection* conn) {
         close(conn->cgi_context_->cgi_pipe_stdout_fd_);
     }
 
-    // Delete the context object itself
     delete conn->cgi_context_;
     conn->cgi_context_ = NULL;
 
@@ -251,107 +238,9 @@ void CgiHandler::cleanup_handler(Connection* conn) {
         conn->client_fd_);
 }
 
-/* Result CgiHandler::validate_cgi_request(Connection* conn) {
-
-
-    // Extract request data
-    const std::string& request_uri = conn->request_data_->uri_;
-    const std::string& request_method = conn->request_data_->method_;
-    const Location* location = conn->location_match_;
-
-    log(LOG_TRACE,
-        "CGI Handler request\nRequest URI: %s\nRequest Method: %s\n Matched "
-        "location: %s\nRoot: %s",
-        request_uri.c_str(), request_method.c_str(), location->path_.c_str(),
-        location->root_.c_str());
-
-    // 2. Method Validation (GET or POST only)
-    if (request_method != "GET" && request_method != "POST") {
-        log(LOG_ERROR, "Invalid request method '%s' for CGI script",
-            request_method.c_str());
-        conn->response_data_->set_error_header("Allow", "GET, POST");
-        conn->status_ = METHOD_NOT_ALLOWED;
-        return ERROR;
-    }
-
-    // 3. URI Format Check (can't execute a directory)
-    if (!request_uri.empty() && request_uri[request_uri.length() - 1] == '/') {
-        log(LOG_ERROR, "URI is a directory, cannot execute: %s",
-            request_uri.c_str());
-        conn->status_ = BAD_REQUEST;
-        return ERROR;
-    }
-
-    // 4. Script Path Resolution
-    conn->cgi_context_->cgi_script_path_ = parse_absolute_path(conn);
-    if (conn->cgi_context_->cgi_script_path_.empty()) {
-        log(LOG_ERROR, "Failed to determine CGI script path for URI: %s",
-            request_uri.c_str());
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR;
-    }
-
-    // 5. Script Extension Check
-    bool is_valid_extension = false;
-    std::string extension;
-    size_t dot_pos = conn->cgi_context_->cgi_script_path_.find_last_of('.');
-    if (dot_pos != std::string::npos) {
-        extension = conn->cgi_context_->cgi_script_path_.substr(dot_pos + 1);
-        // --CHECK - Check against allowed extensions
-        if (extension == "php" || extension == "py" || extension == "sh") {
-            is_valid_extension = true;
-        }
-    }
-
-    if (!is_valid_extension) {
-        log(LOG_ERROR, "Invalid CGI script extension '%s' for script '%s'",
-            extension.c_str(), conn->cgi_context_->cgi_script_path_.c_str());
-        conn->status_ = FORBIDDEN;
-        return ERROR;
-    }
-
-    // 6. Script Existence Check
-    struct stat file_info;
-    if (stat(conn->cgi_context_->cgi_script_path_.c_str(), &file_info) == -1) {
-        if (errno == ENOENT) {
-            log(LOG_ERROR, "CGI script '%s' not found",
-                conn->cgi_context_->cgi_script_path_.c_str());
-            conn->status_ = NOT_FOUND;
-        } else {
-            log(LOG_ERROR, "Failed to access CGI script '%s': %s",
-                conn->cgi_context_->cgi_script_path_.c_str(), strerror(errno));
-            conn->status_ = INTERNAL_SERVER_ERROR;
-        }
-        return ERROR;
-    }
-
-    // 7. Script Type Validation
-    if (!S_ISREG(file_info.st_mode)) {
-        log(LOG_ERROR, "CGI script '%s' is not a regular file",
-            conn->cgi_context_->cgi_script_path_.c_str());
-        conn->status_ = FORBIDDEN;
-        return ERROR;
-    }
-
-    // 8. Script Permission Check
-    if (!(file_info.st_mode & S_IXUSR)) {  // Check for user execute permission
-        log(LOG_ERROR, "CGI script '%s' is not executable",
-            conn->cgi_context_->cgi_script_path_.c_str());
-        conn->status_ = FORBIDDEN;
-        return ERROR;
-    }
-
-    log(LOG_DEBUG, "CGI request validated for script: %s",
-        conn->cgi_context_->cgi_script_path_.c_str());
-    return COMPLETE;
-} */
-
 bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                                  int cgi_to_server_pipe[2]) {
-    // Create pipes for communication between server and CGI script
-
     if (pipe(server_to_cgi_pipe) == -1) {
-        // Pipe creation failure
         log(LOG_ERROR, "Pipe server_to_cgi_pipe creation error: %s",
             strerror(errno));
         conn->status_ = INTERNAL_SERVER_ERROR;
@@ -359,7 +248,6 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
     }
 
     if (pipe(cgi_to_server_pipe) == -1) {
-        // Pipe creation failure
         log(LOG_ERROR, "Pipe cgi_to_server_pipe creation error: %s",
             strerror(errno));
         conn->status_ = INTERNAL_SERVER_ERROR;
@@ -381,14 +269,12 @@ void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
     // Close the write-end of the pipe from CGI's stdout
     close(cgi_to_server_pipe[0]);
 
-    // Redirect stdin to the read-end of the server_to_cgi_pipe
     if (dup2(server_to_cgi_pipe[0], STDIN_FILENO) == -1) {
         log(LOG_ERROR, "Failed to redirect stdin to CGI pipe: %s",
             strerror(errno));
         _exit(EXIT_FAILURE);
     }
 
-    // Redirect stdout to the write-end of the cgi_to_server_pipe
     if (dup2(cgi_to_server_pipe[1], STDOUT_FILENO) == -1) {
         log(LOG_ERROR, "Failed to redirect stdout to CGI pipe: %s",
             strerror(errno));
@@ -405,22 +291,20 @@ void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
         close(stderr_fd);
     }
 
-    // Close the original pipe file descriptors in the child process
     close(server_to_cgi_pipe[0]);
     close(cgi_to_server_pipe[1]);
 }
 
 std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
-    std::vector<std::string>& cgi_env_strings =
-        conn->cgi_context_->cgi_envp_;   // To store "NAME=VALUE"
-    std::vector<char*> envp_char_array;  // To store char* for execve
+    std::vector<std::string>& cgi_env_strings = conn->cgi_context_->cgi_envp_;
+    std::vector<char*> envp_char_array;
 
     cgi_env_strings.push_back("REQUEST_METHOD=" + conn->request_data_->method_);
     cgi_env_strings.push_back("SCRIPT_NAME=" +
                               conn->cgi_context_->cgi_script_path_);
     cgi_env_strings.push_back("SERVER_PROTOCOL=" +
                               conn->request_data_->version_);
-    cgi_env_strings.push_back("SERVER_SOFTWARE=webserv/1.0");
+    cgi_env_strings.push_back("SERVER_SOFTWARE=webserv/4.2");
 
     if (!conn->request_data_->query_string_.empty()) {
         cgi_env_strings.push_back("QUERY_STRING=" +
@@ -473,17 +357,15 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
         cgi_env_strings.push_back(header_name_env + "=" + it->second);
     }
 
-    // Convert vector of std::string to vector of char*
     for (size_t i = 0; i < cgi_env_strings.size(); ++i) {
         envp_char_array.push_back(
             const_cast<char*>(cgi_env_strings[i].c_str()));
     }
-    envp_char_array.push_back(NULL);  // Null-terminate
+    envp_char_array.push_back(NULL);
 
     log(LOG_DEBUG, "CGI environment variables created for client %d",
         conn->client_fd_);
 
-    // Log the environment variables for debugging
     for (std::vector<std::string>::const_iterator it = cgi_env_strings.begin();
          it != cgi_env_strings.end(); ++it) {
         log(LOG_TRACE, "CGI env: %s", it->c_str());
@@ -496,7 +378,6 @@ void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
     char* cgi_script_path_cstr =
         const_cast<char*>(conn->cgi_context_->cgi_script_path_.c_str());
 
-    // Setup executing directory (chdir to script's directory)
     std::string script_path = conn->cgi_context_->cgi_script_path_;
     size_t last_slash = script_path.find_last_of('/');
     if (last_slash != std::string::npos) {
@@ -521,7 +402,6 @@ void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
         "execute_cgi_script: connection '%d' attempting to execute '%s'",
         conn->client_fd_, cgi_script_path_cstr);
 
-    // Execute the CGI script
     if (execve(cgi_script_path_cstr, argv, envp) == -1) {
         log(LOG_ERROR,
             "execute_cgi_script: connection '%d' failed to execute CGI script "
@@ -542,7 +422,6 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
     conn->cgi_context_->cgi_pipe_stdout_fd_ =
         cgi_to_server_pipe[0];  // Parent keeps read-end
 
-    // Set the pipe stdin to non-blocking mode
     if (!set_non_blocking(conn->cgi_context_->cgi_pipe_stdin_fd_)) {
         log(LOG_ERROR,
             "Failed to set CGI stdin pipe to non-blocking mode for client %d",
@@ -551,7 +430,6 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
         return false;
     }
 
-    // Set the pipe stdout to non-blocking mode
     if (!set_non_blocking(conn->cgi_context_->cgi_pipe_stdout_fd_)) {
         log(LOG_ERROR,
             "Failed to set CGI stdout pipe to non-blocking mode for client %d",
@@ -567,12 +445,6 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
     return true;
 }
 
-// 1. Write everything in body_data to cgi_input_pipe, clear what has been read
-// 2. if body_fully_parse == false, return and wait for next event
-// 3. if body_fully_parsed == true, send all the remaining buffer
-// 4. if body_data_.empty() return success
-// Function has to return status so that WebServer knows when to call
-// ResponseWriter or not
 Result CgiHandler::handle_cgi_write(Connection* conn) {
     if (!conn || !conn->cgi_context_ ||
         conn->cgi_context_->cgi_pipe_stdin_fd_ < 0) {
@@ -584,8 +456,6 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
     Buffer& body_buffer = conn->request_data_->body_buffer_;
     int fd = conn->cgi_context_->cgi_pipe_stdin_fd_;
 
-    // Write as much as possible from the buffer to the pipe
-    // TODO: change to send if we decide to go with sockets
     ssize_t bytes_written = body_buffer.write_to(fd);
 
     if (bytes_written < 0) {
@@ -596,11 +466,9 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
     }
 
     if (conn->request_data_->body_fully_parsed_ && body_buffer.empty()) {
-        // All data sent, close the stdin pipe
         close(fd);
         conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
 
-        // Create IOContext for stdout pipe and add to epoll for reading
         IOContext* stdout_ctx = conn->add_io_context(
             conn->cgi_context_->cgi_pipe_stdout_fd_, FD_CGI_PIPE_READ, EPOLLIN);
 
@@ -621,7 +489,7 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
         log(LOG_DEBUG,
             "Partial write to CGI stdin pipe for client %d, %zu bytes left",
             conn->client_fd_, body_buffer.readable_bytes());
-        return AGAIN;  // Indicate we need to write more later
+        return AGAIN;
     }
 }
 
@@ -656,10 +524,8 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
         log(LOG_DEBUG,
             "CGI: Read %zd bytes from stdout for client %d. Total buffer: %zu",
             bytes_read, conn->client_fd_, buffer.readable_bytes());
-        // Check the return of parse_cgi_output
-        ParseStatus status =
-            parse_cgi_output(conn);  // This may change the handler state
-        if (conn->status_ != OK) {
+        Result result = parse_cgi_output(conn);
+        if (result == ERROR) {
             log(LOG_ERROR,
                 "CGI: Error state reached for client %d, cleaning up resources",
                 conn->client_fd_);
@@ -683,7 +549,8 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
         return ERROR;
     }
 
-    // Headers already processed - check Content-Length if present and matches the body size
+    // Headers already processed - check Content-Length if present and matches
+    // the body size
     std::string content_length_str =
         conn->response_data_->get_header("content-length");
     if (!content_length_str.empty()) {
@@ -705,9 +572,8 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
     return COMPLETE;
 }
 
-void CgiHandler::parse_cgi_output(Connection* conn) {
-    log(LOG_DEBUG,
-        "CGI: Parsing output buffer (size %zu) for client %d",
+Result CgiHandler::parse_cgi_output(Connection* conn) {
+    log(LOG_DEBUG, "CGI: Parsing output buffer (size %zu) for client %d",
         conn->cgi_context_->cgi_output_buffer_.readable_bytes(),
         conn->client_fd_);
 
@@ -726,7 +592,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
                 "CGI: Incomplete header line for client %d. Waiting for more "
                 "data.",
                 conn->client_fd_);
-            return;  // Need more data
+            return AGAIN;  // Need more data
         }
 
         size_t line_length = crlf_pos - data;
@@ -745,9 +611,8 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
         if (colon_pos == std::string::npos || colon_pos == 0) {
             log(LOG_ERROR, "CGI: Invalid header line for client %d: '%s'",
                 conn->client_fd_, header_line.c_str());
-            finalize_cgi_error(conn,
-                               BAD_GATEWAY);  // Malformed response from CGI
-            return;
+            conn->status_ = BAD_GATEWAY;
+            return ERROR;
         }
 
         std::string header_name = header_line.substr(0, colon_pos);
@@ -762,8 +627,8 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
             if (!(isalnum(c) || strchr("!#$%&'*+-.^_`|~", c))) {
                 log(LOG_ERROR, "Invalid character '%c' in CGI header name: %s",
                     static_cast<char>(c), header_name.c_str());
-                finalize_cgi_error(conn, BAD_GATEWAY);
-                return;
+                conn->status_ = BAD_GATEWAY;
+                return ERROR;
             }
 
             header_name[i] = std::tolower(c);
@@ -792,14 +657,14 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
             log(LOG_ERROR,
                 "Invalid Content-Length header value '%s' for client %d",
                 content_length_str.c_str(), conn->client_fd_);
-            finalize_cgi_error(conn, BAD_GATEWAY);
-            return;
+            conn->status_ = BAD_GATEWAY;
+            return ERROR;
         }
         if (content_length > buffer.readable_bytes()) {
             log(LOG_DEBUG,
                 "Waiting for more CGI output data, expected %zu bytes, got %zu",
                 content_length, buffer.readable_bytes());
-            return;  // Not enough data for body, wait for more
+            return AGAIN;  // Not enough data for body, wait for more
         }
 
         // We have enough data for the body
@@ -810,7 +675,7 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
         buffer.consume(content_length);  // Remove body from buffer
         log(LOG_DEBUG, "CGI body read successfully, size: %zu bytes",
             conn->response_data_->body_data_.size());
-        finalize_cgi_response(conn);
+        return COMPLETE;
     } else {
         // No Content-Length header, append the rest of the buffer as body
         log(LOG_DEBUG,
@@ -824,12 +689,12 @@ void CgiHandler::parse_cgi_output(Connection* conn) {
             body_data + body_size);
         buffer.consume(body_size);
     }
+    return COMPLETE;
 }
 
 bool CgiHandler::set_status_line(Connection* conn) {
     std::string status_str = conn->response_data_->get_header("status");
     if (!status_str.empty()) {
-        // If status header is present, use it
         char* end_ptr;
         size_t status = std::strtoul(status_str.c_str(), &end_ptr, 10);
         if (*end_ptr != '\0' || status == 0) {
@@ -839,7 +704,6 @@ bool CgiHandler::set_status_line(Connection* conn) {
         }
         conn->response_data_->status_code_ = static_cast<int>(status);
     } else {
-        // Default to 200 OK if no status header is provided
         conn->response_data_->status_code_ = OK;
     }
 
