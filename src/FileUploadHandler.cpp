@@ -7,6 +7,124 @@ FileUploadHandler::FileUploadHandler() : AHandler() {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
+Result FileUploadHandler::handle(Connection* conn) {
+    Result result = check_permissions(conn);
+    if (result != COMPLETE) {
+        return result;
+    }
+
+    // Generate temporary file name
+    std::string upload_dir = get_upload_directory(conn);
+
+    if (!ensure_upload_directory_exists(conn, upload_dir)) {
+        return ERROR;  // Directory creation failed
+    }
+
+    std::stringstream ss;
+    ss << conn->client_fd_;
+    std::string temp_filename = upload_dir + "upload_" + ss.str() + ".tmp";
+    int file_fd =
+        open(temp_filename.c_str(), O_WRONLY | O_CREAT | O_NONBLOCK, 0644);
+    if (file_fd < 0) {
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
+    }
+
+    // Initialize context
+    conn->file_upload_context_->file_fd_ = file_fd;
+    conn->file_upload_context_->temp_path_ = temp_filename;
+
+    ParseStatus status = multipart_parser_.parse_multipart(conn);
+    if (status >= PARSE_ERROR) {
+        conn->status_ = ErrorHandler::parse_status_to_response_status(status);
+        return ERROR;
+    }
+
+    // Write any parsed file data to the temp file
+    Buffer& buffer = conn->file_upload_context_->upload_buffer_;
+    if (!buffer.empty()) {
+        ssize_t written = buffer.write_to(file_fd);
+        if (written < 0) {
+            conn->status_ = INTERNAL_SERVER_ERROR;
+            return ERROR;
+        }
+        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d",
+            written, file_fd);
+    }
+
+    if (status == PARSE_INCOMPLETE) {
+        return AGAIN;
+    }
+
+    if (conn->file_upload_context_->upload_complete) {
+        // Close the temp file before copying
+        int file_fd = conn->file_upload_context_->file_fd_;
+        if (file_fd >= 0) {
+            close(file_fd);
+            conn->file_upload_context_->file_fd_ = -1;  // Mark as closed
+        }
+
+        // Determine final file path
+        std::string filename = conn->file_upload_context_->filename_;
+        if (filename.empty()) {
+            filename = "upload_file";
+        }
+        filename = sanitize_filename(filename);
+        std::string final_path = get_upload_directory(conn) + filename;
+
+        // Copy temp file to final destination
+        if (!copy_temp_to_final_file(conn->file_upload_context_->temp_path_,
+                                     final_path)) {
+            conn->status_ = INTERNAL_SERVER_ERROR;
+            return ERROR;
+        }
+        log(LOG_INFO,
+            "FileUploadHandler: Copied temp file to final file '%s' for "
+            "client_fd %d",
+            final_path.c_str(), conn->client_fd_);
+
+        send_success_response(conn);
+        return COMPLETE;
+    }
+    return AGAIN;
+}
+
+Result FileUploadHandler::check_permissions(Connection* conn) {
+    std::string content_length =
+        conn->request_data_->get_header("content-length");
+    if (content_length.empty()) {
+        conn->status_ = BAD_REQUEST;
+        return ERROR;
+    }
+    std::string content_type = conn->request_data_->get_header("content-type");
+    if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
+        conn->status_ = UNSUPPORTED_MEDIA_TYPE;
+        return ERROR;
+    }
+
+    std::string boundary =
+        conn->file_upload_context_->multipart_context_.boundary_;
+    boundary = multipart_parser_.extract_boundary(content_type);
+    if (boundary.empty()) {
+        log(LOG_ERROR, "No multipart boundary found for client_fd %d",
+            conn->client_fd_);
+        conn->status_ = BAD_REQUEST;
+        return ERROR;
+    }
+
+    // Redirect if needed
+    if (process_trailing_slash_redirect(conn)) {
+        return AGAIN;
+    }
+
+    log(LOG_DEBUG,
+        "FileUploadHandler: Permissions check passed for client_fd %d",
+        conn->client_fd_);
+
+    conn->status_ = OK;
+    return COMPLETE;
+}
+
 bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
     std::string uri = conn->request_data_->uri_;
     const Location* location = conn->location_match_;
@@ -165,140 +283,11 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
     return true;
 }
 
-Result FileUploadHandler::check_permissions(Connection* conn) {
-    std::string content_length =
-        conn->request_data_->get_header("content-length");
-    if (content_length.empty()) {
-        conn->status_ = BAD_REQUEST;
-        return ERROR;
-    }
-    std::string content_type = conn->request_data_->get_header("content-type");
-    if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
-        conn->status_ = UNSUPPORTED_MEDIA_TYPE;
-        return ERROR;
-    }
-
-    std::string boundary =
-        conn->file_upload_context_->multipart_context_.boundary_;
-    boundary = multipart_parser_.extract_boundary(content_type);
-    if (boundary.empty()) {
-        log(LOG_ERROR, "No multipart boundary found for client_fd %d",
-            conn->client_fd_);
-        conn->status_ = BAD_REQUEST;
-        return ERROR;
-    }
-
-    // Redirect if needed
-    if (process_trailing_slash_redirect(conn)) {
-        return COMPLETE;
-    }
-
-    log(LOG_DEBUG,
-        "FileUploadHandler: Permissions check passed for client_fd %d",
-        conn->client_fd_);
-
-    conn->status_ = OK;
-    return COMPLETE;
-}
-
-Result FileUploadHandler::setup_handler(Connection* conn) {
-    // Generate temporary file name
-    std::string upload_dir = get_upload_directory(conn);
-
-    if (!ensure_upload_directory_exists(conn, upload_dir)) {
-        return ERROR;  // Directory creation failed
-    }
-
-    std::stringstream ss;
-    ss << conn->client_fd_;
-    std::string temp_filename = upload_dir + "upload_" + ss.str() + ".tmp";
-    int file_fd =
-        open(temp_filename.c_str(), O_WRONLY | O_CREAT | O_NONBLOCK, 0644);
-    if (file_fd < 0) {
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR;
-    }
-
-    // Initialize context
-    conn->file_upload_context_->file_fd_ = file_fd;
-    conn->file_upload_context_->temp_path_ = temp_filename;
-    log(LOG_INFO,
-        "FileUploadHandler: Setup complete for client_fd %d, file_fd %d",
-        conn->client_fd_, file_fd);
-
-    return COMPLETE;
-}
-
-// TODO: Handle multipart parsing inside handle_event
-Result FileUploadHandler::handle_file_upload_write(Connection* conn) {
-    // Consume from upload_buffer_ and write to temporary file
-    if (!conn->file_upload_context_) {
-        log(LOG_FATAL,
-            "FileUploadHandler: No file upload context for client_fd %d",
-            conn->client_fd_);
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR;
-    }
-
-    ParseStatus status = multipart_parser_.parse_multipart(conn);
-    if (status >= PARSE_ERROR) {
-        conn->status_ = ErrorHandler::parse_status_to_response_status(status);
-        return ERROR;
-    }
-
-    // Write any parsed file data to the temp file
-    Buffer& buffer = conn->file_upload_context_->upload_buffer_;
-    int file_fd = conn->file_upload_context_->file_fd_;
-    if (!buffer.empty()) {
-        ssize_t written = buffer.write_to(file_fd);
-        if (written < 0) {
-            conn->status_ = INTERNAL_SERVER_ERROR;
-            return ERROR;
-        }
-        log(LOG_DEBUG, "FileUploadHandler: Wrote %zd bytes to temp file fd %d",
-            written, file_fd);
-    }
-
-    if (status == PARSE_INCOMPLETE) {
-        return AGAIN;
-    }
-
-    if (conn->file_upload_context_->upload_complete) {
-        // Close the temp file before copying
-        int file_fd = conn->file_upload_context_->file_fd_;
-        if (file_fd >= 0) {
-            close(file_fd);
-            conn->file_upload_context_->file_fd_ = -1;  // Mark as closed
-        }
-
-        // Determine final file path
-        std::string filename = conn->file_upload_context_->filename_;
-        if (filename.empty()) {
-            filename = "upload_file";
-        }
-        filename = sanitize_filename(filename);
-        std::string final_path = get_upload_directory(conn) + filename;
-
-        // Copy temp file to final destination
-        if (!copy_temp_to_final_file(conn->file_upload_context_->temp_path_,
-                                     final_path)) {
-            conn->status_ = INTERNAL_SERVER_ERROR;
-            return ERROR;
-        }
-        log(LOG_INFO,
-            "FileUploadHandler: Copied temp file to final file '%s' for "
-            "client_fd %d",
-            final_path.c_str(), conn->client_fd_);
-
-        send_success_response(conn);
-        return COMPLETE;
-    }
-    return AGAIN;
-}
-
 void FileUploadHandler::cleanup_handler(Connection* conn) {
-    delete conn->file_upload_context_;
-    conn->file_upload_context_ = NULL;
+    if (conn->file_upload_context_) {
+        delete conn->file_upload_context_;
+        conn->file_upload_context_ = NULL;
+    }
 
     return;
 }

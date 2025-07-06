@@ -11,19 +11,25 @@ class StaticFileHandler : public AHandler {
     StaticFileHandler();
     virtual ~StaticFileHandler();
 
-    // Implementation of the handle method for static files.
-    // - Validates request method (GET, HEAD).
-    // - Resolves file path based on server root and request URI.
-    // - Checks file existence and permissions.
-    // - Opens file, prepares response headers (status, content-type, length).
-    // - Sets up Connection state for sending (file FD, offset, bytes).
-    // - Uses ResponseWriter to format headers into Connection write buffer.
-    virtual Result check_permissions(Connection* conn);
-    virtual Result setup_handler(Connection* conn);
-    virtual Result handle_static_file_read(Connection* conn);
+    virtual Result handle(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
+    bool is_asynchronous() const { return false; }
+
    private:
+    Result validate_method(Connection* conn);
+    Result handle_location_redirect(Connection* conn);
+    Result resolve_absolute_path(Connection* conn, std::string& absolute_path);
+    Result handle_directory_request(Connection* conn,
+                                    std::string& absolute_path);
+    Result validate_file_access(Connection* conn,
+                                const std::string& absolute_path);
+    Result prepare_file_response(Connection* conn,
+                                 const std::string& absolute_path);
+    Result handle_file_open_error(Connection* conn);
+    void set_response_headers(Connection* conn, const struct stat& file_info);
+    std::string determine_content_type(const std::string& path);
+
     // Prevent copying
     StaticFileHandler(const StaticFileHandler&);
     StaticFileHandler& operator=(const StaticFileHandler&);
@@ -32,13 +38,9 @@ class StaticFileHandler : public AHandler {
 
 struct StaticFileContext {
     int file_fd_;
-    off_t offset_;
-    size_t bytes_to_send_;
-    size_t bytes_sent_;
     std::string absolute_path_;
 
-    StaticFileContext()
-        : file_fd_(-1), offset_(0), bytes_to_send_(0), bytes_sent_(0) {}
+    StaticFileContext() : file_fd_(-1) {}
 };
 
 #endif  // STATICFILEHANDLER_HPP

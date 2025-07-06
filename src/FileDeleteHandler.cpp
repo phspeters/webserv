@@ -4,15 +4,56 @@ FileDeleteHandler::FileDeleteHandler() : AHandler() {}
 
 FileDeleteHandler::~FileDeleteHandler() {}
 
+Result FileDeleteHandler::handle(Connection* conn) {
+    log(LOG_DEBUG,
+        "FileDeleteHandler: handle: Starting processing for client_fd %d",
+        conn->client_fd_);
+
+    Result result = check_permissions(conn);
+    if (result != COMPLETE) {
+        log(LOG_ERROR,
+            "FileDeleteHandler: handle: Permission check failed for client_fd "
+            "%d",
+            conn->client_fd_);
+        return result;
+    }
+
+    std::string file_path = parse_absolute_path(conn);
+
+    // Attempt to delete the file
+    if (!delete_file(conn, file_path)) {
+        log(LOG_ERROR,
+            "FileDeleteHandler: setup_handler: Failed to delete file for "
+            "client_fd %d",
+            conn->client_fd_);
+        return ERROR;
+    }
+
+    // Use 204 No Content (nginx default for successful DELETE)
+
+    conn->response_data_->status_code_ = 204;
+    conn->response_data_->set_header("Content-Length", "0");
+    conn->response_data_->set_header("Server", "webserv/4.2");
+    conn->response_data_->status_message_ = "No Content";
+    conn->response_data_->content_length_ = 0;
+    conn->response_data_->body_data_.clear();
+    conn->is_asynchronous_ = true;
+
+    return COMPLETE;
+}
+
 Result FileDeleteHandler::check_permissions(Connection* conn) {
     log(LOG_DEBUG,
-        "FileDeleteHandler: check_permissions: Checking all permissions for client_fd %d",
+        "FileDeleteHandler: check_permissions: Checking all permissions for "
+        "client_fd %d",
         conn->client_fd_);
 
     std::string file_path = parse_absolute_path(conn);
 
     if (file_path.empty()) {
-        log(LOG_ERROR, "FileDeleteHandler: check_permissions: Could not resolve path for URI: %s",
+        log(LOG_ERROR,
+            "FileDeleteHandler: check_permissions: Could not resolve path for "
+            "URI: %s",
             conn->request_data_->uri_.c_str());
         conn->status_ = BAD_REQUEST;
         return ERROR;
@@ -28,7 +69,9 @@ Result FileDeleteHandler::check_permissions(Connection* conn) {
 
     // Security: Do not allow deleting directories via this handler
     if (file_path[file_path.length() - 1] == '/') {
-        log(LOG_ERROR, "FileDeleteHandler: check_permissions: Attempt to delete directory: %s",
+        log(LOG_ERROR,
+            "FileDeleteHandler: check_permissions: Attempt to delete "
+            "directory: %s",
             file_path.c_str());
         conn->status_ = FORBIDDEN;
         return ERROR;
@@ -38,15 +81,20 @@ Result FileDeleteHandler::check_permissions(Connection* conn) {
     struct stat file_stat;
     if (stat(file_path.c_str(), &file_stat) != 0) {
         if (errno == ENOENT) {
-            log(LOG_INFO, "FileDeleteHandler: check_permissions: File to delete not found: %s",
+            log(LOG_INFO,
+                "FileDeleteHandler: check_permissions: File to delete not "
+                "found: %s",
                 file_path.c_str());
             conn->status_ = NOT_FOUND;
         } else if (errno == EACCES) {
-            log(LOG_ERROR, "FileDeleteHandler: check_permissions: Permission denied to stat file: %s",
+            log(LOG_ERROR,
+                "FileDeleteHandler: check_permissions: Permission denied to "
+                "stat file: %s",
                 file_path.c_str());
             conn->status_ = FORBIDDEN;
         } else {
-            log(LOG_ERROR, "FileDeleteHandler: check_permissions: stat error for %s: %s",
+            log(LOG_ERROR,
+                "FileDeleteHandler: check_permissions: stat error for %s: %s",
                 file_path.c_str(), strerror(errno));
             conn->status_ = INTERNAL_SERVER_ERROR;
         }
@@ -55,7 +103,9 @@ Result FileDeleteHandler::check_permissions(Connection* conn) {
 
     // Ensure we are deleting a regular file
     if (!S_ISREG(file_stat.st_mode)) {
-        log(LOG_ERROR, "FileDeleteHandler: check_permissions: Attempt to delete non-regular file: %s",
+        log(LOG_ERROR,
+            "FileDeleteHandler: check_permissions: Attempt to delete "
+            "non-regular file: %s",
             file_path.c_str());
         conn->status_ = FORBIDDEN;
         return ERROR;
@@ -63,57 +113,30 @@ Result FileDeleteHandler::check_permissions(Connection* conn) {
 
     // Get parent directory path to check for write permissions
     size_t last_slash = file_path.find_last_of('/');
-    std::string dir_path =
-        (last_slash != std::string::npos) ? file_path.substr(0, last_slash) : ".";
+    std::string dir_path = (last_slash != std::string::npos)
+                               ? file_path.substr(0, last_slash)
+                               : ".";
 
     if (access(dir_path.c_str(), W_OK) != 0) {
         log(LOG_ERROR,
-            "FileDeleteHandler: check_permissions: No write permission on directory: %s",
+            "FileDeleteHandler: check_permissions: No write permission on "
+            "directory: %s",
             dir_path.c_str());
         conn->status_ = FORBIDDEN;
         return ERROR;
     }
 
     log(LOG_DEBUG,
-        "FileDeleteHandler: check_permissions: All permission checks passed for client_fd %d",
+        "FileDeleteHandler: check_permissions: All permission checks passed "
+        "for client_fd %d",
         conn->client_fd_);
     return COMPLETE;
 }
-
-Result FileDeleteHandler::setup_handler(Connection* conn) {
-
-    log(LOG_DEBUG, "FileDeleteHandler: setup_handler: Starting processing for client_fd %d",
-        conn->client_fd_);
-
-    std::string file_path = parse_absolute_path(conn);
-
-    // Attempt to delete the file
-    if (!delete_file(conn, file_path)) {
-        log(LOG_ERROR, "FileDeleteHandler: setup_handler: Failed to delete file for client_fd %d",
-            conn->client_fd_);
-        return ERROR;
-    }
-
-    // Use 204 No Content (nginx default for successful DELETE)
-    
-    conn->response_data_->status_code_ = 204;
-    conn->response_data_->set_header("Content-Length", "0");
-    conn->response_data_->set_header("Server", "webserv/4.2");
-    conn->response_data_->status_message_ = "No Content";
-    conn->response_data_->content_length_ = 0;
-    conn->response_data_->body_data_.clear();
-    log(LOG_DEBUG, "FileDeleteHandler: setup_handler: is asynchronous to true");
-    conn->is_asynchronous_= true;
-
-    return COMPLETE;
-}
-
 
 bool FileDeleteHandler::delete_file(Connection* conn,
                                     const std::string& file_path) {
     log(LOG_DEBUG, "FileDeleteHandler: Attempting to delete file: %s",
         file_path.c_str());
-
 
     // Attempt to delete the file
     if (unlink(file_path.c_str()) != 0) {

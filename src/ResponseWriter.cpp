@@ -143,7 +143,6 @@ Result ResponseWriter::write_response_head(Connection* conn) {
         return AGAIN;
     }
 
-    context.formatted_headers_.clear();
     return COMPLETE;
 }
 

@@ -4,13 +4,111 @@ CgiHandler::CgiHandler() : AHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
+Result CgiHandler::handle(Connection* conn) {
+    Result result = check_permissions(conn);
+    if (result != COMPLETE) {
+        return result;  // Error or redirect occurred
+    }
+
+    // Setup pipes
+    int server_to_cgi_pipe[2];
+    int cgi_to_server_pipe[2];
+    if (!setup_cgi_pipes(conn, server_to_cgi_pipe, cgi_to_server_pipe)) {
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
+    }
+
+    const std::string& request_method = conn->request_data_->method_;
+    conn->cgi_context_ = new CgiContext();
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        // Fork failure
+        close(server_to_cgi_pipe[0]);
+        close(server_to_cgi_pipe[1]);
+        close(cgi_to_server_pipe[0]);
+        close(cgi_to_server_pipe[1]);
+
+        log(LOG_ERROR, "Fork error: %s", strerror(errno));
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
+    } else if (pid == 0) {
+        handle_child_pipes(server_to_cgi_pipe, cgi_to_server_pipe);
+        std::vector<char*> envp = create_cgi_envp(conn);
+        execute_cgi_script(conn, envp.data());
+    } else {
+        conn->cgi_context_->cgi_pid_ = pid;
+        if (!handle_parent_pipes(conn, server_to_cgi_pipe,
+                                 cgi_to_server_pipe)) {
+            conn->status_ = INTERNAL_SERVER_ERROR;
+            return ERROR;
+        }
+
+        if (request_method == "POST" &&
+            !conn->request_data_->body_buffer_.empty()) {
+            IOContext* stdin_ctx =
+                conn->add_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_,
+                                     FD_CGI_PIPE_WRITE, EPOLLOUT);
+
+            if (!stdin_ctx) {
+                log(LOG_ERROR,
+                    "Failed to register CGI stdin pipe with epoll for client "
+                    "%d",
+                    conn->client_fd_);
+                conn->status_ = INTERNAL_SERVER_ERROR;
+                return ERROR;
+            }
+
+            log(LOG_DEBUG,
+                "CGI: POST request, state -> WRITING_TO_PIPE for client %d, "
+                "stdin_fd %d",
+                conn->client_fd_, conn->cgi_context_->cgi_pipe_stdin_fd_);
+        } else {
+            if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
+                close(conn->cgi_context_->cgi_pipe_stdin_fd_);
+                conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
+                log(LOG_DEBUG,
+                    "CGI: Closed stdin pipe immediately for "
+                    "non-POST/empty-POST for client %d",
+                    conn->client_fd_);
+            }
+
+            IOContext* stdout_ctx =
+                conn->add_io_context(conn->cgi_context_->cgi_pipe_stdout_fd_,
+                                     FD_CGI_PIPE_READ, EPOLLIN);
+
+            if (!stdout_ctx) {
+                log(LOG_ERROR,
+                    "Failed to register CGI stdout pipe with epoll for client "
+                    "%d",
+                    conn->client_fd_);
+                conn->status_ = INTERNAL_SERVER_ERROR;
+                return ERROR;
+            }
+
+            log(LOG_DEBUG,
+                "CGI: GET or empty POST, state -> READING_FROM_PIPE for client "
+                "%d, stdout_fd %d",
+                conn->client_fd_, conn->cgi_context_->cgi_pipe_stdout_fd_);
+        }
+    }
+
+    log(LOG_DEBUG, "CgiHandler: Setup complete for client_fd %d",
+        conn->client_fd_);
+
+    return COMPLETE;
+}
+
 Result CgiHandler::check_permissions(Connection* conn) {
     log(LOG_DEBUG, "CgiHandler: Checking permissions for client_fd %d",
         conn->client_fd_);
 
     // Check for location-level redirect first (takes precedence over CGI)
     if (process_location_redirect(conn)) {
-        return COMPLETE;
+        log(LOG_DEBUG,
+            "StaticFileHandler: Processed location redirect for client_fd %d",
+            conn->client_fd_);
+        return AGAIN;  // Indicates that the request has been redirected
     }
 
     // Validate request method (must be GET or POST)
@@ -103,140 +201,6 @@ Result CgiHandler::check_permissions(Connection* conn) {
     return COMPLETE;
 }
 
-Result CgiHandler::setup_handler(Connection* conn) {
-    const std::string& request_method = conn->request_data_->method_;
-
-    // Setup pipes
-    int server_to_cgi_pipe[2];
-    int cgi_to_server_pipe[2];
-    if (!setup_cgi_pipes(conn, server_to_cgi_pipe, cgi_to_server_pipe)) {
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR;
-    }
-
-    pid_t pid = fork();
-    if (pid == -1) {
-        // Fork failure
-        close(server_to_cgi_pipe[0]);
-        close(server_to_cgi_pipe[1]);
-        close(cgi_to_server_pipe[0]);
-        close(cgi_to_server_pipe[1]);
-
-        log(LOG_ERROR, "Fork error: %s", strerror(errno));
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR;
-    } else if (pid == 0) {
-        handle_child_pipes(server_to_cgi_pipe, cgi_to_server_pipe);
-        std::vector<char*> envp = create_cgi_envp(conn);
-        execute_cgi_script(conn, envp.data());
-    } else {
-        conn->cgi_context_->cgi_pid_ = pid;
-        if (!handle_parent_pipes(conn, server_to_cgi_pipe,
-                                 cgi_to_server_pipe)) {
-            conn->status_ = INTERNAL_SERVER_ERROR;
-            return ERROR;
-        }
-
-        if (request_method == "POST" &&
-            !conn->request_data_->body_buffer_.empty()) {
-            IOContext* stdin_ctx =
-                conn->add_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_,
-                                     FD_CGI_PIPE_WRITE, EPOLLOUT);
-
-            if (!stdin_ctx) {
-                log(LOG_ERROR,
-                    "Failed to register CGI stdin pipe with epoll for client "
-                    "%d",
-                    conn->client_fd_);
-                conn->status_ = INTERNAL_SERVER_ERROR;
-                return ERROR;
-            }
-
-            log(LOG_DEBUG,
-                "CGI: POST request, state -> WRITING_TO_PIPE for client %d, "
-                "stdin_fd %d",
-                conn->client_fd_, conn->cgi_context_->cgi_pipe_stdin_fd_);
-        } else {
-            if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
-                close(conn->cgi_context_->cgi_pipe_stdin_fd_);
-                conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
-                log(LOG_DEBUG,
-                    "CGI: Closed stdin pipe immediately for "
-                    "non-POST/empty-POST for client %d",
-                    conn->client_fd_);
-            }
-
-            IOContext* stdout_ctx =
-                conn->add_io_context(conn->cgi_context_->cgi_pipe_stdout_fd_,
-                                     FD_CGI_PIPE_READ, EPOLLIN);
-
-            if (!stdout_ctx) {
-                log(LOG_ERROR,
-                    "Failed to register CGI stdout pipe with epoll for client "
-                    "%d",
-                    conn->client_fd_);
-                conn->status_ = INTERNAL_SERVER_ERROR;
-                return ERROR;
-            }
-
-            log(LOG_DEBUG,
-                "CGI: GET or empty POST, state -> READING_FROM_PIPE for client "
-                "%d, stdout_fd %d",
-                conn->client_fd_, conn->cgi_context_->cgi_pipe_stdout_fd_);
-        }
-    }
-
-    log(LOG_DEBUG, "CgiHandler: Setup complete for client_fd %d",
-        conn->client_fd_);
-
-    return COMPLETE;
-}
-
-void CgiHandler::cleanup_handler(Connection* conn) {
-    if (!conn->cgi_context_) {
-        log(LOG_FATAL,
-            "CgiHandler: Cleanup called but cgi_context_ is NULL for client_fd "
-            "%d",
-            conn->client_fd_);
-        return;
-    }
-
-    // Remove pipe IO contexts from epoll monitoring
-    // look in the vector of IO contexts and remove the ones related to CGI
-    // pipes if (conn->cgi_context_->cgi_pipe_stdin_fd_) {
-    //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_);
-    // }
-    // if (conn->cgi_context_->cgi_pipe_stdout_io_ctx_) {
-    //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdout_io_ctx_);
-    // }
-
-    if (conn->cgi_context_->cgi_pid_ > 0) {
-        int status;
-        pid_t result = waitpid(conn->cgi_context_->cgi_pid_, &status, WNOHANG);
-
-        if (result == 0) {
-            log(LOG_INFO,
-                "Killing remaining CGI child process %d for client %d",
-                conn->cgi_context_->cgi_pid_, conn->client_fd_);
-            kill(conn->cgi_context_->cgi_pid_, SIGKILL);
-            waitpid(conn->cgi_context_->cgi_pid_, &status, 0);
-        }
-    }
-
-    if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
-        close(conn->cgi_context_->cgi_pipe_stdin_fd_);
-    }
-    if (conn->cgi_context_->cgi_pipe_stdout_fd_ != -1) {
-        close(conn->cgi_context_->cgi_pipe_stdout_fd_);
-    }
-
-    delete conn->cgi_context_;
-    conn->cgi_context_ = NULL;
-
-    log(LOG_DEBUG, "CgiHandler: Cleanup complete for client_fd %d",
-        conn->client_fd_);
-}
-
 bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                                  int cgi_to_server_pipe[2]) {
     if (pipe(server_to_cgi_pipe) == -1) {
@@ -265,8 +229,10 @@ void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
                                     int cgi_to_server_pipe[2]) {
     // Close the write-end of the pipe to CGI's stdin
     close(server_to_cgi_pipe[1]);
+    server_to_cgi_pipe[1] = -1;
     // Close the write-end of the pipe from CGI's stdout
     close(cgi_to_server_pipe[0]);
+    cgi_to_server_pipe[0] = -1;
 
     if (dup2(server_to_cgi_pipe[0], STDIN_FILENO) == -1) {
         log(LOG_ERROR, "Failed to redirect stdin to CGI pipe: %s",
@@ -291,7 +257,9 @@ void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
     }
 
     close(server_to_cgi_pipe[0]);
+    server_to_cgi_pipe[0] = -1;
     close(cgi_to_server_pipe[1]);
+    cgi_to_server_pipe[1] = -1;
 }
 
 std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
@@ -414,10 +382,12 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
                                      int server_to_cgi_pipe[2],
                                      int cgi_to_server_pipe[2]) {
     close(server_to_cgi_pipe[0]);  // Parent closes read-end of pipe
+    server_to_cgi_pipe[0] = -1;    // Mark as closed
     conn->cgi_context_->cgi_pipe_stdin_fd_ =
         server_to_cgi_pipe[1];  // Parent keeps write-end
 
     close(cgi_to_server_pipe[1]);  // Parent closes write-end of pipe
+    cgi_to_server_pipe[1] = -1;    // Mark as closed
     conn->cgi_context_->cgi_pipe_stdout_fd_ =
         cgi_to_server_pipe[0];  // Parent keeps read-end
 
@@ -442,6 +412,55 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
         conn->cgi_context_->cgi_pipe_stdout_fd_);
 
     return true;
+}
+
+void CgiHandler::cleanup_handler(Connection* conn) {
+    if (!conn->cgi_context_) {
+        log(LOG_FATAL,
+            "CgiHandler: Cleanup called but cgi_context_ is NULL for client_fd "
+            "%d",
+            conn->client_fd_);
+        return;
+    }
+
+    // Remove pipe IO contexts from epoll monitoring
+    // look in the vector of IO contexts and remove the ones related to CGI
+    // pipes if (conn->cgi_context_->cgi_pipe_stdin_fd_) {
+    //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_);
+    // }
+    // if (conn->cgi_context_->cgi_pipe_stdout_io_ctx_) {
+    //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdout_io_ctx_);
+    // }
+
+    if (conn->cgi_context_->cgi_pid_ > 0) {
+        int status;
+        pid_t result = waitpid(conn->cgi_context_->cgi_pid_, &status, WNOHANG);
+
+        if (result == 0) {
+            log(LOG_INFO,
+                "Killing remaining CGI child process %d for client %d",
+                conn->cgi_context_->cgi_pid_, conn->client_fd_);
+            kill(conn->cgi_context_->cgi_pid_, SIGKILL);
+            waitpid(conn->cgi_context_->cgi_pid_, &status, 0);
+        }
+    }
+
+    if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
+        close(conn->cgi_context_->cgi_pipe_stdin_fd_);
+        conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
+    }
+    if (conn->cgi_context_->cgi_pipe_stdout_fd_ != -1) {
+        close(conn->cgi_context_->cgi_pipe_stdout_fd_);
+        conn->cgi_context_->cgi_pipe_stdout_fd_ = -1;
+    }
+
+    if (conn->cgi_context_) {
+        delete conn->cgi_context_;
+        conn->cgi_context_ = NULL;
+    }
+
+    log(LOG_DEBUG, "CgiHandler: Cleanup complete for client_fd %d",
+        conn->client_fd_);
 }
 
 Result CgiHandler::handle_cgi_write(Connection* conn) {

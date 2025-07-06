@@ -12,12 +12,14 @@ class CgiHandler : public AHandler {
     CgiHandler();
     virtual ~CgiHandler();
 
-    virtual Result check_permissions(Connection* conn);
-    virtual Result setup_handler(Connection* conn);
+    virtual Result handle(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
     Result handle_cgi_read(Connection* conn);
     Result handle_cgi_write(Connection* conn);
+
+    Result check_permissions(Connection* conn);
+    bool is_asynchronous() const { return true; }
 
    private:
     bool setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
@@ -31,7 +33,7 @@ class CgiHandler : public AHandler {
     Result parse_cgi_output(Connection* conn);
     void commit_cgi_header(HttpResponse* response, const CgiContext* context);
     bool set_status_line(Connection* conn);
-	void set_cgi_body_handling(Connection* conn);
+    void set_cgi_body_handling(Connection* conn);
 
     // Prevent copying
     CgiHandler(const CgiHandler&);
