@@ -85,8 +85,7 @@ bool WebServer::parse_config_file(const std::string& filename) {
                     virtual_server.host_.c_str(), virtual_server.port_);
 
                 virtual_servers_.push_back(virtual_server);
-            }
-            else {
+            } else {
                 log(LOG_ERROR, "Error parsing server block");
                 return false;
             }
@@ -126,7 +125,8 @@ bool WebServer::add_context_to_epoll(IOContext* ctx, uint32_t events) {
     event.data.ptr = ctx;
 
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, ctx->fd_, &event) < 0) {
-        log(LOG_ERROR, "Failed to register socket '%i' on epoll", ctx->fd_);
+        log(LOG_ERROR, "Failed to register socket '%i' on epoll: %s", ctx->fd_,
+            strerror(errno));
         return false;
     }
 
@@ -578,7 +578,8 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
     if (event_flags & EPOLLOUT) {
         if (conn->conn_state_ == CONN_WRITING_RESPONSE) {
             log_buffer(LOG_TRACE, conn->write_buffer_);
-            log(LOG_FATAL, "Response body fd %d", conn->response_data_->body_fd_);
+            log(LOG_FATAL, "Response body fd %d",
+                conn->response_data_->body_fd_);
             ssize_t bytes_sent = conn->write_buffer_.write_to(conn->client_fd_);
             if (bytes_sent <= 0) {
                 log(LOG_ERROR,
@@ -737,10 +738,11 @@ ParseStatus WebServer::process_request(Connection* conn) {
         return PARSE_ERROR;
     }
 
-    if (conn->is_asynchronous_) {
-        conn->conn_state_ = CONN_GENERATING_RESPONSE;
-        return PARSE_SUCCESS;
-    }
+    // if (conn->is_asynchronous_) {
+    //     log(LOG_FATAL, "ASYNC 1");
+    //     conn->conn_state_ = CONN_GENERATING_RESPONSE;
+    //     return PARSE_SUCCESS;
+    // }
 
     result = conn->active_handler_->setup_handler(conn);
     if (result == ERROR) {
@@ -748,10 +750,11 @@ ParseStatus WebServer::process_request(Connection* conn) {
         return PARSE_ERROR;
     }
 
-    if (conn->is_asynchronous_) {
-        conn->conn_state_ = CONN_GENERATING_RESPONSE;
-        return PARSE_SUCCESS;
-    }
+    // if (conn->is_asynchronous_) {
+    //     log(LOG_FATAL, "ASYNC 2");
+    //     conn->conn_state_ = CONN_GENERATING_RESPONSE;
+    //     return PARSE_SUCCESS;
+    // }
 
     conn->conn_state_ = CONN_WRITING_RESPONSE;
     response_writer_.write_response_to_buffer(conn);
@@ -1081,6 +1084,7 @@ void WebServer::handle_static_file_event(IOContext* ctx, uint32_t event_flags) {
             "handle_static_file_event: Handling EPOLLIN for static file fd %d",
             ctx->fd_);
 
+        log(LOG_FATAL, "SEMAPHORE");
         Result result = static_file_handler_.handle_static_file_read(conn);
         if (!handle_async_result(result, conn, "static file")) {
             return;

@@ -13,7 +13,7 @@ Connection::Connection(WebServer* owner, int fd,
       conn_state_(CONN_READING_REQUEST),
       active_handler_(NULL),
       location_match_(NULL),
-      is_asynchronous_(false),
+      is_asynchronous_(true),
       static_file_context_(NULL),
       file_upload_context_(NULL),
       cgi_context_(NULL) {
@@ -167,7 +167,7 @@ void Connection::reset_for_keep_alive() {
     writer_context_.reset();
     location_match_ = NULL;
     active_handler_ = NULL;
-    is_asynchronous_ = false;
+    is_asynchronous_ = true;
 
     // Clean up handler contexts (if any)
     if (static_file_context_) {

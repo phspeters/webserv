@@ -17,7 +17,7 @@ bool AHandler::process_location_redirect(Connection* conn) {
     // Set up redirect response
     conn->response_data_->set_header("Location", location->redirect_);
     conn->status_ = MOVED_PERMANENTLY;
-    conn->is_asynchronous_ = true;
+    conn->is_asynchronous_ = false;
     log(LOG_DEBUG, "process_location_redirect: is asynchronous to true");
     return true;
 }
@@ -91,7 +91,7 @@ bool AHandler::process_directory_redirect(Connection* conn,
         conn->response_data_->set_header("Location", redirect_url);
         conn->status_ = MOVED_PERMANENTLY;
         conn->status_ = MOVED_PERMANENTLY;
-        conn->is_asynchronous_ = true;
+        conn->is_asynchronous_ = false;
         log(LOG_DEBUG, "process_directory_redirect: is asynchronous to true");
         return true;
     }
@@ -200,7 +200,7 @@ bool AHandler::generate_directory_listing(Connection* conn,
     conn->response_data_->set_header("Content-Length", content_stream.str());
     conn->response_data_->body_data_.assign(html.begin(), html.end());
     conn->status_ = OK;
-    conn->is_asynchronous_ = true;
+    conn->is_asynchronous_ = false;
     log(LOG_DEBUG, "generate_directory_listing: is asynchronous to true");
 
     return true;
