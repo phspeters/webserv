@@ -89,6 +89,11 @@ bool VirtualServer::parse_location_block(std::ifstream& file,
 
     std::string path = line.substr(pathStart, pathEnd - pathStart);
 
+    if (path.empty()) {
+        log(LOG_ERROR, "Location path cannot be empty");
+        return false;
+    }
+
     // Find opening brace
     size_t bracePos = line.find('{', pathEnd);
     if (bracePos == std::string::npos) {
@@ -279,6 +284,11 @@ bool VirtualServer::parse_error_page(const std::string& value) {
 
     if (path[0] != '/') {
         log(LOG_ERROR, "error_page path must start with '/': %s", path.c_str());
+        return false;
+    }
+
+    if (path == "/") {
+        log(LOG_ERROR, "error_page path cannot be root ('/')");
         return false;
     }
 
