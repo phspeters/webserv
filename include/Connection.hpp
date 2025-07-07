@@ -55,8 +55,7 @@ struct Connection {
     ParserContext parser_context_;
     MultipartContext multipart_context_;
     WriterContext writer_context_;
-    std::vector<IOContext*>
-        io_contexts_;  // TODO: change to map<FdType, IOContext*> ??
+    std::map<FdType, IOContext*> io_contexts_;
 
     //--------------------------------------
     // Connection Management
@@ -92,6 +91,12 @@ struct IOContext {
 
     IOContext(int fd, FdType type, Connection* conn)
         : conn_(conn), type_(type), fd_(fd) {}
+    ~IOContext() {
+        if (fd_ >= 0) {
+            close(fd_);
+            fd_ = -1;
+        }
+    }
 };
 
 #endif  // CONNECTION_HPP

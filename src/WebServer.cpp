@@ -994,7 +994,7 @@ void WebServer::match_host_header(Connection* conn) {
 
     // Loop through all virtual servers for this listener
     std::vector<VirtualServer*> vs_candidates =
-        listener_to_virtual_servers_[conn->io_contexts_[0]->fd_];
+        listener_to_virtual_servers_[conn->client_fd_];
     for (std::vector<VirtualServer*>::iterator it = vs_candidates.begin();
          it != vs_candidates.end(); ++it) {
         if ((*it)->host_ == target_hostname) {
@@ -1100,7 +1100,7 @@ bool WebServer::start_response_writing(Connection* conn) {
         return false;
     }
 
-    IOContext* client_ctx = conn->io_contexts_[0];
+    IOContext* client_ctx = conn->io_contexts_[FD_CLIENT_SOCKET];
     if (!update_context_in_epoll(client_ctx, EPOLLIN | EPOLLOUT)) {
         log(LOG_TRACE,
             "start_response_writing: Failed to update epoll events for "
@@ -1117,7 +1117,7 @@ bool WebServer::start_response_writing(Connection* conn) {
 }
 
 void WebServer::handle_error_response(Connection* conn) {
-    IOContext* client_ctx = conn->io_contexts_[0];
+    IOContext* client_ctx = conn->io_contexts_[FD_CLIENT_SOCKET];
     HttpStatus status = conn->status_;
 
     ErrorHandler::generate_error_response(conn, status);

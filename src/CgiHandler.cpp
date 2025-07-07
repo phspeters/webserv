@@ -423,15 +423,6 @@ void CgiHandler::cleanup_handler(Connection* conn) {
         return;
     }
 
-    // Remove pipe IO contexts from epoll monitoring
-    // look in the vector of IO contexts and remove the ones related to CGI
-    // pipes if (conn->cgi_context_->cgi_pipe_stdin_fd_) {
-    //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_);
-    // }
-    // if (conn->cgi_context_->cgi_pipe_stdout_io_ctx_) {
-    //     conn->remove_io_context(conn->cgi_context_->cgi_pipe_stdout_io_ctx_);
-    // }
-
     if (conn->cgi_context_->cgi_pid_ > 0) {
         int status;
         pid_t result = waitpid(conn->cgi_context_->cgi_pid_, &status, WNOHANG);
@@ -446,12 +437,10 @@ void CgiHandler::cleanup_handler(Connection* conn) {
     }
 
     if (conn->cgi_context_->cgi_pipe_stdin_fd_ != -1) {
-        close(conn->cgi_context_->cgi_pipe_stdin_fd_);
-        conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
+        conn->remove_io_context(conn->io_contexts_[FD_CGI_PIPE_WRITE]);
     }
     if (conn->cgi_context_->cgi_pipe_stdout_fd_ != -1) {
-        close(conn->cgi_context_->cgi_pipe_stdout_fd_);
-        conn->cgi_context_->cgi_pipe_stdout_fd_ = -1;
+        conn->remove_io_context(conn->io_contexts_[FD_CGI_PIPE_READ]);
     }
 
     if (conn->cgi_context_) {

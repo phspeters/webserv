@@ -38,12 +38,13 @@ Connection::~Connection() {
 
     // Clean up I/O contexts
     while (!io_contexts_.empty()) {
-        remove_io_context(io_contexts_.back());
+        remove_io_context(io_contexts_.begin()->second);
     }
 
     // Close any open file descriptors
     if (client_fd_ >= 0) {
         close(client_fd_);
+        client_fd_ = -1;
     }
 
     // Clean up handler contexts (if any)
@@ -64,6 +65,14 @@ Connection::~Connection() {
 }
 
 IOContext* Connection::add_io_context(int fd, FdType type, uint32_t events) {
+    std::map<FdType, IOContext*>::iterator it = io_contexts_.find(type);
+    if (it != io_contexts_.end()) {
+        log(LOG_FATAL,
+            "I/O context for type '%d' already exists for socket '%i'", type,
+            fd);
+        return NULL;
+    }
+
     IOContext* io_context = NULL;
     try {
         io_context = new IOContext(fd, type, this);
@@ -77,7 +86,7 @@ IOContext* Connection::add_io_context(int fd, FdType type, uint32_t events) {
         }
 
         // Add to the list of contexts
-        io_contexts_.push_back(io_context);
+        io_contexts_[type] = io_context;
         log(LOG_DEBUG, "I/O context added for socket '%i'", io_context->fd_);
 
         return io_context;
@@ -93,24 +102,30 @@ IOContext* Connection::add_io_context(int fd, FdType type, uint32_t events) {
 }
 
 void Connection::remove_io_context(IOContext* io_context) {
-    // Remove from epoll
-    if (!owner_server_->remove_context_from_epoll(io_context)) {
-        log(LOG_ERROR, "Failed to remove I/O context for socket '%i'",
-            io_context->fd_);
+    std::map<FdType, IOContext*>::iterator it =
+        io_contexts_.find(io_context->type_);
+    if (it == io_contexts_.end()) {
+        log(LOG_WARNING, "No I/O context found for type '%d' on socket '%i'",
+            io_context->type_, io_context->fd_);
         return;
     }
 
-    // Remove from the list of contexts
-    std::vector<IOContext*>::iterator it =
-        std::find(io_contexts_.begin(), io_contexts_.end(), io_context);
-    if (it != io_contexts_.end()) {
-        log(LOG_DEBUG, "I/O context removed for socket '%i'", io_context->fd_);
-        delete *it;  // Clean up the IOContext
-        io_contexts_.erase(it);
-    } else {
-        log(LOG_WARNING, "I/O context not found for socket '%i'",
-            io_context->fd_);
+    if (it->second != io_context) {
+        log(LOG_WARNING, "I/O context mismatch for type '%d' on socket '%i'",
+            io_context->type_, io_context->fd_);
+        return;
     }
+
+    // Remove from epoll
+    if (!owner_server_->remove_context_from_epoll(io_context)) {
+        log(LOG_ERROR, "Failed to remove I/O context for socket '%i'",
+            io_context->fd_);  // Log error but continue cleanup
+    }
+
+    // Clean up
+    log(LOG_DEBUG, "I/O context removed for socket '%i'", io_context->fd_);
+    delete io_context;
+    io_contexts_.erase(it);
 }
 
 bool Connection::is_keep_alive() const {
@@ -188,7 +203,7 @@ void Connection::reset_for_keep_alive() {
     // Reset activity timer
     last_activity_ = time(NULL);
 
-    owner_server_->update_context_in_epoll(*(io_contexts_.begin()), EPOLLIN);
+    owner_server_->update_context_in_epoll(io_contexts_[FD_CLIENT_SOCKET], EPOLLIN);
 
     status_ = OK;
     conn_state_ = CONN_READING_REQUEST;
