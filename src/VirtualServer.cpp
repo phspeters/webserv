@@ -4,7 +4,7 @@
 static const int DEFAULT_PORT = 80;
 static const std::string DEFAULT_HOST = "0.0.0.0";
 static const size_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024;  // 1MB
-static const size_t DEFAULT_LOCATION_MAX_BODY_SIZE = 0;
+static const size_t DEFAULT_LOCATION_MAX_BODY_SIZE = 1024 * 1024;
 static const std::string DEFAULT_SERVER_NAME = "default_server";
 
 // Location defaults
