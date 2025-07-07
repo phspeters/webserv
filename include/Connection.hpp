@@ -71,7 +71,6 @@ struct Connection {
     //--------------------------------------
     AHandler* active_handler_;
     const Location* location_match_;
-    bool is_asynchronous_;
 
     StaticFileContext* static_file_context_;
     FileUploadContext* file_upload_context_;

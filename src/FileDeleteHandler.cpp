@@ -37,7 +37,6 @@ Result FileDeleteHandler::handle(Connection* conn) {
     conn->response_data_->status_message_ = "No Content";
     conn->response_data_->content_length_ = 0;
     conn->response_data_->body_data_.clear();
-    conn->is_asynchronous_ = true;
 
     return COMPLETE;
 }
