@@ -19,6 +19,6 @@ void log_request(log_level level, const Connection* conn);
 void log_response(log_level level, const Connection* conn);
 int log_buffer(log_level level, const Buffer& buffer);
 void log_virtual_server(log_level level, const VirtualServer& virtual_server);
-std::string event_to_string(uint32_t event_flags);
+const char* event_to_string(uint32_t event_flags);
 
 #endif  // LOGGER_HPP

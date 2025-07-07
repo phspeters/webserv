@@ -275,7 +275,7 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
     std::cout << "================================" << RESET << std::endl;
 }
 
-std::string event_to_string(uint32_t event_flags) {
+const char* event_to_string(uint32_t event_flags) {
     switch (event_flags) {
         case EPOLLIN:
             return "EPOLLIN";
