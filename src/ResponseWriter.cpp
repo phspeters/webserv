@@ -5,14 +5,13 @@ Result ResponseWriter::write_response_to_buffer(Connection* conn) {
         return ERROR;
     }
 
+    log(LOG_TRACE,
+        "ResponseWriter::write_response_to_buffer called for client %d",
+        conn->client_fd_);
+
     HttpResponse* resp = conn->response_data_;
     WriterContext& context = conn->writer_context_;
     Result result = COMPLETE;
-
-    log(LOG_DEBUG,
-        "write_response_to_buffer: filling response buffer for connection %d, "
-        "response %p",
-        conn->client_fd_, resp);
 
     while (context.response_writer_state_ != WRITER_DONE) {
         switch (context.response_writer_state_) {
@@ -83,7 +82,7 @@ Result ResponseWriter::write_response_to_buffer(Connection* conn) {
 
 std::string ResponseWriter::get_response_head_string(HttpResponse* resp) {
     log(LOG_TRACE,
-        "get_response_head_string: Generating response headers for response %p",
+        "ResponseWriter::get_response_head_string called for response %p",
         resp);
 
     std::stringstream headers;
@@ -127,8 +126,7 @@ std::string ResponseWriter::get_response_head_string(HttpResponse* resp) {
 }
 
 Result ResponseWriter::write_response_head(Connection* conn) {
-    log(LOG_TRACE,
-        "write_response_head: Writing response headers for connection %d",
+    log(LOG_TRACE, "ResponseWriter::write_response_head called for client %d",
         conn->client_fd_);
 
     WriterContext& context = conn->writer_context_;
@@ -148,8 +146,7 @@ Result ResponseWriter::write_response_head(Connection* conn) {
 
 Result ResponseWriter::write_response_body_from_buffer(Connection* conn) {
     log(LOG_TRACE,
-        "write_response_body_from_buffer: Writing response body from buffer "
-        "for connection %d",
+        "ResponseWriter::write_response_body_from_buffer for client %d",
         conn->client_fd_);
 
     HttpResponse* resp = conn->response_data_;
@@ -178,9 +175,7 @@ Result ResponseWriter::write_response_body_from_buffer(Connection* conn) {
 
 Result ResponseWriter::write_response_body_from_fd(Connection* conn) {
     log(LOG_TRACE,
-        "write_response_body_from_fd: Writing response body from file "
-        "descriptor "
-        "for connection %d",
+        "ResponseWriter::write_response_body_from_fd called for connection %d",
         conn->client_fd_);
 
     HttpResponse* resp = conn->response_data_;

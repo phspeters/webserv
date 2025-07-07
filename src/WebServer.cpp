@@ -125,12 +125,12 @@ bool WebServer::add_context_to_epoll(IOContext* ctx, uint32_t events) {
     event.data.ptr = ctx;
 
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, ctx->fd_, &event) < 0) {
-        log(LOG_ERROR, "Failed to register socket '%i' on epoll: %s", ctx->fd_,
+        log(LOG_ERROR, "Failed to register socket '%d' on epoll: %s", ctx->fd_,
             strerror(errno));
         return false;
     }
 
-    log(LOG_TRACE, "Registered socket '%i' on epoll with events %u", ctx->fd_,
+    log(LOG_TRACE, "Registered socket '%d' on epoll with events %u", ctx->fd_,
         events);
     return true;
 }
@@ -141,22 +141,22 @@ bool WebServer::update_context_in_epoll(IOContext* ctx, uint32_t events) {
     event.events = events;
     event.data.ptr = ctx;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, ctx->fd_, &event) < 0) {
-        log(LOG_ERROR, "Failed to up epoll events for socket '%i'", ctx->fd_);
+        log(LOG_ERROR, "Failed to up epoll events for socket '%d'", ctx->fd_);
         return false;
     }
 
-    log(LOG_TRACE, "Updated epoll events for socket '%i' to %u", ctx->fd_,
+    log(LOG_TRACE, "Updated epoll events for socket '%d' to %u", ctx->fd_,
         events);
     return true;
 }
 
 bool WebServer::remove_context_from_epoll(IOContext* ctx) {
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, ctx->fd_, NULL) < 0) {
-        log(LOG_ERROR, "Failed to unregister socket '%i' on epoll", ctx->fd_);
+        log(LOG_ERROR, "Failed to unregister socket '%d' on epoll", ctx->fd_);
         return false;
     }
 
-    log(LOG_TRACE, "Unregistered socket '%i' on epoll", ctx->fd_);
+    log(LOG_TRACE, "Unregistered socket '%d' on epoll", ctx->fd_);
     return true;
 }
 
@@ -166,7 +166,7 @@ void WebServer::event_loop() {
     while (ready_) {
         int timed_out = cleanup_timed_out_connections();
         if (timed_out > 0) {
-            log(LOG_INFO, "Closed '%i' timed out connections.", timed_out);
+            log(LOG_INFO, "Closed '%d' timed out connections.", timed_out);
         }
 
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
@@ -230,38 +230,39 @@ void WebServer::close_client_connection(Connection* conn) {
 
     if (it != active_connections_.end()) {
         delete it->second;
-        log(LOG_INFO, "Closed connection for client (fd: %i)", fd);
+        log(LOG_INFO, "Closed connection for client (fd: %d)", fd);
         active_connections_.erase(it);
     } else {
-        log(LOG_FATAL, "Connection not found for socket '%i'", fd);
+        log(LOG_FATAL, "Connection not found for socket '%d'", fd);
     }
 }
 
 bool WebServer::read_from_client_socket(Connection* conn) {
-    log(LOG_DEBUG, "Reading from socket (fd: %i)", conn->client_fd_);
+    log(LOG_TRACE, "WebServer::read_from_client_socket called for client %d",
+        conn->client_fd_);
 
     ssize_t bytes_read = conn->read_buffer_.read_from(conn->client_fd_);
 
     if (bytes_read == 0) {
-        log(LOG_WARNING, "Client disconnected (fd: %i)", conn->client_fd_);
+        log(LOG_WARNING, "Client disconnected (fd: %d)", conn->client_fd_);
         return false;
     }
 
     if (bytes_read == -1) {
-        log(LOG_ERROR, "Error reading from socket (fd: %i): %s",
+        log(LOG_ERROR, "Error reading from socket (fd: %d): %s",
             conn->client_fd_, strerror(errno));
         return false;
     }
 
     if (bytes_read == BUFFER_FULL) {
-        log(LOG_DEBUG, "Buffer full while reading from socket (fd: %i)",
+        log(LOG_DEBUG, "Buffer full while reading from socket (fd: %d)",
             conn->client_fd_);
         return true;
     }
 
     conn->last_activity_ = time(NULL);
 
-    log(LOG_DEBUG, "Read %zd bytes from socket (fd: %i)", bytes_read,
+    log(LOG_INFO, "Read %zd bytes from socket (fd: %d)", bytes_read,
         conn->client_fd_);
 
     log_buffer(LOG_TRACE, conn->read_buffer_);
@@ -299,7 +300,7 @@ bool WebServer::setup_listener_sockets() {
 }
 
 int WebServer::create_listener_socket(const std::string& host, int port) {
-    log(LOG_DEBUG, "Creating listener socket for host: %s on port: %i",
+    log(LOG_DEBUG, "Creating listener socket for host: %s on port: %d",
         host.c_str(), port);
 
     struct addrinfo filter, *results, *current;
@@ -358,11 +359,11 @@ int WebServer::create_listener_socket(const std::string& host, int port) {
 
     if (listen(listener_fd, SOMAXCONN) < 0) {
         close(listener_fd);
-        log(LOG_ERROR, "Failed to listen on %s:%i", host.c_str(), port);
+        log(LOG_ERROR, "Failed to listen on %s:%d", host.c_str(), port);
         return -1;
     }
 
-    log(LOG_INFO, "Successfully created listener socket for %s:%i on fd %d",
+    log(LOG_INFO, "Successfully created listener socket for %s:%d on fd %d",
         host.c_str(), port, listener_fd);
     return listener_fd;
 }
@@ -394,7 +395,7 @@ int WebServer::cleanup_timed_out_connections() {
 
 bool WebServer::add_listener_context(int listener_fd) {
     if (listener_fd < 0) {
-        log(LOG_FATAL, "add_listener_context: Invalid listener_fd '%i'",
+        log(LOG_FATAL, "add_listener_context: Invalid listener_fd '%d'",
             listener_fd);
         return false;
     }
@@ -402,7 +403,7 @@ bool WebServer::add_listener_context(int listener_fd) {
     try {
         IOContext* ctx = new IOContext(listener_fd, FD_LISTENER, NULL);
         if (!add_context_to_epoll(ctx, EPOLLIN)) {
-            log(LOG_ERROR, "Failed to add listener socket '%i' to epoll",
+            log(LOG_ERROR, "Failed to add listener socket '%d' to epoll",
                 ctx->fd_);
             close(ctx->fd_);
             delete ctx;
@@ -410,11 +411,11 @@ bool WebServer::add_listener_context(int listener_fd) {
         }
 
         listener_contexts_.push_back(ctx);
-        log(LOG_INFO, "Listener socket '%i' added successfully", ctx->fd_);
+        log(LOG_INFO, "Listener socket '%d' added successfully", ctx->fd_);
         return true;
     } catch (const std::exception& e) {
         log(LOG_ERROR,
-            "Failed to create IOContext for listener socket '%i': %s",
+            "Failed to create IOContext for listener socket '%d': %s",
             listener_fd, e.what());
         close(listener_fd);
         return false;
@@ -438,11 +439,11 @@ bool WebServer::remove_listener_context(IOContext* ctx) {
         listener_contexts_.erase(it);
     } else {
         log(LOG_ERROR,
-            "Listener socket '%i' not found in managed contexts during removal",
+            "Listener socket '%d' not found in managed contexts during removal",
             ctx->fd_);
     }
 
-    log(LOG_INFO, "Listener socket '%i' removed and cleaned up successfully",
+    log(LOG_INFO, "Listener socket '%d' removed and cleaned up successfully",
         ctx->fd_);
     delete ctx;
 
@@ -486,7 +487,7 @@ void WebServer::signal_handler(int signal) {
 
 void WebServer::accept_new_connection(int listener_fd) {
     log(LOG_DEBUG,
-        "accept_new_connection: Processing new connection on listener_fd "
+        "WebServer::accept_new_connection called for listener socket"
         "%d",
         listener_fd);
 
@@ -495,14 +496,14 @@ void WebServer::accept_new_connection(int listener_fd) {
         listener_to_virtual_servers_.end()) {
         default_server = listener_to_virtual_servers_[listener_fd].front();
     } else {
-        log(LOG_FATAL, "No default server found for listener socket '%i'",
+        log(LOG_FATAL, "No default server found for listener socket '%d'",
             listener_fd);
         return;
     }
 
     int client_fd = accept4(listener_fd, NULL, NULL, SOCK_NONBLOCK);
     if (client_fd < 0) {
-        log(LOG_ERROR, "Failed to accept new connection listener socket '%i'",
+        log(LOG_ERROR, "Failed to accept new connection listener socket '%d'",
             listener_fd);
         return;
     }
@@ -510,18 +511,23 @@ void WebServer::accept_new_connection(int listener_fd) {
     if (!create_client_connection(client_fd, default_server)) {
         return;
     }
+
+    log(LOG_INFO,
+        "Accepted new connection on listener socket '%d' for client %d",
+        listener_fd, client_fd);
 }
 
 Connection* WebServer::create_client_connection(
     int client_fd, const VirtualServer* default_virtual_server) {
-    log(LOG_DEBUG, "Creating new connection for client_fd %d", client_fd);
+    log(LOG_TRACE, "WebServer::create_client_connection called for client %d",
+        client_fd);
 
     try {
         Connection* conn =
             new Connection(this, client_fd, default_virtual_server);
 
         active_connections_[client_fd] = conn;
-        log(LOG_INFO, "Accepted new connection from client (fd: %i)",
+        log(LOG_INFO, "Accepted new connection from client (fd: %d)",
             client_fd);
         return conn;
 
@@ -542,9 +548,8 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
     }
 
     Connection* conn = ctx->conn_;
-    log(LOG_DEBUG,
-        "handle_client_socket_event: Starting for client_fd %d with event %d",
-        conn->client_fd_, event_flags);
+    log(LOG_INFO, "New %s event for client %d", event_to_string(event_flags),
+        conn->client_fd_);
 
     if (event_flags & EPOLLIN) {
         if (!read_from_client_socket(conn)) {
@@ -625,6 +630,9 @@ bool WebServer::handle_keep_alive(Connection* conn) {
 }
 
 ParseStatus WebServer::handle_request_parsing(Connection* conn) {
+    log(LOG_TRACE, "WebServer::handle_request_parsing called for client %d",
+        conn->client_fd_);
+
     ParseStatus status = PARSE_SUCCESS;
 
     while (true) {
@@ -668,7 +676,7 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
                 break;
 
             case PARSER_COMPLETE:
-                log(LOG_DEBUG, "Request parsing complete for fd %d.",
+                log(LOG_INFO, "Request parsing complete for fd %d.",
                     conn->client_fd_);
                 return PARSE_SUCCESS;
 
@@ -695,7 +703,8 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
 }
 
 ParseStatus WebServer::process_request(Connection* conn) {
-    log(LOG_DEBUG, "Processing request for connection: %i", conn->client_fd_);
+    log(LOG_TRACE, "WebServer::process_request called for client %d",
+        conn->client_fd_);
 
     if (conn->conn_state_ == CONN_READING_REQUEST) {
         match_host_header(conn);
@@ -704,7 +713,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
 
         ParseStatus status = validate_version(conn);
         if (status != PARSE_SUCCESS) {
-            log(LOG_ERROR, "Invalid HTTP version in request for connection: %i",
+            log(LOG_ERROR, "Invalid HTTP version in request for connection: %d",
                 conn->client_fd_);
             return status;
         }
@@ -712,7 +721,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
         status = validate_method(conn);
         if (status != PARSE_SUCCESS) {
             log(LOG_ERROR,
-                "Invalid or unsupported method in request for connection: %i",
+                "Invalid or unsupported method in request for connection: %d",
                 conn->client_fd_);
             return status;
         }
@@ -720,7 +729,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
         status = validate_body_handling(conn);
         if (status != PARSE_SUCCESS) {
             log(LOG_ERROR,
-                "Invalid body handling in request for connection: %i",
+                "Invalid body handling in request for connection: %d",
                 conn->client_fd_);
             return status;
         }
@@ -735,13 +744,13 @@ ParseStatus WebServer::process_request(Connection* conn) {
     }
 
     if (conn->active_handler_->is_asynchronous()) {
-        log(LOG_DEBUG,
-            "Asynchronous handler set for connection: %i, awaiting for epoll "
+        log(LOG_INFO,
+            "Asynchronous handler set for connection: %d, awaiting for epoll "
             "event.",
             conn->client_fd_);
         conn->conn_state_ = CONN_GENERATING_RESPONSE;
     } else {
-        log(LOG_DEBUG,
+        log(LOG_INFO,
             "Synchronous handler finished for fd %d. Writing response.",
             conn->client_fd_);
         start_response_writing(conn);
@@ -751,7 +760,8 @@ ParseStatus WebServer::process_request(Connection* conn) {
 }
 
 ParserState WebServer::determine_body_handling_state(Connection* conn) {
-    log(LOG_DEBUG, "Determining body handling state for connection: %i",
+    log(LOG_TRACE,
+        "WebServer::determine_body_handling_state called for client %d",
         conn->client_fd_);
 
     conn->parser_context_.clear_for_next_state();
@@ -785,8 +795,9 @@ ParserState WebServer::determine_body_handling_state(Connection* conn) {
 }
 
 ParseStatus WebServer::validate_version(Connection* conn) {
-    log(LOG_DEBUG, "Validating HTTP version for connection: %i",
+    log(LOG_TRACE, "WebServer::validate_version called for client %d",
         conn->client_fd_);
+
     std::string version = conn->request_data_->version_;
 
     // Only HTTP/1.0 or HTTP/1.1 allowed
@@ -794,18 +805,18 @@ ParseStatus WebServer::validate_version(Connection* conn) {
         return PARSE_SUCCESS;
     }
 
-    log(LOG_ERROR, "Invalid HTTP version '%s' in request for connection: %i",
+    log(LOG_ERROR, "Invalid HTTP version '%s' in request for connection: %d",
         version.c_str(), conn->client_fd_);
     return PARSE_VERSION_NOT_SUPPORTED;
 }
 
 ParseStatus WebServer::validate_method(Connection* conn) {
-    log(LOG_DEBUG, "Validating HTTP method for connection: %i",
+    log(LOG_TRACE, "WebServer::validate_method called for client %d",
         conn->client_fd_);
 
     std::string method = conn->request_data_->method_;
     if (method != "GET" && method != "POST" && method != "DELETE") {
-        log(LOG_ERROR, "Invalid HTTP method '%s' in request for connection: %i",
+        log(LOG_ERROR, "Invalid HTTP method '%s' in request for connection: %d",
             method.c_str(), conn->client_fd_);
         return PARSE_METHOD_NOT_IMPLEMENTED;
     }
@@ -828,7 +839,7 @@ ParseStatus WebServer::validate_method(Connection* conn) {
 }
 
 ParseStatus WebServer::validate_body_handling(Connection* conn) {
-    log(LOG_DEBUG, "Validating body handling for connection: %i",
+    log(LOG_TRACE, "WebServer::validate_body_handling called for client %d",
         conn->client_fd_);
 
     HttpRequest* request = conn->request_data_;
@@ -880,14 +891,14 @@ ParseStatus WebServer::validate_body_handling(Connection* conn) {
             }
         }
     }
-    log(LOG_DEBUG, "Body handling validation successful for connection: %i",
+    log(LOG_DEBUG, "Body handling validation successful for connection: %d",
         conn->client_fd_);
     return PARSE_SUCCESS;
 }
 
 AHandler* WebServer::choose_handler(Connection* conn) {
-    log(LOG_DEBUG,
-        "choose_handler: Finding handler for client_fd %d, method %s, path "
+    log(LOG_TRACE,
+        "WebServer::choose_handler called for client %d, method %s, path "
         "%s",
         conn->client_fd_, conn->request_data_->method_.c_str(),
         conn->request_data_->path_.c_str());
@@ -924,6 +935,11 @@ AHandler* WebServer::choose_handler(Connection* conn) {
 
 const Location* WebServer::match_location(const VirtualServer* vs,
                                           const std::string& path) const {
+    log(LOG_TRACE,
+        "WebServer::match_location called for path '%s' on virtual server "
+        "'%s:%d'",
+        path.c_str(), vs->host_.c_str(), vs->port_);
+
     const Location* best_prefix = NULL;
     const Location* best_extension = NULL;
 
@@ -956,9 +972,19 @@ const Location* WebServer::match_location(const VirtualServer* vs,
 
     // Prefer extension match over prefix match if both exist
     if (best_extension) {
+        log(LOG_DEBUG,
+            "Matched extension location '%s' for path '%s' on virtual server "
+            "'%s:%d'",
+            best_extension->path_.c_str(), path.c_str(), vs->host_.c_str(),
+            vs->port_);
         return best_extension;
     }
     if (best_prefix) {
+        log(LOG_DEBUG,
+            "Matched prefix location '%s' for path '%s' on virtual server "
+            "'%s:%d'",
+            best_prefix->path_.c_str(), path.c_str(), vs->host_.c_str(),
+            vs->port_);
         return best_prefix;
     }
 
@@ -974,6 +1000,9 @@ void WebServer::match_host_header(Connection* conn) {
         log(LOG_FATAL, "match_host_header: Invalid connection or data.");
         return;
     }
+
+    log(LOG_TRACE, "WebServer::match_host_header called for client %d",
+        conn->client_fd_);
 
     // Get Host header value from the request
     std::string request_host_header_val =
@@ -1022,13 +1051,13 @@ void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
         return;
     }
 
-    if (event_flags & EPOLLIN) {
-        log(LOG_DEBUG,
-            "handle_cgi_read_event: Handling EPOLLIN for cgi pipe fd %d",
-            ctx->fd_);
+    log(LOG_TRACE,
+        "WebServer::handle_cgi_read_event called with %s for cgi pipe fd %d",
+        event_to_string(event_flags), ctx->fd_);
 
+    if (event_flags & EPOLLIN) {
         Result result = cgi_handler_.handle_cgi_read(conn);
-        if (!handle_async_result(result, conn, "static file")) {
+        if (!handle_async_result(result, conn, "handle_cgi_read_event")) {
             return;
         }
 
@@ -1054,9 +1083,13 @@ void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
         return;
     }
 
+    log(LOG_TRACE,
+        "WebServer::handle_cgi_write_event called with %s for cgi pipe fd %d",
+        event_to_string(event_flags), ctx->fd_);
+
     if (event_flags & EPOLLOUT) {
         Result result = cgi_handler_.handle_cgi_write(conn);
-        if (!handle_async_result(result, conn, "static file")) {
+        if (!handle_async_result(result, conn, "handle_cgi_write_event")) {
             return;
         }
     } else {
@@ -1090,6 +1123,9 @@ bool WebServer::handle_async_result(Result result, Connection* conn,
 }
 
 bool WebServer::start_response_writing(Connection* conn) {
+    log(LOG_TRACE, "WebServer::start_response_writing called for client %d",
+        conn->client_fd_);
+
     Result result = response_writer_.write_response_to_buffer(conn);
     if (result == ERROR) {
         log(LOG_TRACE,
@@ -1117,6 +1153,9 @@ bool WebServer::start_response_writing(Connection* conn) {
 }
 
 void WebServer::handle_error_response(Connection* conn) {
+    log(LOG_TRACE, "WebServer::handle_error_response called for client %d",
+        conn->client_fd_);
+
     IOContext* client_ctx = conn->io_contexts_[FD_CLIENT_SOCKET];
     HttpStatus status = conn->status_;
 

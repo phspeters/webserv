@@ -5,6 +5,9 @@ CgiHandler::CgiHandler() : AHandler() {}
 CgiHandler::~CgiHandler() {}
 
 Result CgiHandler::handle(Connection* conn) {
+    log(LOG_TRACE, "CgiHandler::handle called for client_fd %d",
+        conn->client_fd_);
+
     Result result = check_permissions(conn);
     if (result != COMPLETE) {
         return result;  // Error or redirect occurred
@@ -100,7 +103,7 @@ Result CgiHandler::handle(Connection* conn) {
 }
 
 Result CgiHandler::check_permissions(Connection* conn) {
-    log(LOG_DEBUG, "CgiHandler: Checking permissions for client_fd %d",
+    log(LOG_TRACE, "CgiHandler::check_permissions called for client_fd %d",
         conn->client_fd_);
 
     // Check for location-level redirect first (takes precedence over CGI)
@@ -203,6 +206,9 @@ Result CgiHandler::check_permissions(Connection* conn) {
 
 bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
                                  int cgi_to_server_pipe[2]) {
+    log(LOG_TRACE, "CgiHandler::setup_cgi_pipes called for client_fd %d",
+        conn->client_fd_);
+
     if (pipe(server_to_cgi_pipe) == -1) {
         log(LOG_ERROR, "Pipe server_to_cgi_pipe creation error: %s",
             strerror(errno));
@@ -227,6 +233,8 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
 
 void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
                                     int cgi_to_server_pipe[2]) {
+    log(LOG_TRACE, "CgiHandler::handle_child_pipes called");
+
     // Close the write-end of the pipe to CGI's stdin
     close(server_to_cgi_pipe[1]);
     server_to_cgi_pipe[1] = -1;
@@ -263,6 +271,9 @@ void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
 }
 
 std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
+    log(LOG_TRACE, "CgiHandler::create_cgi_envp called for client_fd %d",
+        conn->client_fd_);
+
     std::vector<std::string>& cgi_env_strings = conn->cgi_context_->cgi_envp_;
     std::vector<char*> envp_char_array;
 
@@ -342,6 +353,9 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
 }
 
 void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
+    log(LOG_TRACE, "CgiHandler::execute_cgi_script called for client_fd %d",
+        conn->client_fd_);
+
     char* cgi_script_path_cstr =
         const_cast<char*>(conn->cgi_context_->cgi_script_path_.c_str());
 
@@ -381,6 +395,9 @@ void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
 bool CgiHandler::handle_parent_pipes(Connection* conn,
                                      int server_to_cgi_pipe[2],
                                      int cgi_to_server_pipe[2]) {
+    log(LOG_TRACE, "CgiHandler::handle_parent_pipes called for client_fd %d",
+        conn->client_fd_);
+
     close(server_to_cgi_pipe[0]);  // Parent closes read-end of pipe
     server_to_cgi_pipe[0] = -1;    // Mark as closed
     conn->cgi_context_->cgi_pipe_stdin_fd_ =
@@ -423,6 +440,9 @@ void CgiHandler::cleanup_handler(Connection* conn) {
         return;
     }
 
+    log(LOG_TRACE, "CgiHandler::cleanup_handler called for client_fd %d",
+        conn->client_fd_);
+
     if (conn->cgi_context_->cgi_pid_ > 0) {
         int status;
         pid_t result = waitpid(conn->cgi_context_->cgi_pid_, &status, WNOHANG);
@@ -459,6 +479,9 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
         conn->status_ = INTERNAL_SERVER_ERROR;
         return ERROR;
     }
+
+    log(LOG_TRACE, "CgiHandler::handle_cgi_write called for client %d",
+        conn->client_fd_);
 
     Buffer& body_buffer = conn->request_data_->body_buffer_;
     int fd = conn->cgi_context_->cgi_pipe_stdin_fd_;
@@ -501,8 +524,8 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
 }
 
 Result CgiHandler::handle_cgi_read(Connection* conn) {
-    log(LOG_DEBUG, "CGI: Handling read for client %d on stdout_fd %d",
-        conn->client_fd_, conn->cgi_context_->cgi_pipe_stdout_fd_);
+    log(LOG_TRACE, "CgiHandler::handle_cgi_read called for client %d",
+        conn->client_fd_);
 
     if (conn->cgi_context_->cgi_pipe_stdout_fd_ < 0) {
         log(LOG_FATAL,
@@ -568,7 +591,8 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
 }
 
 Result CgiHandler::parse_cgi_output(Connection* conn) {
-    log(LOG_DEBUG, "Parsing cgi output for connection: %i", conn->client_fd_);
+    log(LOG_TRACE, "CgiHandler::parse_cgi_output called for client %d",
+        conn->client_fd_);
 
     enum CgiParseState {
         CGI_LINE_START,
@@ -696,6 +720,8 @@ Result CgiHandler::parse_cgi_output(Connection* conn) {
 
 void CgiHandler::commit_cgi_header(HttpResponse* response,
                                    const CgiContext* context) {
+    log(LOG_TRACE, "CgiHandler::commit_cgi_header called");
+
     std::string header_name(context->key_start_,
                             context->key_end_ - context->key_start_);
 
@@ -709,7 +735,7 @@ void CgiHandler::commit_cgi_header(HttpResponse* response,
 }
 
 bool CgiHandler::set_status_line(Connection* conn) {
-    log(LOG_DEBUG, "Setting status line for client %d", conn->client_fd_);
+    log(LOG_TRACE, "CgiHandler::set_status_line called for client %d", conn->client_fd_);
 
     std::string status_str = conn->response_data_->get_header("status");
     if (!status_str.empty()) {
@@ -740,7 +766,7 @@ bool CgiHandler::set_status_line(Connection* conn) {
 }
 
 void CgiHandler::set_cgi_body_handling(Connection* conn) {
-    log(LOG_DEBUG, "Determining CGI body handling for client %d",
+    log(LOG_TRACE, "CgiHandler::set_cgi_body_handling called for client %d",
         conn->client_fd_);
 
     Buffer& buffer = conn->cgi_context_->cgi_output_buffer_;

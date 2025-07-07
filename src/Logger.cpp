@@ -274,3 +274,22 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
 
     std::cout << "================================" << RESET << std::endl;
 }
+
+std::string event_to_string(uint32_t event_flags) {
+    switch (event_flags) {
+        case EPOLLIN:
+            return "EPOLLIN";
+        case EPOLLOUT:
+            return "EPOLLOUT";
+        case EPOLLIN | EPOLLOUT:
+            return "EPOLLIN | EPOLLOUT";
+        case EPOLLERR:
+            return "EPOLLERR";
+        case EPOLLHUP:
+            return "EPOLLHUP";
+        case EPOLLRDHUP:
+            return "EPOLLRDHUP";
+        default:
+            return "UNKNOWN EVENT";
+    }
+}

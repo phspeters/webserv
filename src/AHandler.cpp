@@ -1,6 +1,9 @@
 #include "common.hpp"
 
 bool AHandler::process_location_redirect(Connection* conn) {
+    log(LOG_TRACE, "AHandler::process_location_redirect called for client_fd %d",
+        conn->client_fd_);
+
     const Location* location = conn->location_match_;
 
     // Check if this location has a redirect
@@ -22,6 +25,9 @@ bool AHandler::process_location_redirect(Connection* conn) {
 }
 
 std::string AHandler::parse_absolute_path(Connection* conn) {
+    log(LOG_TRACE, "AHandler::parse_absolute_path called for client_fd %d",
+        conn->client_fd_);
+
     const Location* request_location = conn->location_match_;
     std::string request_root = request_location->root_;
     const std::string& request_path = conn->request_data_->path_;
@@ -62,6 +68,9 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
 
 bool AHandler::process_directory_redirect(Connection* conn,
                                           std::string& absolute_path) {
+    log(LOG_TRACE, "AHandler::process_directory_redirect called for client_fd %d",
+        conn->client_fd_);
+
     std::string path = conn->request_data_->path_;
 
     // Check if the request URI ends with a slash (indicating directory)
@@ -100,6 +109,9 @@ bool AHandler::process_directory_redirect(Connection* conn,
 bool AHandler::process_directory_index(Connection* conn,
                                        std::string& absolute_path,
                                        bool& need_autoindex) {
+    log(LOG_TRACE, "AHandler::process_directory_index called for client_fd %d",
+        conn->client_fd_);
+
     // Get location config
     const Location* location = conn->location_match_;
     std::string index = location->index_;
@@ -133,6 +145,9 @@ bool AHandler::process_directory_index(Connection* conn,
 
 bool AHandler::generate_directory_listing(Connection* conn,
                                           const std::string& dir_path) {
+    log(LOG_TRACE, "AHandler::generate_directory_listing called for client_fd %d",
+        conn->client_fd_);
+
     DIR* dir = opendir(dir_path.c_str());
     if (!dir) {
         log(LOG_ERROR, "Failed to open directory for listing: %s",

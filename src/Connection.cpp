@@ -22,7 +22,7 @@ Connection::Connection(WebServer* owner, int fd,
         throw std::runtime_error(
             "Failed to create and register IOContext for new connection");
     }
-    log(LOG_DEBUG, "Connection created for socket '%i'", client_fd_);
+    log(LOG_DEBUG, "Connection created for socket '%d'", client_fd_);
 }
 
 Connection::~Connection() {
@@ -59,15 +59,18 @@ Connection::~Connection() {
         delete cgi_context_;
     }
 
-    log(LOG_TRACE, "Connection resources cleaned up for socket '%i'",
+    log(LOG_TRACE, "Connection resources cleaned up for socket '%d'",
         client_fd_);
 }
 
 IOContext* Connection::add_io_context(int fd, FdType type, uint32_t events) {
+    log(LOG_TRACE, "Connection::add_io_context called for fd '%d', type '%d'",
+        fd, type);
+
     std::map<FdType, IOContext*>::iterator it = io_contexts_.find(type);
     if (it != io_contexts_.end()) {
         log(LOG_FATAL,
-            "I/O context for type '%d' already exists for socket '%i'", type,
+            "I/O context for type '%d' already exists for socket '%d'", type,
             fd);
         return NULL;
     }
@@ -78,7 +81,7 @@ IOContext* Connection::add_io_context(int fd, FdType type, uint32_t events) {
 
         // Add to epoll
         if (!owner_server_->add_context_to_epoll(io_context, events)) {
-            log(LOG_ERROR, "Failed to add I/O context for socket '%i'",
+            log(LOG_ERROR, "Failed to add I/O context for socket '%d'",
                 io_context->fd_);
             delete io_context;  // Clean up if failed
             return NULL;
@@ -86,7 +89,7 @@ IOContext* Connection::add_io_context(int fd, FdType type, uint32_t events) {
 
         // Add to the list of contexts
         io_contexts_[type] = io_context;
-        log(LOG_DEBUG, "I/O context added for socket '%i'", io_context->fd_);
+        log(LOG_DEBUG, "I/O context added for socket '%d'", io_context->fd_);
 
         return io_context;
 
@@ -101,45 +104,55 @@ IOContext* Connection::add_io_context(int fd, FdType type, uint32_t events) {
 }
 
 void Connection::remove_io_context(IOContext* io_context) {
+    log(LOG_TRACE,
+        "Connection::remove_io_context called for fd '%d', type '%d'",
+        io_context->fd_, io_context->type_);
+
+    if (!io_context) {
+        log(LOG_FATAL, "Attempted to remove a NULL I/O context");
+        return;
+    }
+
     std::map<FdType, IOContext*>::iterator it =
         io_contexts_.find(io_context->type_);
     if (it == io_contexts_.end()) {
-        log(LOG_WARNING, "No I/O context found for type '%d' on socket '%i'",
+        log(LOG_WARNING, "No I/O context found for type '%d' on socket '%d'",
             io_context->type_, io_context->fd_);
         return;
     }
 
     if (it->second != io_context) {
-        log(LOG_WARNING, "I/O context mismatch for type '%d' on socket '%i'",
+        log(LOG_WARNING, "I/O context mismatch for type '%d' on socket '%d'",
             io_context->type_, io_context->fd_);
         return;
     }
 
     // Remove from epoll
     if (!owner_server_->remove_context_from_epoll(io_context)) {
-        log(LOG_ERROR, "Failed to remove I/O context for socket '%i'",
+        log(LOG_ERROR, "Failed to remove I/O context for socket '%d'",
             io_context->fd_);  // Log error but continue cleanup
     }
 
     // Clean up
-    log(LOG_DEBUG, "I/O context removed for socket '%i'", io_context->fd_);
+    log(LOG_DEBUG, "I/O context removed for socket '%d'", io_context->fd_);
     delete io_context;
     io_contexts_.erase(it);
 }
 
 bool Connection::is_keep_alive() const {
     if (!request_data_ || !response_data_) {
-        log(LOG_FATAL, "Invalid request/response data for socket '%i'",
+        log(LOG_FATAL, "Invalid request/response data for socket '%d'",
             client_fd_);
         return false;
     }
 
-    log(LOG_TRACE, "Checking keep-alive for socket '%i'", client_fd_);
+    log(LOG_TRACE, "Connection::is_keep_alive called for client '%d'",
+        client_fd_);
 
     int status = response_data_->status_code_;
     if (is_fatal_error_status(status)) {
         log(LOG_DEBUG,
-            "Fatal error status %d detected for socket '%i', not keeping alive",
+            "Fatal error status %d detected for socket '%d', not keeping alive",
             status, client_fd_);
         return false;
     }
@@ -161,6 +174,9 @@ bool Connection::is_fatal_error_status(int status) const {
 }
 
 void Connection::reset_for_keep_alive() {
+    log(LOG_TRACE, "Connection::reset_for_keep_alive called for client '%d'",
+        client_fd_);
+
     // Reset virtual server
     virtual_server_ = default_virtual_server_;
 
@@ -201,11 +217,12 @@ void Connection::reset_for_keep_alive() {
     // Reset activity timer
     last_activity_ = time(NULL);
 
-    owner_server_->update_context_in_epoll(io_contexts_[FD_CLIENT_SOCKET], EPOLLIN);
+    owner_server_->update_context_in_epoll(io_contexts_[FD_CLIENT_SOCKET],
+                                           EPOLLIN);
 
     status_ = OK;
     conn_state_ = CONN_READING_REQUEST;
 
-    log(LOG_DEBUG, "Connection reset for keep-alive on socket '%i'",
+    log(LOG_INFO, "Connection reset for keep-alive on socket '%d'",
         client_fd_);
 }

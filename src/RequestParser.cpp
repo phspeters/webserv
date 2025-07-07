@@ -1,7 +1,8 @@
 #include "common.hpp"
 
 ParseStatus RequestParser::parse_request_line(Connection* conn) {
-    log(LOG_DEBUG, "Parsing request line for connection: %i", conn->client_fd_);
+    log(LOG_TRACE, "RequestParser::parse_request_line for client %d",
+        conn->client_fd_);
 
     enum ReqLineState {
         START,
@@ -247,6 +248,9 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
 
 ParseStatus RequestParser::commit_request_line(HttpRequest* request,
                                                const ParserContext& context) {
+    log(LOG_TRACE, "RequestParser::commit_request_line called for request %p",
+        request);
+
     // 1. Assign raw components from the parsed pointers.
     request->method_.assign(context.method_start_,
                             context.method_end_ - context.method_start_);
@@ -303,6 +307,9 @@ ParseStatus RequestParser::commit_request_line(HttpRequest* request,
 }
 
 std::string RequestParser::decode_uri_path(const std::string& path) {
+    log(LOG_TRACE, "RequestParser::decode_uri_path called for path '%s'",
+        path.c_str());
+
     std::string decoded_path;
     decoded_path.reserve(path.length());
 
@@ -338,6 +345,9 @@ std::string RequestParser::decode_uri_path(const std::string& path) {
 }
 
 std::string RequestParser::normalize_path(const std::string& decoded_path) {
+    log(LOG_TRACE, "RequestParser::normalize_path called for path '%s'",
+        decoded_path.c_str());
+
     if (decoded_path.empty() || decoded_path[0] != '/') {
         return "";
     }
@@ -375,6 +385,9 @@ std::string RequestParser::normalize_path(const std::string& decoded_path) {
 }
 
 std::string RequestParser::decode_uri_query(const std::string& query) {
+    log(LOG_TRACE, "RequestParser::decode_uri_query called for query '%s'",
+        query.c_str());
+
     std::string decoded_query;
     decoded_query.reserve(query.length());
 
@@ -429,7 +442,8 @@ int RequestParser::hex_to_int(char c) {
 }
 
 ParseStatus RequestParser::parse_headers(Connection* conn) {
-    log(LOG_DEBUG, "Parsing headers for connection: %i", conn->client_fd_);
+    log(LOG_TRACE, "RequestParser::parse_headers called for client %d",
+        conn->client_fd_);
 
     enum HeadParseState {
         LINE_START,
@@ -560,6 +574,9 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
 
 void RequestParser::commit_header(HttpRequest* request,
                                   const ParserContext& context) {
+    log(LOG_TRACE, "RequestParser::commit_header called for request %p",
+        request);
+
     std::string header_name(context.key_start_,
                             context.key_end_ - context.key_start_);
 
@@ -573,7 +590,8 @@ void RequestParser::commit_header(HttpRequest* request,
 }
 
 ParseStatus RequestParser::parse_content_body(Connection* conn) {
-    log(LOG_DEBUG, "Parsing body for connection: %i", conn->client_fd_);
+    log(LOG_TRACE, "RequestParser::parse_content_body called for client %d",
+        conn->client_fd_);
 
     HttpRequest* req = conn->request_data_;
     Buffer& buff = conn->read_buffer_;
@@ -587,18 +605,18 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
         buff.unload_to(req->body_buffer_, body_remaining_bytes);
     body_remaining_bytes -= unloaded_bytes;
 
-    log(LOG_DEBUG, "Unloaded %zu bytes to body buffer for connection: %i",
+    log(LOG_DEBUG, "Unloaded %zu bytes to body buffer for connection: %d",
         unloaded_bytes, conn->client_fd_);
 
     if (body_remaining_bytes == 0) {
         req->body_fully_parsed_ = true;
-        log(LOG_DEBUG, "Body parsing complete for connection: %i",
+        log(LOG_DEBUG, "Body parsing complete for connection: %d",
             conn->client_fd_);
         return PARSE_SUCCESS;
     }
 
     log(LOG_DEBUG,
-        "Body parsing incomplete for connection: %i, need %zu more bytes.",
+        "Body parsing incomplete for connection: %d, need %zu more bytes.",
         conn->client_fd_,
         req->content_length_ - req->body_buffer_.readable_bytes());
     return PARSE_INCOMPLETE;
@@ -608,7 +626,7 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
 // "chunks" without needing to know the total size in advance. Each chunk
 // has a size prefix in hexadecimal notation, followed by the chunk data.
 ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
-    log(LOG_DEBUG, "Parsing chunked body for connection: %i", conn->client_fd_);
+    log(LOG_TRACE, "RequestParser::parse_chunked_body for client %d", conn->client_fd_);
 
     enum ChunkParseState {
         CHUNK_SIZE_START,
@@ -779,7 +797,7 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
                     conn->request_data_->body_fully_parsed_ = true;
                     log(LOG_DEBUG,
                         "Chunked body parsing complete for connection: "
-                        "%i",
+                        "%d",
                         conn->client_fd_);
                     return PARSE_SUCCESS;
                 } else {
@@ -796,7 +814,7 @@ ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
     // If we exit the loop, it's because the buffer is empty. We need more
     // data.
     log(LOG_DEBUG,
-        "Chunked body parsing incomplete for connection: %i, need more "
+        "Chunked body parsing incomplete for connection: %d, need more "
         "data.",
         conn->client_fd_);
     return PARSE_INCOMPLETE;

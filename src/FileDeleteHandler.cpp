@@ -5,8 +5,7 @@ FileDeleteHandler::FileDeleteHandler() : AHandler() {}
 FileDeleteHandler::~FileDeleteHandler() {}
 
 Result FileDeleteHandler::handle(Connection* conn) {
-    log(LOG_DEBUG,
-        "FileDeleteHandler: handle: Starting processing for client_fd %d",
+    log(LOG_TRACE, "FileDeleteHandler::handle called for client_fd %d",
         conn->client_fd_);
 
     Result result = check_permissions(conn);
@@ -42,9 +41,8 @@ Result FileDeleteHandler::handle(Connection* conn) {
 }
 
 Result FileDeleteHandler::check_permissions(Connection* conn) {
-    log(LOG_DEBUG,
-        "FileDeleteHandler: check_permissions: Checking all permissions for "
-        "client_fd %d",
+    log(LOG_TRACE,
+        "FileDeleteHandler::check_permissions called for client_fd %d",
         conn->client_fd_);
 
     std::string file_path = parse_absolute_path(conn);
@@ -134,8 +132,9 @@ Result FileDeleteHandler::check_permissions(Connection* conn) {
 
 bool FileDeleteHandler::delete_file(Connection* conn,
                                     const std::string& file_path) {
-    log(LOG_DEBUG, "FileDeleteHandler: Attempting to delete file: %s",
-        file_path.c_str());
+    log(LOG_DEBUG,
+        "FileDeleteHandler::delete_file called for client %d with path %s",
+        conn->client_fd_, file_path.c_str());
 
     // Attempt to delete the file
     if (unlink(file_path.c_str()) != 0) {

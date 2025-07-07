@@ -5,15 +5,15 @@ MultipartParser::MultipartParser() {}
 MultipartParser::~MultipartParser() {}
 
 ParseStatus MultipartParser::parse_multipart(Connection* conn) {
-    log(LOG_DEBUG, "Parsing multipart body for connection: %i",
-        conn->client_fd_);
-
     if (!conn->file_upload_context_) {
         log(LOG_FATAL,
-            "MultipartParser: No file upload context for connection: %i",
+            "MultipartParser: No file upload context for connection: %d",
             conn->client_fd_);
         return PARSE_ERROR;
     }
+
+    log(LOG_TRACE, "MultipartParser::parse_multipart called for client %d",
+        conn->client_fd_);
 
     FileUploadContext* upload_ctx = conn->file_upload_context_;
     MultipartContext* multipart_ctx = &upload_ctx->multipart_context_;
@@ -154,6 +154,9 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                 } else {
                     // Trailing CR is optional, so we can treat it as a normal
                     // character
+                    log(LOG_INFO,
+                        "Successfully parsed multipart chunk for client %d",
+                        conn->client_fd_);
                     return PARSE_SUCCESS;
                 }
                 break;
@@ -161,6 +164,9 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
 
             case EXPECT_TRAILING_LF: {
                 if (ch == '\n') {
+                    log(LOG_INFO,
+                        "Successfully parsed multipart chunk for client %d",
+                        conn->client_fd_);
                     return PARSE_SUCCESS;
                 } else {
                     log(LOG_ERROR, "Expected \\n after \\r in final boundary");
@@ -191,6 +197,9 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
 
 void MultipartParser::commit_part_data(MultipartContext* multipart_ctx,
                                        FileUploadContext* upload_ctx) {
+    log(LOG_TRACE, "MultipartParser::commit_part_data called for fd %d",
+        upload_ctx->file_fd_);
+
     if (multipart_ctx->is_file_part_ && multipart_ctx->data_start_ &&
         multipart_ctx->data_end_) {
         size_t data_len = multipart_ctx->data_end_ - multipart_ctx->data_start_;
@@ -205,6 +214,9 @@ void MultipartParser::commit_part_data(MultipartContext* multipart_ctx,
 
 void MultipartParser::parse_part_headers(const std::string& headers,
                                          FileUploadContext* upload_ctx) {
+    log(LOG_TRACE, "MultipartParser::parse_part_headers called for fd %d",
+        upload_ctx->file_fd_);
+
     size_t filename_pos = headers.find("filename=\"");
     if (filename_pos != std::string::npos) {
         upload_ctx->multipart_context_.is_file_part_ = true;
@@ -224,6 +236,10 @@ void MultipartParser::parse_part_headers(const std::string& headers,
 }
 
 std::string MultipartParser::extract_boundary(const std::string& content_type) {
+    log(LOG_TRACE,
+        "MultipartParser::extract_boundary called with content_type: %s",
+        content_type.c_str());
+
     size_t boundary_pos = content_type.find("boundary=");
     if (boundary_pos == std::string::npos) {
         return "";
@@ -247,5 +263,6 @@ std::string MultipartParser::extract_boundary(const std::string& content_type) {
         }
         boundary = content_type.substr(boundary_pos, end_pos - boundary_pos);
     }
+
     return boundary;
 }

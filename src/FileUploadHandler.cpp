@@ -8,6 +8,9 @@ FileUploadHandler::FileUploadHandler() : AHandler() {}
 FileUploadHandler::~FileUploadHandler() {}
 
 Result FileUploadHandler::handle(Connection* conn) {
+    log(LOG_TRACE, "FileUploadHandler::handle() called for client_fd %d",
+        conn->client_fd_);
+
     Result result = check_permissions(conn);
     if (result != COMPLETE) {
         return result;
@@ -90,6 +93,10 @@ Result FileUploadHandler::handle(Connection* conn) {
 }
 
 Result FileUploadHandler::check_permissions(Connection* conn) {
+    log(LOG_TRACE,
+        "FileUploadHandler::check_permissions() called for client_fd %d",
+        conn->client_fd_);
+
     std::string content_length =
         conn->request_data_->get_header("content-length");
     if (content_length.empty()) {
@@ -126,6 +133,11 @@ Result FileUploadHandler::check_permissions(Connection* conn) {
 }
 
 bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
+    log(LOG_TRACE,
+        "FileUploadHandler::process_trailing_slash_redirect() called for "
+        "client_fd %d",
+        conn->client_fd_);
+
     std::string uri = conn->request_data_->uri_;
     const Location* location = conn->location_match_;
 
@@ -141,6 +153,10 @@ bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
 }
 
 void FileUploadHandler::send_success_response(Connection* conn) {
+    log(LOG_TRACE,
+        "FileUploadHandler::send_success_response called for client_fd %d",
+        conn->client_fd_);
+
     HttpResponse* resp = conn->response_data_;
     resp->status_code_ = 201;
     resp->status_message_ = "Created";
@@ -153,6 +169,10 @@ void FileUploadHandler::send_success_response(Connection* conn) {
 }
 
 std::string FileUploadHandler::get_upload_directory(Connection* conn) {
+    log(LOG_TRACE,
+        "FileUploadHandler::get_upload_directory called for client_fd %d",
+        conn->client_fd_);
+
     std::string base_path = parse_absolute_path(conn);
 
     // Extract just the directory part (remove any filename component)
@@ -172,6 +192,11 @@ std::string FileUploadHandler::get_upload_directory(Connection* conn) {
 
 bool FileUploadHandler::ensure_upload_directory_exists(
     Connection* conn, const std::string& upload_dir) {
+    log(LOG_TRACE,
+        "FileUploadHandler::ensure_upload_directory_exists called for "
+        "client_fd %d",
+        conn->client_fd_);
+
     struct stat st;
     if (stat(upload_dir.c_str(), &st) == 0) {
         return true;  // Directory already exists
@@ -182,6 +207,10 @@ bool FileUploadHandler::ensure_upload_directory_exists(
 
 bool FileUploadHandler::create_directory_recursive(Connection* conn,
                                                    const std::string& path) {
+    log(LOG_TRACE,
+        "FileUploadHandler::create_directory_recursive called for client_fd %d",
+        conn->client_fd_);
+
     size_t pos = 0;
     while ((pos = path.find('/', pos + 1)) != std::string::npos) {
         if (pos > 0) {
@@ -210,6 +239,9 @@ bool FileUploadHandler::create_directory_recursive(Connection* conn,
 }
 
 std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
+    log(LOG_TRACE, "FileUploadHandler::sanitize_filename called for '%s'",
+        filename.c_str());
+
     // Remove path information
     std::string safe_filename = filename;
     size_t last_slash = safe_filename.find_last_of("/\\");
@@ -242,6 +274,11 @@ std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
 
 bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
                                                 const std::string& final_path) {
+    log(LOG_TRACE,
+        "FileUploadHandler::copy_temp_to_final_file called for temp '%s' and "
+        "final '%s'",
+        temp_path.c_str(), final_path.c_str());
+
     int src_fd = open(temp_path.c_str(), O_RDONLY);
     if (src_fd < 0) {
         log(LOG_ERROR, "Failed to open temp file for reading: %s",
@@ -272,14 +309,15 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
             total_written += bytes_written;
         }
     }
-    if (bytes_read < 0) {
-        log(LOG_ERROR, "Error reading from temp file: %s", strerror(errno));
-        close(src_fd);
-        close(dst_fd);
-        return false;
-    }
+
     close(src_fd);
     close(dst_fd);
+
+    if (bytes_read < 0) {
+        log(LOG_ERROR, "Error reading from temp file: %s", strerror(errno));
+        return false;
+    }
+
     return true;
 }
 
@@ -288,6 +326,9 @@ void FileUploadHandler::cleanup_handler(Connection* conn) {
         delete conn->file_upload_context_;
         conn->file_upload_context_ = NULL;
     }
+
+    log(LOG_DEBUG, "FileUploadHandler: Cleanup completed for client_fd %d",
+        conn->client_fd_);
 
     return;
 }

@@ -5,7 +5,7 @@ StaticFileHandler::StaticFileHandler() {}
 StaticFileHandler::~StaticFileHandler() {}
 
 Result StaticFileHandler::handle(Connection* conn) {
-    log(LOG_DEBUG, "StaticFileHandler: Handling request for client_fd %d",
+    log(LOG_TRACE, "StaticFileHandler::handle called for client_fd %d",
         conn->client_fd_);
 
     conn->static_file_context_ = new StaticFileContext();
@@ -46,6 +46,8 @@ Result StaticFileHandler::handle(Connection* conn) {
 }
 
 Result StaticFileHandler::validate_method(Connection* conn) {
+    log(LOG_TRACE, "StaticFileHandler::validate_method called for client_fd %d",
+        conn->client_fd_);
     if (conn->request_data_->method_ != "GET") {
         conn->response_data_->set_error_header("Allow", "GET");
         conn->status_ = METHOD_NOT_ALLOWED;
@@ -55,6 +57,10 @@ Result StaticFileHandler::validate_method(Connection* conn) {
 }
 
 Result StaticFileHandler::handle_location_redirect(Connection* conn) {
+    log(LOG_TRACE,
+        "StaticFileHandler::handle_location_redirect called for client_fd %d",
+        conn->client_fd_);
+
     if (process_location_redirect(conn)) {
         log(LOG_DEBUG,
             "StaticFileHandler: Processed location redirect for client_fd %d",
@@ -66,6 +72,10 @@ Result StaticFileHandler::handle_location_redirect(Connection* conn) {
 
 Result StaticFileHandler::resolve_absolute_path(Connection* conn,
                                                 std::string& absolute_path) {
+    log(LOG_TRACE,
+        "StaticFileHandler::resolve_absolute_path called for client_fd %d",
+        conn->client_fd_);
+
     absolute_path = parse_absolute_path(conn);
     if (absolute_path.empty()) {
         log(LOG_ERROR,
@@ -79,6 +89,10 @@ Result StaticFileHandler::resolve_absolute_path(Connection* conn,
 
 Result StaticFileHandler::handle_directory_request(Connection* conn,
                                                    std::string& absolute_path) {
+    log(LOG_TRACE,
+        "StaticFileHandler::handle_directory_request called for client_fd %d",
+        conn->client_fd_);
+
     if (absolute_path[absolute_path.length() - 1] != '/') {
         return COMPLETE;
     }
@@ -105,6 +119,10 @@ Result StaticFileHandler::handle_directory_request(Connection* conn,
 
 Result StaticFileHandler::validate_file_access(
     Connection* conn, const std::string& absolute_path) {
+    log(LOG_TRACE,
+        "StaticFileHandler::validate_file_access called for client_fd %d",
+        conn->client_fd_);
+
     struct stat file_info;
     if (stat(absolute_path.c_str(), &file_info) == -1) {
         if (errno == ENOENT || errno == ENOTDIR) {
@@ -131,6 +149,10 @@ Result StaticFileHandler::validate_file_access(
 
 Result StaticFileHandler::prepare_file_response(
     Connection* conn, const std::string& absolute_path) {
+    log(LOG_TRACE,
+        "StaticFileHandler::prepare_file_response called for client_fd %d",
+        conn->client_fd_);
+
     int fd = open(absolute_path.c_str(), O_RDONLY | O_NONBLOCK);
     if (fd == -1) {
         return handle_file_open_error(conn);
@@ -166,6 +188,10 @@ Result StaticFileHandler::handle_file_open_error(Connection* conn) {
 
 void StaticFileHandler::set_response_headers(Connection* conn,
                                              const struct stat& file_info) {
+    log(LOG_TRACE,
+        "StaticFileHandler::set_response_headers called for client_fd %d",
+        conn->client_fd_);
+
     std::string content_type =
         determine_content_type(conn->static_file_context_->absolute_path_);
 
@@ -181,8 +207,9 @@ void StaticFileHandler::set_response_headers(Connection* conn,
 }
 
 std::string StaticFileHandler::determine_content_type(const std::string& path) {
-    log(LOG_FATAL, "StaticFileHandler: Determining content type for path: %s",
+    log(LOG_TRACE, "StaticFileHandler::determine_content_type called with path: %s",
         path.c_str());
+
     size_t dot_pos = path.find_last_of('.');
     if (dot_pos == std::string::npos) {
         log(LOG_WARNING, "StaticFileHandler: No extension found for path: %s",

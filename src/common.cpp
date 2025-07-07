@@ -128,14 +128,14 @@ std::string join(const std::vector<std::string>& vec, const std::string& sep) {
 bool set_non_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
-        log(LOG_ERROR, "Failed to get flags for socket '%i'", fd);
+        log(LOG_ERROR, "Failed to get flags for socket '%d'", fd);
         return false;
     }
 
     flags |= O_NONBLOCK;
 
     if (fcntl(fd, F_SETFL, flags) == -1) {
-        log(LOG_ERROR, "Failed to set non-blocking mode for socket '%i'", fd);
+        log(LOG_ERROR, "Failed to set non-blocking mode for socket '%d'", fd);
         return false;
     }
 

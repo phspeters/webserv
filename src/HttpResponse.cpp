@@ -57,6 +57,7 @@ std::string HttpResponse::get_header(const std::string& name) const {
             lower_name.c_str(), it->second.c_str());
         return it->second;
     }
+    
     log(LOG_DEBUG, "Response header '%s' not found", lower_name.c_str());
     return "";
 }
