@@ -595,29 +595,18 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
 
             response_writer_.write_response_to_buffer(conn);
 
-             if (conn->write_buffer_.empty()) {
-                // If the write buffer is empty, the response is fully sent.
-                // Decide whether to keep the connection alive or close it.
-                if (conn->is_keep_alive()) {
-                    handle_keep_alive(conn);
-                } else {
-                    close_client_connection(conn);
-                }
-                return; // Important: Stop processing for this event.
+            if (!conn->write_buffer_.empty()) {
+                log(LOG_DEBUG,
+                    "handle_client_socket_event: Incomplete write for "
+                    "client_fd %d, remaining bytes: %zu",
+                    conn->client_fd_, conn->write_buffer_.readable_bytes());
+                return;  // Still data to write, wait for next EPOLLOUT event
             }
-            
-            // if (!conn->write_buffer_.empty()) {
-            //     log(LOG_DEBUG,
-            //         "handle_client_socket_event: Incomplete write for "
-            //         "client_fd %d, remaining bytes: %zu",
-            //         conn->client_fd_, conn->write_buffer_.readable_bytes());
-            //     return;  // Still data to write, wait for next EPOLLOUT event
-            // }
 
-            // conn->active_handler_->cleanup_handler(conn);
-            // handle_keep_alive(conn);
+            conn->active_handler_->cleanup_handler(conn);
+            handle_keep_alive(conn);
 
-            // return;
+            return;
         } else {
             log(LOG_FATAL,
                 "handle_event: Unexpected state for client_fd %d: %d",

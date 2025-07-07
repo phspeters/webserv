@@ -11,6 +11,8 @@ Result FileUploadHandler::handle(Connection* conn) {
     log(LOG_TRACE, "FileUploadHandler::handle() called for client_fd %d",
         conn->client_fd_);
 
+    conn->file_upload_context_ = new FileUploadContext();
+
     Result result = check_permissions(conn);
     if (result != COMPLETE) {
         return result;
