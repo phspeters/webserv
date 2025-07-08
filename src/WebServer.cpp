@@ -553,10 +553,6 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
 
     if (event_flags & EPOLLIN) {
         if (!read_from_client_socket(conn)) {
-            log(LOG_ERROR,
-                "handle_client_socket_event: Failed to read from socket for "
-                "client_fd %d",
-                conn->client_fd_);
             close_client_connection(conn);
             return;
         }

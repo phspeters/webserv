@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Webserv Test Page</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; margin: 0 auto; max-width: 800px; padding: 2em; }
+        h1, h2 { border-bottom: 2px solid #eee; padding-bottom: 0.5em; }
+        .test-section { background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 2em; padding: 1.5em; }
+        .test-section h3 { margin-top: 0; }
+        .test-case { margin-bottom: 1em; padding-left: 1em; border-left: 3px solid #007bff; }
+        a, button, input[type=submit] { font-size: 1em; }
+        button, input[type=submit] { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+        button:hover, input[type=submit]:hover { background-color: #0056b3; }
+        input[type=text], input[type=file], textarea { width: 95%; padding: 8px; margin-bottom: 1em; border: 1px solid #ccc; border-radius: 4px; }
+        pre { background: #333; color: #eee; padding: 1em; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }
+        .note { font-style: italic; color: #555; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+
+    <h1>Webserv Comprehensive Test Page</h1>
+    <p class="note">Note: Some tests may require specific server configurations (e.g., upload paths, allowed methods). Adjust URLs and paths as needed.</p>
+
+    <!-- ==================== Static File Tests ==================== -->
+    <div class="test-section">
+        <h2>1. Static File Serving (GET)</h2>
+        <div class="test-case">
+            <h3>Valid File</h3>
+            <p>Tests if the server can serve a known static file.</p>
+            <a href="/html/test_post.html">Get /html/test_post.html</a>
+        </div>
+        <div class="test-case">
+            <h3>Non-Existent File (404 Not Found)</h3>
+            <p>Tests the server's 404 error handling.</p>
+            <a href="/nonexistent-file-123.html">Get /nonexistent-file-123.html</a>
+        </div>
+        <div class="test-case">
+            <h3>Forbidden Directory (403 Forbidden)</h3>
+            <p>Tests directory access rules. (Requires a location block configured to deny access).</p>
+            <a href="/cgi-bin/">Get /cgi-bin/</a>
+        </div>
+    </div>
+
+    <!-- ==================== CGI Tests ==================== -->
+    <div class="test-section">
+        <h2>2. CGI Script Tests</h2>
+        <div class="test-case">
+            <h3>CGI with GET Request</h3>
+            <p>Sends a GET request with a query string to the CGI script.</p>
+            <a href="/cgi-bin/shell-cgi.sh?name=GET_Request&value=Success">Run CGI with GET</a>
+        </div>
+        <div class="test-case">
+            <h3>CGI with POST Request</h3>
+            <p>Sends a POST request with form data to the CGI script.</p>
+            <form action="/cgi-bin/shell-cgi.sh" method="POST">
+                <label for="cgi-name">Name:</label>
+                <input type="text" id="cgi-name" name="name" value="CGI_POST_Test">
+                <label for="cgi-data">Data:</label>
+                <input type="text" id="cgi-data" name="data" value="Some POST data">
+                <input type="submit" value="Run CGI with POST">
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== File Upload Tests ==================== -->
+    <div class="test-section">
+        <h2>3. File Upload (POST)</h2>
+        <div class="test-case">
+            <h3>Upload a File</h3>
+            <p>Sends a file using a multipart/form-data POST request. (Requires a location configured for uploads).</p>
+            <form action="/upload" method="POST" enctype="multipart/form-data">
+                <label for="file-upload">Choose a file to upload:</label>
+                <input type="file" id="file-upload" name="uploadedFile">
+                <input type="submit" value="Upload File">
+            </form>
+        </div>
+        <div class="test-case">
+            <h3>Test Max Body Size (413 Payload Too Large)</h3>
+            <p>Attempts to send a large text block to test `client_max_body_size`.</p>
+            <form action="/upload" method="POST">
+                <label for="large-text">Large Text Data:</label>
+                <textarea id="large-text" name="large_text" rows="8"></textarea>
+                <input type="submit" value="Test Max Body Size">
+                <p class="note">Paste a large amount of text (e.g., >1MB) into the box above before submitting.</p>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==================== File Deletion Tests ==================== -->
+    <div class="test-section">
+        <h2>4. File Deletion (DELETE)</h2>
+        <div class="test-case">
+            <h3>Delete a File</h3>
+            <p>Sends a DELETE request using JavaScript. (Requires a location configured to handle DELETE).</p>
+            <label for="delete-path">Path of file to delete (e.g., /uploads/myfile.txt):</label>
+            <input type="text" id="delete-path" placeholder="/uploads/your-file-to-delete.txt">
+            <button onclick="sendDeleteRequest()">Send DELETE Request</button>
+            <h3>Server Response:</h3>
+            <pre id="delete-response">Click the button to see the response...</pre>
+        </div>
+    </div>
+
+    <!-- ==================== Other Tests ==================== -->
+    <div class="test-section">
+        <h2>5. Other Method Tests</h2>
+        <div class="test-case">
+            <h3>Method Not Allowed (405)</h3>
+            <p>Sends a request with a method that may not be allowed for a given resource.</p>
+            <label for="method-path">Resource Path:</label>
+            <input type="text" id="method-path" value="/index.html">
+            <button onclick="sendCustomMethodRequest('PUT')">Send PUT to /index.html</button>
+            <h3>Server Response:</h3>
+            <pre id="method-response">Click the button to see the response...</pre>
+        </div>
+    </div>
+
+    <script>
+        // Helper function to display fetch responses
+        function displayResponse(elementId, response) {
+            const pre = document.getElementById(elementId);
+            let headersText = '';
+            response.headers.forEach((value, key) => {
+                headersText += `${key}: ${value}\n`;
+            });
+            
+            response.text().then(body => {
+                pre.textContent = `Status: ${response.status} ${response.statusText}\n\n` +
+                                  `--- HEADERS ---\n${headersText}\n` +
+                                  `--- BODY ---\n${body}`;
+            }).catch(err => {
+                pre.textContent = `Error reading response body: ${err}`;
+            });
+        }
+
+        // Function to send a DELETE request
+        function sendDeleteRequest() {
+            const path = document.getElementById('delete-path').value;
+            if (!path) {
+                alert('Please enter a path for the file to delete.');
+                return;
+            }
+            document.getElementById('delete-response').textContent = 'Sending DELETE request...';
+            fetch(path, { method: 'DELETE' })
+                .then(response => displayResponse('delete-response', response))
+                .catch(err => {
+                    document.getElementById('delete-response').textContent = `Network Error: ${err}`;
+                });
+        }
+
+        // Function to send a custom method request
+        function sendCustomMethodRequest(method) {
+            const path = document.getElementById('method-path').value;
+            if (!path) {
+                alert('Please enter a resource path.');
+                return;
+            }
+            document.getElementById('method-response').textContent = `Sending ${method} request...`;
+            fetch(path, { method: method })
+                .then(response => displayResponse('method-response', response))
+                .catch(err => {
+                    document.getElementById('method-response').textContent = `Network Error: ${err}`;
+                });
+        }
+    </script>
+
+</body>
+</html>
