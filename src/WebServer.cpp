@@ -599,7 +599,9 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
                 return;  // Still data to write, wait for next EPOLLOUT event
             }
 
-            conn->active_handler_->cleanup_handler(conn);
+            if (conn->active_handler_) {
+                conn->active_handler_->cleanup_handler(conn);
+            }
             handle_keep_alive(conn);
 
             return;
