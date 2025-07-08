@@ -68,6 +68,8 @@ void log_request(log_level level, const Connection* conn) {
               << ") ====\n";
     std::cerr << "method: " << conn->request_data_->method_ << std::endl;
     std::cerr << "uri: " << conn->request_data_->uri_ << std::endl;
+    std::cerr << "path: " << conn->request_data_->path_ << std::endl;
+    std::cerr << "query: " << conn->request_data_->query_string_ << std::endl;
     std::cerr << "version: " << conn->request_data_->version_ << std::endl;
     std::cerr << "headers: " << std::endl;
     for (std::map<std::string, std::string>::const_iterator it =

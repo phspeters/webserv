@@ -130,6 +130,9 @@ ParseStatus RequestParser::parse_request_line(Connection* conn) {
                         return PARSE_ERROR;
                     }
                 }
+                if (context.query_start_ == NULL) {
+                    context.query_start_ = buff.data();
+                }
                 break;
 
             case SPACES_AFTER_URI:
@@ -626,7 +629,8 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
 // "chunks" without needing to know the total size in advance. Each chunk
 // has a size prefix in hexadecimal notation, followed by the chunk data.
 ParseStatus RequestParser::parse_chunked_body(Connection* conn) {
-    log(LOG_TRACE, "RequestParser::parse_chunked_body for client %d", conn->client_fd_);
+    log(LOG_TRACE, "RequestParser::parse_chunked_body for client %d",
+        conn->client_fd_);
 
     enum ChunkParseState {
         CHUNK_SIZE_START,
