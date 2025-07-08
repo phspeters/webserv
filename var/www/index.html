@@ -28,7 +28,7 @@
         <div class="test-case">
             <h3>Valid File</h3>
             <p>Tests if the server can serve a known static file.</p>
-            <a href="/html/test_post.html">Get /html/test_post.html</a>
+            <a href="/files/index.html">Get /files/index.html</a>
         </div>
         <div class="test-case">
             <h3>Non-Existent File (404 Not Found)</h3>
@@ -93,8 +93,8 @@
         <div class="test-case">
             <h3>Delete a File</h3>
             <p>Sends a DELETE request using JavaScript. (Requires a location configured to handle DELETE).</p>
-            <label for="delete-path">Path of file to delete (e.g., /uploads/myfile.txt):</label>
-            <input type="text" id="delete-path" placeholder="/uploads/your-file-to-delete.txt">
+            <label for="delete-path">Path of file to delete (e.g., /uploads/text.txt):</label>
+            <input type="text" id="delete-path" placeholder="/uploads/text.txt">
             <button onclick="sendDeleteRequest()">Send DELETE Request</button>
             <h3>Server Response:</h3>
             <pre id="delete-response">Click the button to see the response...</pre>

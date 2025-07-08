@@ -96,10 +96,8 @@ class WebServer {
     ParserState determine_body_handling_state(Connection* conn);
     bool handle_keep_alive(Connection* conn);
 
-    void handle_static_file_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_read_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_write_event(IOContext* ctx, uint32_t event_flags);
-    void handle_file_upload_event(IOContext* ctx, uint32_t event_flags);
     void handle_error_response(Connection* conn);
     bool handle_async_result(Result result, Connection* conn,
                              const char* context_str);
