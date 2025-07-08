@@ -306,6 +306,7 @@ ParseStatus RequestParser::commit_request_line(HttpRequest* request,
 
     log(LOG_DEBUG, "Parsed request line: %s %s %s", request->method_.c_str(),
         request->uri_.c_str(), request->version_.c_str());
+
     return PARSE_SUCCESS;
 }
 
@@ -355,6 +356,9 @@ std::string RequestParser::normalize_path(const std::string& decoded_path) {
         return "";
     }
 
+    bool has_trailing_slash = decoded_path.length() > 1 &&
+                              decoded_path[decoded_path.length() - 1] == '/';
+
     std::vector<std::string> segments;
     std::string current_segment;
     std::stringstream path_stream(decoded_path);
@@ -379,11 +383,16 @@ std::string RequestParser::normalize_path(const std::string& decoded_path) {
     // Reconstruct the canonical path
     std::string canonical_path = "/";
     if (!segments.empty()) {
-        for (size_t i = 0; i < segments.size(); ++i) {
-            canonical_path +=
-                segments[i] + (i < segments.size() - 1 ? "/" : "");
+        canonical_path += segments[0];
+        for (size_t i = 1; i < segments.size(); ++i) {
+            canonical_path += "/" + segments[i];
         }
     }
+
+    if (has_trailing_slash && canonical_path != "/") {
+        canonical_path += "/";
+    }
+
     return canonical_path;
 }
 

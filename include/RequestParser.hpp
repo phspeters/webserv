@@ -14,7 +14,6 @@ class RequestParser {
 
     ParseStatus parse_request_line(Connection* conn);
     ParseStatus parse_headers(Connection* conn);
-    ParseStatus process_request(Connection* conn);
     ParseStatus parse_content_body(Connection* conn);
     ParseStatus parse_chunked_body(Connection* conn);
 
