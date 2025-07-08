@@ -69,7 +69,7 @@
         <div class="test-case">
             <h3>Upload a File</h3>
             <p>Sends a file using a multipart/form-data POST request. (Requires a location configured for uploads).</p>
-            <form action="/upload" method="POST" enctype="multipart/form-data">
+            <form action="/uploads" method="POST" enctype="multipart/form-data">
                 <label for="file-upload">Choose a file to upload:</label>
                 <input type="file" id="file-upload" name="uploadedFile">
                 <input type="submit" value="Upload File">
@@ -78,7 +78,7 @@
         <div class="test-case">
             <h3>Test Max Body Size (413 Payload Too Large)</h3>
             <p>Attempts to send a large text block to test `client_max_body_size`.</p>
-            <form action="/upload" method="POST">
+            <form action="/uploads" method="POST">
                 <label for="large-text">Large Text Data:</label>
                 <textarea id="large-text" name="large_text" rows="8"></textarea>
                 <input type="submit" value="Test Max Body Size">
