@@ -135,6 +135,11 @@ Result ResponseWriter::write_response_head(Connection* conn) {
     size_t bytes_written = conn->write_buffer_.append(
         context.formatted_headers_.c_str(), bytes_to_write);
 
+    log(LOG_DEBUG,
+        "ResponseWriter::write_response_head wrote %zu bytes to buffer for "
+        "client %d",
+        bytes_written, conn->client_fd_);
+
     if (bytes_written < bytes_to_write) {
         // Buffer is full, store remaining and return
         context.formatted_headers_.erase(0, bytes_written);
@@ -162,14 +167,19 @@ Result ResponseWriter::write_response_body_from_buffer(Connection* conn) {
         resp->body_data_.data() + conn->writer_context_.body_bytes_written_,
         bytes_to_write);
 
+    log(LOG_DEBUG,
+        "ResponseWriter::write_response_body_from_buffer wrote %zu bytes to "
+        "buffer for client %d",
+        bytes_written, conn->client_fd_);
+
+    conn->writer_context_.body_bytes_written_ += bytes_written;
+
     if (bytes_written < bytes_to_write) {
         // Buffer is full, store remaining and return
-        conn->writer_context_.body_bytes_written_ += bytes_written;
         return AGAIN;
     }
 
     // All body data written
-    conn->writer_context_.body_bytes_written_ += bytes_written;
     return COMPLETE;
 }
 
@@ -180,15 +190,43 @@ Result ResponseWriter::write_response_body_from_fd(Connection* conn) {
 
     HttpResponse* resp = conn->response_data_;
     Buffer& buffer = conn->write_buffer_;
-
     ssize_t bytes_written = buffer.read_from(resp->body_fd_);
-    if (bytes_written < 0) {
-        return ERROR;
-    } else if (bytes_written == 0) {
-        // EOF reached, no more data to write
+
+    log(LOG_DEBUG,
+        "ResponseWriter::write_response_body_from_fd wrote %zd bytes to buffer "
+        "for client %d",
+        bytes_written, conn->client_fd_);
+
+    conn->writer_context_.body_bytes_written_ += bytes_written;
+
+    if ((conn->response_data_->content_length_ ==
+         conn->writer_context_.body_bytes_written_) ||
+        bytes_written < 0) {
+        IOContext* ctx_to_remove = NULL;
+        for (std::map<FdType, IOContext*>::iterator it =
+                 conn->io_contexts_.begin();
+             it != conn->io_contexts_.end(); ++it) {
+            if (it->second && it->second->fd_ == resp->body_fd_) {
+                ctx_to_remove = it->second;
+                break;
+            }
+        }
+
+        if (ctx_to_remove) {
+            log(LOG_DEBUG,
+                "ResponseWriter: Removing IO context for completed fd %d",
+                resp->body_fd_);
+            conn->remove_io_context(ctx_to_remove);
+        } else {
+            log(LOG_FATAL,
+                "ResponseWriter::write_response_body_from_fd: No IO context "
+                "found for fd %d, cannot remove",
+                resp->body_fd_);
+            close(resp->body_fd_);
+            resp->body_fd_ = -1;
+        }
         return COMPLETE;
     }
 
-    conn->writer_context_.body_bytes_written_ += bytes_written;
     return AGAIN;
 }

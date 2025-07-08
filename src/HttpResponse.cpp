@@ -57,7 +57,7 @@ std::string HttpResponse::get_header(const std::string& name) const {
             lower_name.c_str(), it->second.c_str());
         return it->second;
     }
-    
+
     log(LOG_DEBUG, "Response header '%s' not found", lower_name.c_str());
     return "";
 }
@@ -84,7 +84,7 @@ std::string HttpResponse::get_headers_string() const {
         oss << it->first << ": " << it->second << "\r\n";
     }
 
-    // Add Content-Type if not already set in headers
+    //  Add Content-Type if not already set in headers
     if (headers_.find("content-type") == headers_.end() &&
         !content_type_.empty()) {
         oss << "Content-Type: " << content_type_ << "\r\n";

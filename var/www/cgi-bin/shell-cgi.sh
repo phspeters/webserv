@@ -4,15 +4,13 @@
 #http://localhost:8090/cgi-bin/shell-cgi.sh
 #http://localhost:8090/cgi-bin/shell-cgi.sh?name=test&value=123
 
-# Output HTTP headers
-echo -e "Content-Type: text/html\r"
-echo -e "\r" # Empty line separates headers from body
+# Function to generate the HTML body
+generate_html_body() {
+    # Get current time
+    local CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
 
-# Get current time
-CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
-
-# Start HTML output
-cat << HTML_START
+    # Start HTML output
+    cat << HTML_START
 <!DOCTYPE html>
 <html>
 <head>
@@ -43,74 +41,63 @@ cat << HTML_START
 
     <div class="section">
         <h2>Key Environment Variables</h2>
-        <table>
-            <tr>
-                <th>Variable</th>
-                <th>Value</th>
-            </tr>
 HTML_START
-echo -e "\r"
 
-# List important CGI environment variables
-important_vars="SERVER_NAME SERVER_PORT REQUEST_METHOD REQUEST_URI QUERY_STRING CONTENT_TYPE CONTENT_LENGTH HTTP_HOST HTTP_USER_AGENT SCRIPT_NAME PATH_INFO"
+    # List important CGI environment variables
+    local important_vars="SERVER_NAME SERVER_PORT REQUEST_METHOD REQUEST_URI QUERY_STRING CONTENT_TYPE CONTENT_LENGTH HTTP_HOST HTTP_USER_AGENT SCRIPT_NAME PATH_INFO"
 
-for var in $important_vars; do
-    value="${!var}"
-    echo -e "            <tr>\r"
-    echo -e "                <td><strong>$var</strong></td>\r"
-    echo -e "                <td><span class=\"env-var\">${value:-Not Set}</span></td>\r"
-    echo -e "            </tr>\r"
-done
-
-echo -e "        </table>\r"
-echo -e "    </div>\r"
-
-echo -e "    <div class=\"section\">\r"
-echo -e "        <h2>Query String Parameters</h2>\r"
-
-# Parse and display query string
-if [ -n "$QUERY_STRING" ]; then
-    echo -e "        <p><strong>Raw Query String:</strong> <span class=\"env-var\">$QUERY_STRING</span></p>\r"
-    echo -e "        <ul>\r"
-    
-    # Split query string by '&'
-    IFS="&" read -ra PARAMS <<< "$QUERY_STRING"
-    for param in "${PARAMS[@]}"; do
-        # Check if parameter has a value
-        if [[ "$param" == *"="* ]]; then
-            key="${param%%=*}"
-            value="${param#*=}"
-            echo -e "            <li><strong>$key:</strong> $value</li>\r"
-        else
-            echo -e "            <li>$param (no value)</li>\r"
-        fi
+    for var in $important_vars; do
+        local value="${!var}"
+        echo "                <p><strong>$var:</strong> "
+        echo "                <span class=\"env-var\">${value:-Not Set}</span></p>"
     done
-    
-    echo -e "        </ul>\r"
-else
-    echo -e "        <p><em>No query string parameters</em></p>\r"
-fi
 
-echo -e "    </div>\r"
-echo -e ""
-echo -e "    <div class=\"section\">\r"
-echo -e "        <h2>POST Data</h2>\r"
+    echo "    </div>"
+    echo "    <div class=\"section\">"
+    echo "        <h2>Query String Parameters</h2>"
 
-# Handle POST data
-if [ "$REQUEST_METHOD" = "POST" ]; then
-    if [ -n "$CONTENT_LENGTH" ]; then
-        # Read POST data
-        post_data=$(dd bs="$CONTENT_LENGTH" count=1 2>/dev/null)
-        echo -e "        <p><strong>POST Data:</strong> <span class=\"env-var\">$post_data</span></p>\r"
+    # Parse and display query string
+    if [ -n "$QUERY_STRING" ]; then
+        echo "        <p><strong>Raw Query String:</strong> <span class=\"env-var\">$QUERY_STRING</span></p>"
+        echo "        <ul>"
+        
+        # Split query string by '&'
+        IFS="&" read -ra PARAMS <<< "$QUERY_STRING"
+        for param in "${PARAMS[@]}"; do
+            # Check if parameter has a value
+            if [[ "$param" == *"="* ]]; then
+                key="${param%%=*}"
+                value="${param#*=}"
+                echo "            <li><strong>$key:</strong> $value</li>"
+            else
+                echo "            <li>$param (no value)</li>"
+            fi
+        done
+        
+        echo "        </ul>"
     else
-        echo -e "        <p><em>POST request but no content length or data</em></p>\r"
+        echo "        <p><em>No query string parameters</em></p>"
     fi
-else
-    echo -e "        <p><em>Not a POST request</em></p>\r"
-fi
 
-# Finish HTML
-cat << HTML_END
+    echo "    </div>"
+    echo "    <div class=\"section\">"
+    echo "        <h2>POST Data</h2>"
+
+    # Handle POST data
+    if [ "$REQUEST_METHOD" = "POST" ]; then
+        if [ -n "$CONTENT_LENGTH" ]; then
+            # Read POST data
+            local post_data=$(dd bs="$CONTENT_LENGTH" count=1 2>/dev/null)
+            echo "        <p><strong>POST Data:</strong> <span class=\"env-var\">$post_data</span></p>"
+        else
+            echo "        <p><em>POST request but no content length or data</em></p>"
+        fi
+    else
+        echo "        <p><em>Not a POST request</em></p>"
+    fi
+
+    # Finish HTML
+    cat << HTML_END
     </div>
 
     <div class="section">
@@ -126,3 +113,18 @@ cat << HTML_END
 </body>
 </html>
 HTML_END
+}
+
+# Generate the HTML body and store it in a variable
+html_body=$(generate_html_body)
+
+# Calculate the content length
+content_length=$(echo -n "$html_body" | wc -c)
+
+# Output HTTP headers
+printf "Content-Type: text/html\n"
+printf "Content-Length: %d\n" "$content_length"
+printf "\n"
+
+# Output the HTML body
+printf "%s" "$html_body"

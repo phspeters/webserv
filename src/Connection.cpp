@@ -133,6 +133,11 @@ void Connection::remove_io_context(IOContext* io_context) {
             io_context->fd_);  // Log error but continue cleanup
     }
 
+    if(io_context->fd_ >= 0) {
+        close(io_context->fd_);  // Close the file descriptor
+        io_context->fd_ = -1;    // Mark as closed
+    }
+
     // Clean up
     log(LOG_DEBUG, "I/O context removed for socket '%d'", io_context->fd_);
     delete io_context;

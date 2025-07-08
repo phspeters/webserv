@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
     if (!client.connect(host, port)) {
         return 1;
     }
-
+ 
     // Create a simple HTTP request
     std::string request = "GET " + path +
                           " HTTP/1.1\r\n"
