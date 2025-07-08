@@ -646,6 +646,14 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
             case PARSER_READING_HEADERS:
                 status = request_parser_.parse_headers(conn);
                 if (status == PARSE_SUCCESS) {
+                    // Send 100 Continue if needed
+                    std::string expect = conn->request_data_->get_header("expect");
+                    if (!expect.empty() && expect == "100-continue" && !conn->parser_context_.sent_100_continue_) {
+                        const char* continue_msg = "HTTP/1.1 100 Continue\r\n\r\n";
+                        ssize_t n = send(conn->client_fd_, continue_msg, strlen(continue_msg), 0);
+                        log(LOG_DEBUG, "Sent 100 Continue (%zd bytes) to client %d", n, conn->client_fd_);
+                        conn->parser_context_.sent_100_continue_ = true;
+                    }
                     state = PARSER_PROCESSING_REQUEST;
                 }
                 break;
@@ -658,30 +666,63 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
                 }
                 break;
 
-            case PARSER_READING_CONTENT_BODY:
-                status = request_parser_.parse_content_body(conn);
-                if (status == PARSE_SUCCESS) {
+            case PARSER_READING_CONTENT_BODY: {
+                ParseStatus body_status = request_parser_.parse_content_body(conn);
+
+                if (body_status == PARSE_INCOMPLETE) {
+                    log(LOG_DEBUG, "Body not fully received for fd %d, waiting for more data.", conn->client_fd_);
+                    return PARSE_INCOMPLETE;
+                }
+
+                if (body_status == PARSE_SUCCESS) {
                     state = PARSER_COMPLETE;
                 }
-                break;
 
-            case PARSER_READING_CHUNKED_BODY:
+                if (body_status >= PARSE_ERROR) {
+                    log(LOG_ERROR, "Body parse error for fd %d.", conn->client_fd_);
+                    return body_status;
+                }
+                break;
+            }
+            case PARSER_READING_CHUNKED_BODY: {
                 status = request_parser_.parse_chunked_body(conn);
                 if (status == PARSE_SUCCESS) {
                     state = PARSER_COMPLETE;
                 }
                 break;
-
-            case PARSER_COMPLETE:
+            }
+            case PARSER_COMPLETE: {
                 log(LOG_INFO, "Request parsing complete for fd %d.",
                     conn->client_fd_);
+                // Call the handler only after the body is fully parsed
+                Result result = conn->active_handler_->handle(conn);
+                if (result == ERROR) {
+                    handle_error_response(conn);
+                    return PARSE_ERROR;
+                }
+                if (conn->active_handler_->is_asynchronous()) {
+                    log(LOG_INFO,
+                        "Asynchronous handler set for connection: %d, awaiting for epoll event.",
+                        conn->client_fd_);
+                    conn->conn_state_ = CONN_GENERATING_RESPONSE;
+                } else {
+                    log(LOG_INFO,
+                        "Synchronous handler finished for fd %d. Writing response.",
+                        conn->client_fd_);
+                    start_response_writing(conn);
+                }
                 return PARSE_SUCCESS;
-
-            default:
-                log(LOG_ERROR, "Unknown parser state for fd %d.",
-                    conn->client_fd_);
+            }
+            case PARSER_ERROR: {
+                log(LOG_ERROR, "Parser state is PARSER_ERROR for fd %d.", conn->client_fd_);
                 status = PARSE_ERROR;
                 break;
+            }
+            default: {
+                log(LOG_ERROR, "Unknown parser state for fd %d.", conn->client_fd_);
+                status = PARSE_ERROR;
+                break;
+            }
         }
 
         // Check status after each step.
@@ -698,6 +739,9 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
         }
     }
 }
+
+
+
 
 ParseStatus WebServer::process_request(Connection* conn) {
     log(LOG_TRACE, "WebServer::process_request called for client %d",
@@ -733,26 +777,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
     }
 
     conn->active_handler_ = choose_handler(conn);
-
-    Result result = conn->active_handler_->handle(conn);
-    if (result == ERROR) {
-        handle_error_response(conn);
-        return PARSE_ERROR;
-    }
-
-    if (conn->active_handler_->is_asynchronous()) {
-        log(LOG_INFO,
-            "Asynchronous handler set for connection: %d, awaiting for epoll "
-            "event.",
-            conn->client_fd_);
-        conn->conn_state_ = CONN_GENERATING_RESPONSE;
-    } else {
-        log(LOG_INFO,
-            "Synchronous handler finished for fd %d. Writing response.",
-            conn->client_fd_);
-        start_response_writing(conn);
-    }
-
+    // Handler is now called in PARSER_COMPLETE state only
     return PARSE_SUCCESS;
 }
 
@@ -764,6 +789,10 @@ ParserState WebServer::determine_body_handling_state(Connection* conn) {
     conn->parser_context_.clear_for_next_state();
 
     HttpRequest* request = conn->request_data_;
+    std::string method = request->method_;
+    std::string content_length = request->get_header("content-length");
+    log(LOG_DEBUG, "determine_body_handling_state: method=%s, content-length='%s'", method.c_str(), content_length.c_str());
+
     if (request->method_ != "POST" && request->method_ != "PUT") {
         conn->request_data_->body_fully_parsed_ = true;
         return PARSER_COMPLETE;
@@ -775,7 +804,6 @@ ParserState WebServer::determine_body_handling_state(Connection* conn) {
         return PARSER_READING_CHUNKED_BODY;
     }
 
-    std::string content_length = request->get_header("content-length");
     if (!content_length.empty()) {
         char* end_ptr;
         request->content_length_ =
@@ -1171,5 +1199,9 @@ void WebServer::handle_error_response(Connection* conn) {
         log(LOG_DEBUG,
             "handle_error_response: No data to write for client_fd %d",
             conn->client_fd_);
+    }
+
+    if (!conn->is_keep_alive() || conn->response_data_->get_header("connection") == "close") {
+        close_client_connection(conn);
     }
 }

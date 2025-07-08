@@ -60,6 +60,7 @@ struct ParserContext {
     const char* value_end_;
     int version_major_;
     int version_minor_;
+    bool sent_100_continue_;
 
     void reset() {
         parser_state_ = PARSER_READING_REQUEST_LINE;
@@ -86,6 +87,7 @@ struct ParserContext {
         value_end_ = NULL;
         version_major_ = 0;
         version_minor_ = 0;
+        sent_100_continue_ = false;
     }
 
 };  // struct ParserContext

@@ -121,10 +121,10 @@ Result FileUploadHandler::check_permissions(Connection* conn) {
         return ERROR;
     }
 
-    // Redirect if needed
-    if (process_trailing_slash_redirect(conn)) {
-        return AGAIN;
-    }
+    // // Redirect if needed
+    // if (process_trailing_slash_redirect(conn)) {
+    //     return AGAIN;
+    // }
 
     log(LOG_DEBUG,
         "FileUploadHandler: Permissions check passed for client_fd %d",

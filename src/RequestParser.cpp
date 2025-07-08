@@ -559,6 +559,16 @@ ParseStatus RequestParser::parse_headers(Connection* conn) {
                 if (ch == '\n') {
                     buff.consume(1);
                     context.clear_for_next_state();
+                    // Resize body_buffer_ if Content-Length is present
+                    std::string content_length_str = conn->request_data_->get_header("content-length");
+                    if (!content_length_str.empty()) {
+                        char* end_ptr;
+                        size_t content_length = std::strtoul(content_length_str.c_str(), &end_ptr, 10);
+                        if (content_length > 0) {
+                            conn->request_data_->body_buffer_ = Buffer(content_length);
+                            log(LOG_DEBUG, "Resized body_buffer_ to %zu bytes for client %d", content_length, conn->client_fd_);
+                        }
+                    }
                     return PARSE_SUCCESS;
                 } else {
                     return PARSE_ERROR;
