@@ -28,7 +28,8 @@ class StaticFileHandler : public AHandler {
     Result prepare_file_response(Connection* conn,
                                  const std::string& absolute_path);
     Result handle_file_open_error(Connection* conn);
-    void set_response_headers(Connection* conn, const struct stat& file_info);
+    void set_response_headers(Connection* conn, const struct stat& file_info,
+                              const std::string& absolute_path);
     std::string determine_content_type(const std::string& path);
 
     bool process_directory_index(Connection* conn, std::string& absolute_path,

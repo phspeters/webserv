@@ -163,7 +163,7 @@ Result StaticFileHandler::prepare_file_response(
 
     conn->static_file_context_->file_fd_ = fd;
 
-    set_response_headers(conn, file_info);
+    set_response_headers(conn, file_info, absolute_path);
 
     log(LOG_INFO, "StaticFileHandler: File ready to be served for client_fd %d",
         conn->client_fd_);
@@ -182,14 +182,14 @@ Result StaticFileHandler::handle_file_open_error(Connection* conn) {
 }
 
 void StaticFileHandler::set_response_headers(Connection* conn,
-                                             const struct stat& file_info) {
+                                             const struct stat& file_info,
+                                             const std::string& absolute_path) {
     log(LOG_TRACE,
         "StaticFileHandler::set_response_headers called for client_fd %d",
         conn->client_fd_);
 
     // CHECK: ensure request_data_->path_ also works
-    std::string content_type =
-        determine_content_type(conn->request_data_->path_);
+    std::string content_type = determine_content_type(absolute_path);
 
     conn->response_data_->status_code_ = 200;
     conn->response_data_->status_message_ = "OK";
