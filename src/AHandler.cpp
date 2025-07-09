@@ -98,7 +98,6 @@ bool AHandler::process_directory_redirect(Connection* conn,
 
         conn->response_data_->set_header("Location", redirect_url);
         conn->status_ = MOVED_PERMANENTLY;
-        conn->status_ = MOVED_PERMANENTLY;
 
         return true;
     }

@@ -41,7 +41,7 @@ Result FileUploadHandler::handle(Connection* conn) {
 
     ParseStatus status = multipart_parser_.parse_multipart(conn);
     if (status >= PARSE_ERROR) {
-        conn->status_ = ErrorHandler::parse_status_to_response_status(status);
+        conn->status_ = parse_status_to_response_status(status);
         return ERROR;
     }
 
@@ -99,12 +99,12 @@ Result FileUploadHandler::check_permissions(Connection* conn) {
         "FileUploadHandler::check_permissions() called for client_fd %d",
         conn->client_fd_);
 
-    std::string content_length =
-        conn->request_data_->get_header("content-length");
-    if (content_length.empty()) {
-        conn->status_ = BAD_REQUEST;
-        return ERROR;
-    }
+    //std::string content_length =
+    //    conn->request_data_->get_header("content-length");
+    //if (content_length.empty()) {
+    //    conn->status_ = BAD_REQUEST;
+    //    return ERROR;
+    //}
     std::string content_type = conn->request_data_->get_header("content-type");
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
         conn->status_ = UNSUPPORTED_MEDIA_TYPE;

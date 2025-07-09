@@ -179,13 +179,14 @@ enum LocType { LOC_DEFAULT, LOC_EXTENSION };
 #include "StaticFileHandler.hpp"
 #include "WebServer.hpp"
 
-std::string trim(const std::string& str);
+HttpStatus parse_status_to_response_status(ParseStatus parse_status);
 std::string get_status_message(int code);
 std::string get_current_gmt_time();
+bool set_non_blocking(int fd);
 bool is_cgi_extension(const std::string& request_uri);
 std::string get_file_extension(const std::string& uri_path);
+std::string trim(const std::string& str);
 std::string join(const std::vector<std::string>& vec, const std::string& sep);
-bool set_non_blocking(int fd);
 bool is_token_char(char c);
 bool is_line_ending_char(char c);
 

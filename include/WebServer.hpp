@@ -99,7 +99,7 @@ class WebServer {
     void handle_cgi_read_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_write_event(IOContext* ctx, uint32_t event_flags);
     void handle_error_response(Connection* conn);
-    bool handle_async_result(Result result, Connection* conn,
+    bool handle_result(Result result, Connection* conn,
                              const char* context_str);
     bool start_response_writing(Connection* conn);
 

@@ -560,13 +560,31 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
         if (conn->conn_state_ == CONN_READING_REQUEST ||
             conn->conn_state_ == CONN_GENERATING_RESPONSE) {
             ParseStatus status = handle_request_parsing(conn);
-            conn->status_ =
-                ErrorHandler::parse_status_to_response_status(status);
+            conn->status_ = parse_status_to_response_status(status);
             if (status >= PARSE_ERROR) {
                 handle_error_response(conn);
                 return;
             }
+
             log_request(LOG_TRACE, conn);
+
+            Result result = conn->active_handler_->handle(conn);
+            if (!handle_result(result, conn, "handle")) {
+                return;
+            }
+
+            if (conn->active_handler_->is_asynchronous()) {
+                log(LOG_INFO,
+                    "Asynchronous handler set for connection: %d, awaiting for "
+                    "epoll "
+                    "event.",
+                    conn->client_fd_);
+            } else {
+                log(LOG_INFO,
+                    "Synchronous handler finished for fd %d. Writing response.",
+                    conn->client_fd_);
+                start_response_writing(conn);
+            }
         }
     }
 
@@ -706,10 +724,6 @@ ParseStatus WebServer::process_request(Connection* conn) {
         conn->client_fd_);
 
     if (conn->conn_state_ == CONN_READING_REQUEST) {
-        match_host_header(conn);
-        conn->location_match_ =
-            match_location(conn->virtual_server_, conn->request_data_->path_);
-
         ParseStatus status = validate_version(conn);
         if (status != PARSE_SUCCESS) {
             log(LOG_ERROR, "Invalid HTTP version in request for connection: %d",
@@ -717,13 +731,34 @@ ParseStatus WebServer::process_request(Connection* conn) {
             return status;
         }
 
-        status = validate_method(conn);
-        if (status != PARSE_SUCCESS) {
-            log(LOG_ERROR,
-                "Invalid or unsupported method in request for connection: %d",
-                conn->client_fd_);
-            return status;
-        }
+        match_host_header(conn);
+        conn->location_match_ =
+            match_location(conn->virtual_server_, conn->request_data_->path_);
+
+        // Rewrite/Redirect phase
+        //  1. Check for redirects
+        //  2. Check for rewrites (NOT NEEDED)
+        //  3. Check for directory trailing slash
+
+        // status = validate_access(conn);
+        //////status = validate_method_access(conn);
+        ////// Authentication and authorization checks
+        ////// File permissions checks
+        /*
+        For a GET request: It checks if the file exists and is readable. If not,
+        it stops with 404 Not Found or 403 Forbidden.
+
+        For a POST (upload) request: It checks if the target directory exists
+        and is writable. If not, it stops with 404 Not Found or 403 Forbidden.
+
+        For a DELETE request: It checks if the file exists and if its parent
+        directory is writable. If not, it stops with 404 Not Found or 403
+        Forbidden.*/
+        //if (status != PARSE_SUCCESS) {
+        //    log(LOG_ERROR, "Permission validation failed for connection: %d",
+        //        conn->client_fd_);
+        //    return status;
+        //}
 
         status = validate_body_handling(conn);
         if (status != PARSE_SUCCESS) {
@@ -732,27 +767,14 @@ ParseStatus WebServer::process_request(Connection* conn) {
                 conn->client_fd_);
             return status;
         }
-    }
+        conn->active_handler_ = choose_handler(conn);
+        // conn->active_handler_.setup_handler(conn);
 
-    conn->active_handler_ = choose_handler(conn);
-
-    Result result = conn->active_handler_->handle(conn);
-    if (result == ERROR) {
-        handle_error_response(conn);
-        return PARSE_ERROR;
-    }
-
-    if (conn->active_handler_->is_asynchronous()) {
-        log(LOG_INFO,
-            "Asynchronous handler set for connection: %d, awaiting for epoll "
-            "event.",
-            conn->client_fd_);
         conn->conn_state_ = CONN_GENERATING_RESPONSE;
     } else {
-        log(LOG_INFO,
-            "Synchronous handler finished for fd %d. Writing response.",
-            conn->client_fd_);
-        start_response_writing(conn);
+        log(LOG_FATAL,
+            "process_request called in unexpected state for client %d: %d",
+            conn->client_fd_, conn->conn_state_);
     }
 
     return PARSE_SUCCESS;
@@ -1056,7 +1078,7 @@ void WebServer::handle_cgi_read_event(IOContext* ctx, uint32_t event_flags) {
 
     if (event_flags & EPOLLIN) {
         Result result = cgi_handler_.handle_cgi_read(conn);
-        if (!handle_async_result(result, conn, "handle_cgi_read_event")) {
+        if (!handle_result(result, conn, "handle_cgi_read_event")) {
             return;
         }
 
@@ -1088,7 +1110,7 @@ void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
 
     if (event_flags & EPOLLOUT) {
         Result result = cgi_handler_.handle_cgi_write(conn);
-        if (!handle_async_result(result, conn, "handle_cgi_write_event")) {
+        if (!handle_result(result, conn, "handle_cgi_write_event")) {
             return;
         }
     } else {
@@ -1099,8 +1121,8 @@ void WebServer::handle_cgi_write_event(IOContext* ctx, uint32_t event_flags) {
     }
 }
 
-bool WebServer::handle_async_result(Result result, Connection* conn,
-                                    const char* context_str) {
+bool WebServer::handle_result(Result result, Connection* conn,
+                              const char* context_str) {
     switch (result) {
         case AGAIN:
             log(LOG_DEBUG, "%s: Incomplete action, waiting.", context_str);

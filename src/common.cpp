@@ -1,12 +1,53 @@
 #include "common.hpp"
 
-std::string trim(const std::string& str) {
-    size_t first = str.find_first_not_of(" \t");
-    if (first == std::string::npos) {
-        return "";
+HttpStatus parse_status_to_response_status(ParseStatus parse_status) {
+    HttpStatus status_code = INTERNAL_SERVER_ERROR;
+
+    switch (parse_status) {
+        case PARSE_INCOMPLETE:
+            status_code = OK;
+            break;
+        case PARSE_SUCCESS:
+            status_code = OK;
+            break;
+        case PARSE_ERROR:
+        case PARSE_INVALID_REQUEST_LINE:
+        case PARSE_INVALID_PATH:
+        case PARSE_INVALID_QUERY_STRING:
+        case PARSE_MISSING_HOST_HEADER:
+        case PARSE_INVALID_CONTENT_LENGTH:
+        case PARSE_INVALID_CHUNK_SIZE:
+            status_code = BAD_REQUEST;
+            break;
+        case PARSE_METHOD_NOT_ALLOWED:
+            status_code = METHOD_NOT_ALLOWED;
+            break;
+        case PARSE_CONTENT_TOO_LARGE:
+            status_code = PAYLOAD_TOO_LARGE;
+            break;
+        case PARSE_REQUEST_TOO_LONG:
+            status_code = URI_TOO_LONG;
+            break;
+        case PARSE_HEADER_TOO_LONG:
+        case PARSE_TOO_MANY_HEADERS:
+            status_code = HEADER_TOO_LONG;
+            break;
+        case PARSE_VERSION_NOT_SUPPORTED:
+            status_code = HTTP_VERSION_NOT_SUPPORTED;
+            break;
+        case PARSE_MISSING_CONTENT_LENGTH:
+            status_code = LENGTH_REQUIRED;
+            break;
+        case PARSE_UNKNOWN_ENCODING:
+        case PARSE_METHOD_NOT_IMPLEMENTED:
+            status_code = NOT_IMPLEMENTED;
+            break;
+        default:
+            status_code = INTERNAL_SERVER_ERROR;
+            break;
     }
-    size_t last = str.find_last_not_of(" \t");
-    return str.substr(first, last - first + 1);
+
+    return status_code;
 }
 
 std::string get_status_message(int code) {
@@ -91,6 +132,23 @@ std::string get_current_gmt_time() {
     return std::string(buffer);
 }
 
+bool set_non_blocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        log(LOG_ERROR, "Failed to get flags for socket '%d'", fd);
+        return false;
+    }
+
+    flags |= O_NONBLOCK;
+
+    if (fcntl(fd, F_SETFL, flags) == -1) {
+        log(LOG_ERROR, "Failed to set non-blocking mode for socket '%d'", fd);
+        return false;
+    }
+
+    return true;
+}
+
 bool is_cgi_extension(const std::string& request_uri) {
     std::string extension = get_file_extension(request_uri);
     if (!extension.empty() && (extension == ".php" || extension == ".py" ||
@@ -116,6 +174,15 @@ std::string get_file_extension(const std::string& uri_path) {
     return extension;
 }
 
+std::string trim(const std::string& str) {
+    size_t first = str.find_first_not_of(" \t");
+    if (first == std::string::npos) {
+        return "";
+    }
+    size_t last = str.find_last_not_of(" \t");
+    return str.substr(first, last - first + 1);
+}
+
 std::string join(const std::vector<std::string>& vec, const std::string& sep) {
     std::ostringstream oss;
     for (size_t i = 0; i < vec.size(); ++i) {
@@ -123,23 +190,6 @@ std::string join(const std::vector<std::string>& vec, const std::string& sep) {
         oss << vec[i];
     }
     return oss.str();
-}
-
-bool set_non_blocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1) {
-        log(LOG_ERROR, "Failed to get flags for socket '%d'", fd);
-        return false;
-    }
-
-    flags |= O_NONBLOCK;
-
-    if (fcntl(fd, F_SETFL, flags) == -1) {
-        log(LOG_ERROR, "Failed to set non-blocking mode for socket '%d'", fd);
-        return false;
-    }
-
-    return true;
 }
 
 // It checks if a character is a valid "tchar" according to RFC 7230.
