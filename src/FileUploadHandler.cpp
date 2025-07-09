@@ -34,6 +34,7 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
     // Generate temporary file name
     std::string upload_dir = get_upload_directory(conn);
 
+    // TODO: Do not create upload directory if it does not exist
     if (!ensure_upload_directory_exists(conn, upload_dir)) {
         return ERROR;  // Directory creation failed
     }
@@ -66,9 +67,12 @@ Result FileUploadHandler::handle(Connection* conn) {
     }
 
     int file_fd = conn->file_upload_context_->file_fd_;
-
+    
     // Write any parsed file data to the temp file
     Buffer& buffer = conn->file_upload_context_->upload_buffer_;
+
+    log_buffer(LOG_FATAL, buffer);
+
     if (!buffer.empty()) {
         ssize_t written = buffer.write_to(file_fd);
         if (written < 0) {
@@ -164,19 +168,16 @@ std::string FileUploadHandler::get_upload_directory(Connection* conn) {
         "FileUploadHandler::get_upload_directory called for client_fd %d",
         conn->client_fd_);
 
-    std::string base_path = parse_absolute_path(conn);
+    std::string upload_dir = parse_absolute_path(conn);
 
     // Extract just the directory part (remove any filename component)
-    size_t last_slash = base_path.find_last_of('/');
+    size_t last_slash = upload_dir.find_last_of('/');
     if (last_slash != std::string::npos) {
-        base_path = base_path.substr(0, last_slash + 1);
+        upload_dir = upload_dir.substr(0, last_slash + 1);
     } else {
         // If no slash found, add one
-        base_path += '/';
+        upload_dir += '/';
     }
-
-    // Add uploads subdirectory
-    std::string upload_dir = base_path + "uploads/";
 
     return upload_dir;
 }
@@ -196,6 +197,7 @@ bool FileUploadHandler::ensure_upload_directory_exists(
     return create_directory_recursive(conn, upload_dir);
 }
 
+// TODO: do not create directories if they do not exist, return INTERNAL_SERVER_ERROR
 bool FileUploadHandler::create_directory_recursive(Connection* conn,
                                                    const std::string& path) {
     log(LOG_TRACE,

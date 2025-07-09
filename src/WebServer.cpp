@@ -569,7 +569,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
             log_request(LOG_TRACE, conn);
         }
 
-        if (conn->active_handler_->is_asynchronous()) {
+        if (conn->active_handler_ && conn->active_handler_->is_asynchronous()) {
             log(LOG_INFO,
                 "Asynchronous handler set for connection: %d, awaiting for "
                 "epoll event.",
