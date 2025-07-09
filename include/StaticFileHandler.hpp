@@ -11,14 +11,15 @@ class StaticFileHandler : public AHandler {
     StaticFileHandler();
     virtual ~StaticFileHandler();
 
+    Result initialize_context(Connection* conn);
+    ParseStatus check_permissions(Connection* conn);
+    virtual Result setup_handler(Connection* conn);
     virtual Result handle(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
     bool is_asynchronous() const { return false; }
 
    private:
-    Result validate_method(Connection* conn);
-    Result handle_location_redirect(Connection* conn);
     Result resolve_absolute_path(Connection* conn, std::string& absolute_path);
     Result handle_directory_request(Connection* conn,
                                     std::string& absolute_path);
@@ -29,6 +30,11 @@ class StaticFileHandler : public AHandler {
     Result handle_file_open_error(Connection* conn);
     void set_response_headers(Connection* conn, const struct stat& file_info);
     std::string determine_content_type(const std::string& path);
+
+    bool process_directory_index(Connection* conn, std::string& absolute_path,
+                                 bool& need_autoindex);
+    bool generate_directory_listing(Connection* conn,
+                                    const std::string& dir_path);
 
     // Prevent copying
     StaticFileHandler(const StaticFileHandler&);

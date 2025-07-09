@@ -601,6 +601,43 @@ void RequestParser::commit_header(HttpRequest* request,
     request->set_header(header_name, header_value);
 }
 
+ParserState RequestParser::determine_body_handling_state(Connection* conn) {
+    log(LOG_TRACE,
+        "RequestParser::determine_body_handling_state called for client %d",
+        conn->client_fd_);
+
+    conn->parser_context_.clear_for_next_state();
+
+    HttpRequest* request = conn->request_data_;
+    if (request->method_ != "POST" && request->method_ != "PUT") {
+        conn->request_data_->body_fully_parsed_ = true;
+        return PARSER_COMPLETE;
+    }
+
+    // TODO: include expected: 100 Continue check
+
+    std::string transfer_encoding = request->get_header("transfer-encoding");
+    if (!transfer_encoding.empty() &&
+        transfer_encoding.find("chunked") != std::string::npos) {
+        return PARSER_READING_CHUNKED_BODY;
+    }
+
+    std::string content_length = request->get_header("content-length");
+    if (!content_length.empty()) {
+        char* end_ptr;
+        request->content_length_ =
+            std::strtoul(content_length.c_str(), &end_ptr, 10);
+        conn->parser_context_.body_remaining_bytes_ = request->content_length_;
+
+        if (request->content_length_ > 0) {
+            return PARSER_READING_CONTENT_BODY;
+        }
+    }
+
+    conn->request_data_->body_fully_parsed_ = true;
+    return PARSER_COMPLETE;
+}
+
 ParseStatus RequestParser::parse_content_body(Connection* conn) {
     log(LOG_TRACE, "RequestParser::parse_content_body called for client %d",
         conn->client_fd_);

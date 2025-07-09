@@ -7,16 +7,29 @@ FileUploadHandler::FileUploadHandler() : AHandler() {}
 
 FileUploadHandler::~FileUploadHandler() {}
 
-Result FileUploadHandler::handle(Connection* conn) {
-    log(LOG_TRACE, "FileUploadHandler::handle() called for client_fd %d",
+Result FileUploadHandler::initialize_context(Connection* conn) {
+    log(LOG_TRACE,
+        "FileUploadHandler::initialize_context called for client_fd %d",
         conn->client_fd_);
 
-    conn->file_upload_context_ = new FileUploadContext();
-
-    Result result = check_permissions(conn);
-    if (result != COMPLETE) {
-        return result;
+    try {
+        conn->file_upload_context_ = new FileUploadContext();
+    } catch (const std::bad_alloc& e) {
+        log(LOG_ERROR,
+            "FileUploadHandler::initialize_context: Memory allocation failed "
+            "for "
+            "client_fd %d",
+            conn->client_fd_);
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
     }
+
+    return COMPLETE;
+}
+
+Result FileUploadHandler::setup_handler(Connection* conn) {
+    log(LOG_TRACE, "FileUploadHandler::setup_handler called for client_fd %d",
+        conn->client_fd_);
 
     // Generate temporary file name
     std::string upload_dir = get_upload_directory(conn);
@@ -39,11 +52,20 @@ Result FileUploadHandler::handle(Connection* conn) {
     conn->file_upload_context_->file_fd_ = file_fd;
     conn->file_upload_context_->temp_path_ = temp_filename;
 
+    return COMPLETE;
+}
+
+Result FileUploadHandler::handle(Connection* conn) {
+    log(LOG_TRACE, "FileUploadHandler::handle() called for client_fd %d",
+        conn->client_fd_);
+
     ParseStatus status = multipart_parser_.parse_multipart(conn);
     if (status >= PARSE_ERROR) {
         conn->status_ = parse_status_to_response_status(status);
         return ERROR;
     }
+
+    int file_fd = conn->file_upload_context_->file_fd_;
 
     // Write any parsed file data to the temp file
     Buffer& buffer = conn->file_upload_context_->upload_buffer_;
@@ -94,21 +116,15 @@ Result FileUploadHandler::handle(Connection* conn) {
     return AGAIN;
 }
 
-Result FileUploadHandler::check_permissions(Connection* conn) {
+// TODO: include directory write permission
+ParseStatus FileUploadHandler::check_permissions(Connection* conn) {
     log(LOG_TRACE,
-        "FileUploadHandler::check_permissions() called for client_fd %d",
+        "FileUploadHandler::check_permissions called for client_fd %d",
         conn->client_fd_);
 
-    //std::string content_length =
-    //    conn->request_data_->get_header("content-length");
-    //if (content_length.empty()) {
-    //    conn->status_ = BAD_REQUEST;
-    //    return ERROR;
-    //}
     std::string content_type = conn->request_data_->get_header("content-type");
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
-        conn->status_ = UNSUPPORTED_MEDIA_TYPE;
-        return ERROR;
+        return PARSE_UNSUPPORTED_MEDIA;
     }
 
     std::string boundary =
@@ -117,41 +133,14 @@ Result FileUploadHandler::check_permissions(Connection* conn) {
     if (boundary.empty()) {
         log(LOG_ERROR, "No multipart boundary found for client_fd %d",
             conn->client_fd_);
-        conn->status_ = BAD_REQUEST;
-        return ERROR;
-    }
-
-    // Redirect if needed
-    if (process_trailing_slash_redirect(conn)) {
-        return AGAIN;
+        return PARSE_ERROR;
     }
 
     log(LOG_DEBUG,
         "FileUploadHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
 
-    conn->status_ = OK;
-    return COMPLETE;
-}
-
-bool FileUploadHandler::process_trailing_slash_redirect(Connection* conn) {
-    log(LOG_TRACE,
-        "FileUploadHandler::process_trailing_slash_redirect() called for "
-        "client_fd %d",
-        conn->client_fd_);
-
-    std::string uri = conn->request_data_->uri_;
-    const Location* location = conn->location_match_;
-
-    // If location path ends with / but URI doesn't, redirect to add slash
-    if (!location->path_.empty() &&
-        location->path_[location->path_.length() - 1] == '/' && !uri.empty() &&
-        uri[uri.length() - 1] != '/') {
-        conn->response_data_->set_header("Location", uri + "/");
-        conn->status_ = MOVED_PERMANENTLY;
-        return true;
-    }
-    return false;
+    return PARSE_SUCCESS;
 }
 
 void FileUploadHandler::send_success_response(Connection* conn) {
@@ -324,6 +313,11 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
 }
 
 void FileUploadHandler::cleanup_handler(Connection* conn) {
+    if (conn->file_upload_context_->file_fd_ >= 0) {
+        close(conn->file_upload_context_->file_fd_);
+        conn->file_upload_context_->file_fd_ = -1;  // Mark as closed
+    }
+
     if (conn->file_upload_context_) {
         delete conn->file_upload_context_;
         conn->file_upload_context_ = NULL;

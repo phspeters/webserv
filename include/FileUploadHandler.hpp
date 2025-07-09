@@ -11,16 +11,17 @@ class FileUploadHandler : public AHandler {
     FileUploadHandler();
     virtual ~FileUploadHandler();
 
+    Result initialize_context(Connection* conn);
+    ParseStatus check_permissions(Connection* conn);
+    virtual Result setup_handler(Connection* conn);
     virtual Result handle(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
-    Result check_permissions(Connection* conn);
     bool is_asynchronous() const { return false; }
 
    private:
     MultipartParser multipart_parser_;
 
-    bool process_trailing_slash_redirect(Connection* conn);
     void send_success_response(Connection* conn);
     bool copy_temp_to_final_file(const std::string& temp_path,
                                  const std::string& final_path);

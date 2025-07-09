@@ -5,6 +5,7 @@
 
 class CgiHandler;
 class RequestParser;
+class RequestProcessor;
 class MultipartParser;
 class ResponseWriter;
 class StaticFileHandler;
@@ -61,6 +62,7 @@ class WebServer {
     // Owned Components (Composition)
     //--------------------------------------
     RequestParser request_parser_;
+    RequestProcessor request_processor_;
     ResponseWriter response_writer_;
     //// Handler instances
     StaticFileHandler static_file_handler_;
@@ -86,21 +88,14 @@ class WebServer {
     bool read_from_client_socket(Connection* conn);
     ParseStatus handle_request_parsing(Connection* conn);
     ParseStatus process_request(Connection* conn);
-    void match_host_header(Connection* conn);
-    const Location* match_location(const VirtualServer* virtual_server,
-                                   const std::string& path) const;
-    ParseStatus validate_version(Connection* conn);
-    ParseStatus validate_method(Connection* conn);
-    ParseStatus validate_body_handling(Connection* conn);
     AHandler* choose_handler(Connection* conn);
-    ParserState determine_body_handling_state(Connection* conn);
     bool handle_keep_alive(Connection* conn);
 
     void handle_cgi_read_event(IOContext* ctx, uint32_t event_flags);
     void handle_cgi_write_event(IOContext* ctx, uint32_t event_flags);
     void handle_error_response(Connection* conn);
     bool handle_result(Result result, Connection* conn,
-                             const char* context_str);
+                       const char* context_str);
     bool start_response_writing(Connection* conn);
 
     bool setup_listener_sockets();

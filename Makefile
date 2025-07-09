@@ -18,6 +18,7 @@ FILES = main.cpp \
 		HttpResponse.cpp \
 		Logger.cpp \
 		RequestParser.cpp \
+		RequestProcessor.cpp \
 		MultipartParser.cpp \
 		ResponseWriter.cpp \
 		StaticFileHandler.cpp \

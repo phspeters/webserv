@@ -4,16 +4,116 @@ CgiHandler::CgiHandler() : AHandler() {}
 
 CgiHandler::~CgiHandler() {}
 
-Result CgiHandler::handle(Connection* conn) {
-    log(LOG_TRACE, "CgiHandler::handle called for client_fd %d",
+Result CgiHandler::initialize_context(Connection* conn) {
+    log(LOG_TRACE, "CgiHandler::initialize_context called for client_fd %d",
         conn->client_fd_);
 
-    conn->cgi_context_ = new CgiContext();
-
-    Result result = check_permissions(conn);
-    if (result != COMPLETE) {
-        return result;  // Error or redirect occurred
+    try {
+        conn->cgi_context_ = new CgiContext();
+    } catch (const std::bad_alloc& e) {
+        log(LOG_ERROR,
+            "CgiHandler::initialize_context: Memory allocation failed for "
+            "client_fd %d",
+            conn->client_fd_);
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
     }
+
+    return COMPLETE;
+}
+
+ParseStatus CgiHandler::check_permissions(Connection* conn) {
+    log(LOG_TRACE, "CgiHandler::check_permissions called for client_fd %d",
+        conn->client_fd_);
+
+    // Validate request method (must be GET or POST)
+    const std::string& request_method = conn->request_data_->method_;
+    if (request_method != "GET" && request_method != "POST") {
+        log(LOG_ERROR, "CgiHandler: Invalid method '%s' for client_fd %d",
+            request_method.c_str(), conn->client_fd_);
+        conn->response_data_->set_error_header("Allow", "GET, POST");
+        return PARSE_METHOD_NOT_ALLOWED;
+    }
+
+    // Resolve the absolute path to the CGI script
+    std::string script_path = parse_absolute_path(conn);
+    if (script_path.empty()) {
+        log(LOG_ERROR,
+            "CgiHandler: Failed to determine script path for client_fd %d",
+            conn->client_fd_);
+        return PARSE_INTERNAL_ERROR;
+    }
+
+    // Security: Do not allow executing a directory
+    if (script_path[script_path.length() - 1] == '/') {
+        log(LOG_ERROR, "CgiHandler: Attempt to execute a directory: %s",
+            script_path.c_str());
+        return PARSE_FORBIDDEN;
+    }
+
+    // Check script extension against allowed types
+    bool is_valid_extension = false;
+    std::string extension;
+    size_t dot_pos = script_path.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        extension = script_path.substr(dot_pos + 1);
+        // This should ideally come from the config file
+        if (extension == "php" || extension == "py" || extension == "sh") {
+            is_valid_extension = true;
+        }
+    }
+
+    if (!is_valid_extension) {
+        log(LOG_ERROR,
+            "CgiHandler: Invalid script extension '%s' for script '%s'",
+            extension.c_str(), script_path.c_str());
+        return PARSE_FORBIDDEN;
+    }
+
+    // Use a single stat() call to check existence, type, and permissions
+    struct stat file_stat;
+    if (stat(script_path.c_str(), &file_stat) != 0) {
+        if (errno == ENOENT) {
+            log(LOG_ERROR, "CgiHandler: Script not found: %s",
+                script_path.c_str());
+            return PARSE_NOT_FOUND;
+        } else if (errno == EACCES) {
+            log(LOG_ERROR, "CgiHandler: Access denied to script path: %s",
+                script_path.c_str());
+            return PARSE_FORBIDDEN;
+        } else {
+            log(LOG_ERROR, "CgiHandler: stat() error for script %s: %s",
+                script_path.c_str(), strerror(errno));
+            return PARSE_INTERNAL_ERROR;
+        }
+    }
+
+    // Check if it's a regular file
+    if (!S_ISREG(file_stat.st_mode)) {
+        log(LOG_ERROR, "CgiHandler: Script is not a regular file: %s",
+            script_path.c_str());
+        return PARSE_FORBIDDEN;
+    }
+
+    // Check if the script is executable by the user
+    if (!(file_stat.st_mode & S_IXUSR)) {
+        log(LOG_ERROR, "CgiHandler: Script is not executable: %s",
+            script_path.c_str());
+        return PARSE_FORBIDDEN;
+    }
+
+    // All checks passed. Store the validated path for the setup phase.
+    conn->cgi_context_->cgi_script_path_ = script_path;
+
+    log(LOG_DEBUG, "CgiHandler: Permissions check passed for script: %s",
+        script_path.c_str());
+
+    return PARSE_SUCCESS;
+}
+
+Result CgiHandler::setup_handler(Connection* conn) {
+    log(LOG_TRACE, "CgiHandler::setup_handler called for client_fd %d",
+        conn->client_fd_);
 
     // Setup pipes
     int server_to_cgi_pipe[2];
@@ -90,110 +190,6 @@ Result CgiHandler::handle(Connection* conn) {
 
     log(LOG_DEBUG, "CgiHandler: Setup complete for client_fd %d",
         conn->client_fd_);
-
-    return COMPLETE;
-}
-
-Result CgiHandler::check_permissions(Connection* conn) {
-    log(LOG_TRACE, "CgiHandler::check_permissions called for client_fd %d",
-        conn->client_fd_);
-
-    // Check for location-level redirect first (takes precedence over CGI)
-    if (process_location_redirect(conn)) {
-        log(LOG_DEBUG,
-            "CgiHandler: Processed location redirect for client_fd %d",
-            conn->client_fd_);
-        return AGAIN;  // Indicates that the request has been redirected
-    }
-
-    // Validate request method (must be GET or POST)
-    const std::string& request_method = conn->request_data_->method_;
-    if (request_method != "GET" && request_method != "POST") {
-        log(LOG_ERROR, "CgiHandler: Invalid method '%s' for client_fd %d",
-            request_method.c_str(), conn->client_fd_);
-        conn->response_data_->set_error_header("Allow", "GET, POST");
-        conn->status_ = METHOD_NOT_ALLOWED;
-        return ERROR;
-    }
-
-    // Resolve the absolute path to the CGI script
-    std::string script_path = parse_absolute_path(conn);
-    if (script_path.empty()) {
-        log(LOG_ERROR,
-            "CgiHandler: Failed to determine script path for client_fd %d",
-            conn->client_fd_);
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR;
-    }
-
-    // Security: Do not allow executing a directory
-    if (script_path[script_path.length() - 1] == '/') {
-        log(LOG_ERROR, "CgiHandler: Attempt to execute a directory: %s",
-            script_path.c_str());
-        conn->status_ = FORBIDDEN;
-        return ERROR;
-    }
-
-    // Check script extension against allowed types
-    bool is_valid_extension = false;
-    std::string extension;
-    size_t dot_pos = script_path.find_last_of('.');
-    if (dot_pos != std::string::npos) {
-        extension = script_path.substr(dot_pos + 1);
-        // This should ideally come from the config file
-        if (extension == "php" || extension == "py" || extension == "sh") {
-            is_valid_extension = true;
-        }
-    }
-
-    if (!is_valid_extension) {
-        log(LOG_ERROR,
-            "CgiHandler: Invalid script extension '%s' for script '%s'",
-            extension.c_str(), script_path.c_str());
-        conn->status_ = FORBIDDEN;
-        return ERROR;
-    }
-
-    // Use a single stat() call to check existence, type, and permissions
-    struct stat file_stat;
-    if (stat(script_path.c_str(), &file_stat) != 0) {
-        if (errno == ENOENT) {
-            log(LOG_ERROR, "CgiHandler: Script not found: %s",
-                script_path.c_str());
-            conn->status_ = NOT_FOUND;
-        } else if (errno == EACCES) {
-            log(LOG_ERROR, "CgiHandler: Access denied to script path: %s",
-                script_path.c_str());
-            conn->status_ = FORBIDDEN;
-        } else {
-            log(LOG_ERROR, "CgiHandler: stat() error for script %s: %s",
-                script_path.c_str(), strerror(errno));
-            conn->status_ = INTERNAL_SERVER_ERROR;
-        }
-        return ERROR;
-    }
-
-    // Check if it's a regular file
-    if (!S_ISREG(file_stat.st_mode)) {
-        log(LOG_ERROR, "CgiHandler: Script is not a regular file: %s",
-            script_path.c_str());
-        conn->status_ = FORBIDDEN;
-        return ERROR;
-    }
-
-    // Check if the script is executable by the user
-    if (!(file_stat.st_mode & S_IXUSR)) {
-        log(LOG_ERROR, "CgiHandler: Script is not executable: %s",
-            script_path.c_str());
-        conn->status_ = FORBIDDEN;
-        return ERROR;
-    }
-
-    // All checks passed. Store the validated path for the setup phase.
-    conn->cgi_context_->cgi_script_path_ = script_path;
-
-    log(LOG_DEBUG, "CgiHandler: Permissions check passed for script: %s",
-        script_path.c_str());
 
     return COMPLETE;
 }
@@ -425,10 +421,17 @@ bool CgiHandler::handle_parent_pipes(Connection* conn,
     return true;
 }
 
+Result CgiHandler::handle(Connection* conn) {
+    log(LOG_TRACE, "CgiHandler::handle called for client_fd %d",
+        conn->client_fd_);
+    return COMPLETE;
+}
+
 void CgiHandler::cleanup_handler(Connection* conn) {
     if (!conn->cgi_context_) {
         log(LOG_FATAL,
-            "CgiHandler: Cleanup called but cgi_context_ is NULL for client_fd "
+            "CgiHandler::cleanup_handler called but cgi_context_ is NULL for "
+            "client_fd "
             "%d",
             conn->client_fd_);
         return;
@@ -471,8 +474,7 @@ void CgiHandler::cleanup_handler(Connection* conn) {
 }
 
 Result CgiHandler::handle_cgi_write(Connection* conn) {
-    if (!conn || !conn->cgi_context_ ||
-        conn->cgi_context_->cgi_pipe_stdin_fd_ < 0) {
+    if (!conn->cgi_context_ || conn->cgi_context_->cgi_pipe_stdin_fd_ < 0) {
         log(LOG_ERROR, "CGI write: Invalid connection or pipe");
         conn->status_ = INTERNAL_SERVER_ERROR;
         return ERROR;

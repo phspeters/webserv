@@ -112,7 +112,12 @@ enum ParseStatus {
     PARSE_INVALID_CONTENT_LENGTH,
     PARSE_CONTENT_TOO_LARGE,
     PARSE_UNKNOWN_ENCODING,
-    PARSE_INVALID_CHUNK_SIZE
+    PARSE_INVALID_CHUNK_SIZE,
+    PARSE_FORBIDDEN,
+    PARSE_NOT_FOUND,
+    PARSE_CONFLICT,
+    PARSE_UNSUPPORTED_MEDIA,
+    PARSE_INTERNAL_ERROR
 };
 
 enum HttpStatus {
@@ -176,6 +181,7 @@ enum LocType { LOC_DEFAULT, LOC_EXTENSION };
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
 #include "Logger.hpp"
+#include "RequestProcessor.hpp"
 #include "StaticFileHandler.hpp"
 #include "WebServer.hpp"
 

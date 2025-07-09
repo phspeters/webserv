@@ -42,6 +42,21 @@ HttpStatus parse_status_to_response_status(ParseStatus parse_status) {
         case PARSE_METHOD_NOT_IMPLEMENTED:
             status_code = NOT_IMPLEMENTED;
             break;
+        case PARSE_FORBIDDEN:
+            status_code = FORBIDDEN;
+            break;
+        case PARSE_NOT_FOUND:
+            status_code = NOT_FOUND;
+            break;
+        case PARSE_CONFLICT:
+            status_code = CONFLICT;
+            break;
+        case PARSE_UNSUPPORTED_MEDIA:
+            status_code = UNSUPPORTED_MEDIA_TYPE;
+            break;
+        case PARSE_INTERNAL_ERROR:
+            status_code = INTERNAL_SERVER_ERROR;
+            break;
         default:
             status_code = INTERNAL_SERVER_ERROR;
             break;

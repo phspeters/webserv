@@ -14,6 +14,7 @@ class RequestParser {
 
     ParseStatus parse_request_line(Connection* conn);
     ParseStatus parse_headers(Connection* conn);
+    ParserState determine_body_handling_state(Connection* conn);
     ParseStatus parse_content_body(Connection* conn);
     ParseStatus parse_chunked_body(Connection* conn);
 
@@ -25,7 +26,6 @@ class RequestParser {
     std::string decode_uri_query(const std::string& uri);
     inline int hex_to_int(char c);
     void commit_header(HttpRequest* request, const ParserContext& context);
-    ConnectionState determine_body_handling_state(Connection* conn);
 
     // Prevent copying
     RequestParser(const RequestParser&);

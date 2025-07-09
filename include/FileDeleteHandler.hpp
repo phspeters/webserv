@@ -10,10 +10,12 @@ class FileDeleteHandler : public AHandler {
     FileDeleteHandler();
     virtual ~FileDeleteHandler();
 
+    Result initialize_context(Connection* conn);
+    ParseStatus check_permissions(Connection* conn);
+    virtual Result setup_handler(Connection* conn);
     virtual Result handle(Connection* conn);
     virtual void cleanup_handler(Connection* conn);
 
-    Result check_permissions(Connection* conn);
     bool is_asynchronous() const { return false; }
 
    private:
