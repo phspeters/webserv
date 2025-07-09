@@ -717,11 +717,6 @@ ParseStatus WebServer::process_request(Connection* conn) {
             return status;
         }
 
-        status = request_processor_.validate_body_handling(conn);
-        if (status != PARSE_SUCCESS) {
-            return status;
-        }
-
         request_processor_.match_host_header(conn,
                                              listener_to_virtual_servers_);
         conn->location_match_ = request_processor_.match_location(
@@ -730,6 +725,11 @@ ParseStatus WebServer::process_request(Connection* conn) {
         if (request_processor_.handle_redirects(conn)) {
             conn->conn_state_ = CONN_WRITING_RESPONSE;
             return PARSE_SUCCESS;
+        }
+
+        status = request_processor_.validate_body_handling(conn);
+        if (status != PARSE_SUCCESS) {
+            return status;
         }
 
         status = request_processor_.validate_method_location_access(conn);
