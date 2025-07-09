@@ -614,7 +614,11 @@ ParserState RequestParser::determine_body_handling_state(Connection* conn) {
         return PARSER_COMPLETE;
     }
 
-    // TODO: include expected: 100 Continue check
+    std::string expect = request->get_header("expect");
+    if(expect.find("100-continue") != std::string::npos) {
+        send(conn->client_fd_,
+             "HTTP/1.1 100 Continue\r\n\r\n", 25, MSG_NOSIGNAL);
+    }
 
     std::string transfer_encoding = request->get_header("transfer-encoding");
     if (!transfer_encoding.empty() &&
