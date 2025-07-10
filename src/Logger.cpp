@@ -78,8 +78,15 @@ void log_request(log_level level, const Connection* conn) {
         std::cerr << "  " << it->first << ": " << it->second << std::endl;
     }
     std::cerr << "body: " << std::endl;
-    std::cerr.write(conn->request_data_->body_buffer_.data(),
-                    conn->request_data_->body_buffer_.readable_bytes());
+    if (conn->request_data_->body_buffer_.readable_bytes() > 0) {
+        std::cerr.write(conn->request_data_->body_buffer_.data(),
+                        conn->request_data_->body_buffer_.readable_bytes());
+        std::cerr << "  size: "
+                  << conn->request_data_->body_buffer_.readable_bytes()
+                  << " bytes" << std::endl;
+    } else {
+        std::cerr << "(empty)" << std::endl;
+    }
     std::cerr << "====================================" << RESET << std::endl;
 }
 
@@ -130,7 +137,7 @@ void log_response(log_level level, Connection* conn) {
     std::cerr << "=====================" << RESET << std::endl;
 }
 
-int log_buffer(log_level level, const Buffer& buffer) {
+int log_buffer(log_level level, const Buffer& buffer, const char* buffer_name) {
     if (level < ACTIVE_LOG_LEVEL) {
         return 0;
     }
@@ -154,9 +161,9 @@ int log_buffer(log_level level, const Buffer& buffer) {
 
     std::cerr << timestamp;
 
-    std::cerr << "\n========== BUFFER START ==========\n";
+    std::cerr << "\n========== " << buffer_name << " START ==========\n";
     int bytes_written = write(1, buffer.data(), buffer.readable_bytes());
-    std::cerr << "=========== BUFFER END ===========";
+    std::cerr << "=========== " << buffer_name << " END ===========";
 
     if (bytes_written < 0) {
         std::cerr << "Error writing to buffer" << std::endl;

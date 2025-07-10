@@ -265,7 +265,7 @@ bool WebServer::read_from_client_socket(Connection* conn) {
     log(LOG_INFO, "Read %zd bytes from socket (fd: %d)", bytes_read,
         conn->client_fd_);
 
-    log_buffer(LOG_TRACE, conn->read_buffer_);
+    log_buffer(LOG_TRACE, conn->read_buffer_, "READ BUFFER");
 
     return true;
 }
@@ -591,7 +591,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
 
     if (event_flags & EPOLLOUT) {
         if (conn->conn_state_ == CONN_WRITING_RESPONSE) {
-            log_buffer(LOG_TRACE, conn->write_buffer_);
+            log_buffer(LOG_TRACE, conn->write_buffer_, "WRITE BUFFER");
 
             ssize_t bytes_sent = conn->write_buffer_.write_to(conn->client_fd_);
             if (bytes_sent <= 0) {

@@ -40,20 +40,17 @@ ssize_t Buffer::send_to(int fd) {
 }
 
 size_t Buffer::unload_to(Buffer& dest, size_t max_bytes) {
-    size_t available_space = dest.writable_space();
-
-    size_t bytes_to_move = std::min(readable_bytes(), available_space);
-    bytes_to_move = std::min(bytes_to_move, max_bytes);
-
-    if (bytes_to_move == 0) {
-        return 0;
+    if (empty()) {
+        return 0;  // Nothing to move
     }
-
-    dest.append(data(), bytes_to_move);
-
-    consume(bytes_to_move);
-
-    return bytes_to_move;
+    
+    size_t bytes_to_move = std::min(readable_bytes(), max_bytes);
+    
+    size_t bytes_actually_appended = dest.append(data(), bytes_to_move);
+    
+    consume(bytes_actually_appended);
+    
+    return bytes_actually_appended;
 }
 
 size_t Buffer::append(const char* data, size_t size) {

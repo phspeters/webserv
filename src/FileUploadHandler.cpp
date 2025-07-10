@@ -71,7 +71,7 @@ Result FileUploadHandler::handle(Connection* conn) {
     // Write any parsed file data to the temp file
     Buffer& buffer = conn->file_upload_context_->upload_buffer_;
 
-    log_buffer(LOG_TRACE, buffer);
+    log_buffer(LOG_TRACE, buffer, "UPLOAD BUFFER");
 
     if (!buffer.empty()) {
         ssize_t written = buffer.write_to(file_fd);
@@ -266,6 +266,7 @@ std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
     return safe_filename;
 }
 
+//TODO: remove .tmp file after copying
 bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
                                                 const std::string& final_path) {
     log(LOG_TRACE,

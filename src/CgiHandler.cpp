@@ -550,7 +550,7 @@ Result CgiHandler::handle_cgi_read(Connection* conn) {
             "CGI: Read %zd bytes from stdout for client %d. Total buffer: %zu",
             bytes_read, conn->client_fd_, buffer.readable_bytes());
 
-        log_buffer(LOG_TRACE, buffer);
+        log_buffer(LOG_TRACE, buffer, "CGI OUTPUT BUFFER");
 
         Result result = parse_cgi_output(conn);
         if (result == ERROR) {

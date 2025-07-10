@@ -83,6 +83,7 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
             case READ_DATA: {
                 if (multipart_ctx->data_start_ == NULL) {
                     multipart_ctx->data_start_ = buff.data();
+                    multipart_ctx->data_length_ = 0;
                 }
 
                 if (ch ==
@@ -90,7 +91,8 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                     // Potential boundary match
                     if (multipart_ctx->boundary_match_index_ == 0) {
                         // First character of boundary - set data_end pointer
-                        multipart_ctx->data_end_ = buff.data();
+                        multipart_ctx->data_end_ = multipart_ctx->data_start_ +
+                                                   multipart_ctx->data_length_;
                     }
                     multipart_ctx->boundary_match_index_++;
 
@@ -110,6 +112,7 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                         multipart_ctx->boundary_match_index_ = 0;
                         // Continue accumulating data
                     }
+                    multipart_ctx->data_length_++;
                 }
                 break;
             }
@@ -188,8 +191,11 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
     if (state == READ_DATA && multipart_ctx->boundary_match_index_ == 0) {
         // We're accumulating data and not in the middle of a boundary match
         // Commit all the data we've seen so far
-        multipart_ctx->data_end_ = buff.data();
-        commit_part_data(multipart_ctx, upload_ctx);
+        if (multipart_ctx->data_start_ && multipart_ctx->data_length_ > 0) {
+            multipart_ctx->data_end_ =
+                multipart_ctx->data_start_ + multipart_ctx->data_length_;
+            commit_part_data(multipart_ctx, upload_ctx);
+        }
     }
 
     return PARSE_INCOMPLETE;
@@ -208,6 +214,11 @@ void MultipartParser::commit_part_data(MultipartContext* multipart_ctx,
                                               data_len);
         }
     }
+
+    log(LOG_DEBUG, "Committed part data for fd %d, length: %zu",
+        upload_ctx->file_fd_,
+        multipart_ctx->data_end_ - multipart_ctx->data_start_);
+
     multipart_ctx->data_start_ = NULL;
     multipart_ctx->data_end_ = NULL;
 }

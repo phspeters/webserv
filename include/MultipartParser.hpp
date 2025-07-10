@@ -29,26 +29,29 @@ struct MultipartContext {
     MultipartState state_;
     std::string boundary_;
     std::string part_headers_;
-    bool is_file_part_;
     size_t boundary_match_index_;
+    size_t data_length_;  // Length of current part data
     const char* data_start_;  // Points to start of current part data
     const char* data_end_;
+    bool is_file_part_;
 
     MultipartContext()
         : state_(FIND_INITIAL_BOUNDARY),
-          is_file_part_(false),
-          boundary_match_index_(0),
-          data_start_(NULL),
-          data_end_(NULL) {}
+        boundary_match_index_(0),
+        data_length_(0),
+        data_start_(NULL),
+        data_end_(NULL),
+        is_file_part_(false) {}
 
     void reset() {
         state_ = FIND_INITIAL_BOUNDARY;
         boundary_.clear();
         part_headers_.clear();
-        is_file_part_ = false;
         boundary_match_index_ = 0;
+        data_length_ = 0;
         data_start_ = NULL;
         data_end_ = NULL;
+        is_file_part_ = false;
     }
 };
 

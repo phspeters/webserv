@@ -17,7 +17,7 @@
 int log(log_level level, const char* msg, ...);
 void log_request(log_level level, const Connection* conn);
 void log_response(log_level level, const Connection* conn);
-int log_buffer(log_level level, const Buffer& buffer);
+int log_buffer(log_level level, const Buffer& buffer, const char* buffer_name = "BUFFER");
 void log_virtual_server(log_level level, const VirtualServer& virtual_server);
 const char* event_to_string(uint32_t event_flags);
 
