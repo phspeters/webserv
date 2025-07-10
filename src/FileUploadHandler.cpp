@@ -71,7 +71,7 @@ Result FileUploadHandler::handle(Connection* conn) {
     // Write any parsed file data to the temp file
     Buffer& buffer = conn->file_upload_context_->upload_buffer_;
 
-    log_buffer(LOG_FATAL, buffer);
+    log_buffer(LOG_TRACE, buffer);
 
     if (!buffer.empty()) {
         ssize_t written = buffer.write_to(file_fd);
@@ -131,7 +131,8 @@ ParseStatus FileUploadHandler::check_permissions(Connection* conn) {
         return PARSE_UNSUPPORTED_MEDIA;
     }
 
-    std::string boundary =
+    // TODO: move back to setup_handler
+    std::string& boundary =
         conn->file_upload_context_->multipart_context_.boundary_;
     boundary = multipart_parser_.extract_boundary(content_type);
     if (boundary.empty()) {
@@ -244,10 +245,10 @@ std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
 
     // Remove potentially dangerous characters
     for (size_t i = 0; i < safe_filename.length(); ++i) {
-        char c = safe_filename[i];
+        char c = safe_filename.at(i);
         // Keep alphanumeric, dash, underscore, dot
         if (!isalnum(c) && c != '-' && c != '_' && c != '.') {
-            safe_filename[i] = '_';
+            safe_filename.at(i) = '_';
         }
     }
 
