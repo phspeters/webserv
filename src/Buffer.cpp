@@ -6,14 +6,17 @@ ssize_t Buffer::read_from(int fd) {
     if (writable_space() == 0) {
         compact();
     }
+
     if (writable_space() == 0) {
         // Buffer is genuinely full of unread data, cannot read more.
         return BUFFER_FULL;
     }
+
     ssize_t bytes_read = read(fd, write_ptr(), writable_space());
     if (bytes_read > 0) {
         has_written(bytes_read);
     }
+
     return bytes_read;
 }
 
@@ -21,10 +24,16 @@ ssize_t Buffer::write_to(int fd) {
     if (empty()) {
         return 0;  // Nothing to consume.
     }
+
     ssize_t bytes_sent = write(fd, data(), readable_bytes());
     if (bytes_sent > 0) {
         consume(bytes_sent);
     }
+
+    if (empty()) {
+        reset();
+    }
+
     return bytes_sent;
 }
 
@@ -32,10 +41,16 @@ ssize_t Buffer::send_to(int fd) {
     if (empty()) {
         return 0;  // Nothing to consume.
     }
+
     ssize_t bytes_sent = send(fd, data(), readable_bytes(), MSG_NOSIGNAL);
     if (bytes_sent > 0) {
         consume(bytes_sent);
     }
+
+    if (empty()) {
+        reset();
+    }
+
     return bytes_sent;
 }
 
@@ -49,7 +64,11 @@ size_t Buffer::unload_to(Buffer& dest, size_t max_bytes) {
     size_t bytes_actually_appended = dest.append(data(), bytes_to_move);
     
     consume(bytes_actually_appended);
-    
+
+    if (empty()) {
+        reset();
+    }
+
     return bytes_actually_appended;
 }
 
@@ -61,6 +80,7 @@ size_t Buffer::append(const char* data, size_t size) {
     if (writable_space() == 0) {
         compact();
     }
+
     if (writable_space() == 0) {
         return BUFFER_FULL;
     }
@@ -68,6 +88,10 @@ size_t Buffer::append(const char* data, size_t size) {
     size_t bytes_to_append = std::min(size, writable_space());
     std::memcpy(write_ptr(), data, bytes_to_append);
     has_written(bytes_to_append);
+
+    if (empty()) {
+        reset();
+    }
 
     return bytes_to_append;
 }
