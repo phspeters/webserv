@@ -60,6 +60,8 @@ Result FileUploadHandler::handle(Connection* conn) {
     log(LOG_TRACE, "FileUploadHandler::handle() called for client_fd %d",
         conn->client_fd_);
 
+    log_buffer(LOG_FATAL, conn->request_data_->body_buffer_, "BODY BUFFER");
+
     ParseStatus status = multipart_parser_.parse_multipart(conn);
     if (status >= PARSE_ERROR) {
         conn->status_ = parse_status_to_response_status(status);
@@ -67,11 +69,11 @@ Result FileUploadHandler::handle(Connection* conn) {
     }
 
     int file_fd = conn->file_upload_context_->file_fd_;
-    
+
     // Write any parsed file data to the temp file
     Buffer& buffer = conn->file_upload_context_->upload_buffer_;
 
-    log_buffer(LOG_TRACE, buffer, "UPLOAD BUFFER");
+    log_buffer(LOG_WARNING, buffer, "UPLOAD BUFFER");
 
     if (!buffer.empty()) {
         ssize_t written = buffer.write_to(file_fd);
@@ -198,7 +200,8 @@ bool FileUploadHandler::ensure_upload_directory_exists(
     return create_directory_recursive(conn, upload_dir);
 }
 
-// TODO: do not create directories if they do not exist, return INTERNAL_SERVER_ERROR
+// TODO: do not create directories if they do not exist, return
+// INTERNAL_SERVER_ERROR
 bool FileUploadHandler::create_directory_recursive(Connection* conn,
                                                    const std::string& path) {
     log(LOG_TRACE,
@@ -266,7 +269,7 @@ std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
     return safe_filename;
 }
 
-//TODO: remove .tmp file after copying
+// TODO: remove .tmp file after copying
 bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
                                                 const std::string& final_path) {
     log(LOG_TRACE,

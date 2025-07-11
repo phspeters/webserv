@@ -4,6 +4,7 @@ MultipartParser::MultipartParser() {}
 
 MultipartParser::~MultipartParser() {}
 
+// TODO: only consume from body_buffe if we have writable space in upload buffer
 ParseStatus MultipartParser::parse_multipart(Connection* conn) {
     if (!conn->file_upload_context_) {
         log(LOG_FATAL,
@@ -90,25 +91,24 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                     subsequent_boundary[multipart_ctx->boundary_match_index_]) {
                     // Potential boundary match
                     if (multipart_ctx->boundary_match_index_ == 0) {
-                        // First character of boundary - set data_end pointer
-                        multipart_ctx->data_end_ = multipart_ctx->data_start_ +
-                                                   multipart_ctx->data_length_;
+                        // First character of boundary - commit any data
+                        commit_part_data(multipart_ctx, upload_ctx);
+                        multipart_ctx->data_start_ = buff.data();
+                        multipart_ctx->data_length_ = 0;
                     }
                     multipart_ctx->boundary_match_index_++;
 
                     if (multipart_ctx->boundary_match_index_ ==
                         subsequent_boundary.length()) {
                         // Full boundary matched - commit the data
-                        commit_part_data(multipart_ctx, upload_ctx);
+                        multipart_ctx->data_start_ = NULL;  // Reset data start pointer
                         multipart_ctx->boundary_match_index_ = 0;
                         state = CHECK_BOUNDARY_TYPE;
                     }
                 } else {
                     // Not a boundary match
                     if (multipart_ctx->boundary_match_index_ > 0) {
-                        // We were in the middle of matching a boundary, but it
-                        // failed The data we thought was a boundary is actually
-                        // part of the file
+                        commit_part_data(multipart_ctx, upload_ctx);
                         multipart_ctx->boundary_match_index_ = 0;
                         // Continue accumulating data
                     }
@@ -160,6 +160,7 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                     log(LOG_INFO,
                         "Successfully parsed multipart chunk for client %d",
                         conn->client_fd_);
+                    buff.consume(1);
                     return PARSE_SUCCESS;
                 }
                 break;
@@ -170,6 +171,7 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                     log(LOG_INFO,
                         "Successfully parsed multipart chunk for client %d",
                         conn->client_fd_);
+                    buff.consume(1);
                     return PARSE_SUCCESS;
                 } else {
                     log(LOG_ERROR, "Expected \\n after \\r in final boundary");
@@ -191,9 +193,7 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
     if (state == READ_DATA && multipart_ctx->boundary_match_index_ == 0) {
         // We're accumulating data and not in the middle of a boundary match
         // Commit all the data we've seen so far
-        if (multipart_ctx->data_start_ && multipart_ctx->data_length_ > 0) {
-            multipart_ctx->data_end_ =
-                multipart_ctx->data_start_ + multipart_ctx->data_length_;
+        if (multipart_ctx->data_start_) {
             commit_part_data(multipart_ctx, upload_ctx);
         }
     }
@@ -206,9 +206,9 @@ void MultipartParser::commit_part_data(MultipartContext* multipart_ctx,
     log(LOG_TRACE, "MultipartParser::commit_part_data called for fd %d",
         upload_ctx->file_fd_);
 
-    if (multipart_ctx->is_file_part_ && multipart_ctx->data_start_ &&
-        multipart_ctx->data_end_) {
-        size_t data_len = multipart_ctx->data_end_ - multipart_ctx->data_start_;
+    size_t data_len = 0;
+    if (multipart_ctx->is_file_part_ && multipart_ctx->data_start_) {
+        data_len = multipart_ctx->data_length_;
         if (data_len > 0) {
             upload_ctx->upload_buffer_.append(multipart_ctx->data_start_,
                                               data_len);
@@ -216,11 +216,9 @@ void MultipartParser::commit_part_data(MultipartContext* multipart_ctx,
     }
 
     log(LOG_DEBUG, "Committed part data for fd %d, length: %zu",
-        upload_ctx->file_fd_,
-        multipart_ctx->data_end_ - multipart_ctx->data_start_);
+        upload_ctx->file_fd_, data_len);
 
     multipart_ctx->data_start_ = NULL;
-    multipart_ctx->data_end_ = NULL;
 }
 
 void MultipartParser::parse_part_headers(const std::string& headers,

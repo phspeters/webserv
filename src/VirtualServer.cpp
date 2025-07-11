@@ -47,7 +47,7 @@ bool VirtualServer::parse_server_block(std::ifstream& file) {
 
         // Check for block end
         if (line == "}") {
-            std::cout << "Server block parsed successfully." << std::endl;
+            log(LOG_DEBUG, "Server block parsed successfully.");
             return true;
         }
 

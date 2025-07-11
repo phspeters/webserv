@@ -45,9 +45,11 @@ class Buffer {
 
     const char* data() const { return &buffer_[pos_]; }
 
-    void consume(size_t bytes_parsed) { pos_ += bytes_parsed; }
+    void consume(size_t bytes) { pos_ += bytes; }
 
     size_t readable_bytes() const { return last_ - pos_; }
+
+    size_t writable_space() const { return buffer_.size() - last_; }
 
     bool empty() const { return pos_ == last_; }
 
@@ -62,7 +64,6 @@ class Buffer {
     // Slides unread data to the beginning to maximize writable space.
     void compact();
 
-    size_t writable_space() const { return buffer_.size() - last_; }
     char* write_ptr() { return &buffer_[last_]; }
     void has_written(size_t bytes_written) { last_ += bytes_written; }
 

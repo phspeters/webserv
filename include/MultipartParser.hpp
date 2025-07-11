@@ -32,7 +32,6 @@ struct MultipartContext {
     size_t boundary_match_index_;
     size_t data_length_;  // Length of current part data
     const char* data_start_;  // Points to start of current part data
-    const char* data_end_;
     bool is_file_part_;
 
     MultipartContext()
@@ -40,7 +39,6 @@ struct MultipartContext {
         boundary_match_index_(0),
         data_length_(0),
         data_start_(NULL),
-        data_end_(NULL),
         is_file_part_(false) {}
 
     void reset() {
@@ -50,7 +48,6 @@ struct MultipartContext {
         boundary_match_index_ = 0;
         data_length_ = 0;
         data_start_ = NULL;
-        data_end_ = NULL;
         is_file_part_ = false;
     }
 };

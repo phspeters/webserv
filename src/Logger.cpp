@@ -162,16 +162,18 @@ int log_buffer(log_level level, const Buffer& buffer, const char* buffer_name) {
     std::cerr << timestamp;
 
     std::cerr << "\n========== " << buffer_name << " START ==========\n";
-    int bytes_written = write(1, buffer.data(), buffer.readable_bytes());
+    int bytes_written = 0;
+    if (!buffer.empty()) {
+        bytes_written = write(1, buffer.data(), buffer.readable_bytes());
+        std::cerr << "\nbuffer size: " << bytes_written << std::endl;
+    } else {
+        std::cerr << "(empty buffer)" << std::endl;
+    }
     std::cerr << "=========== " << buffer_name << " END ===========";
 
     if (bytes_written < 0) {
         std::cerr << "Error writing to buffer" << std::endl;
         return -1;
-    }
-
-    if (bytes_written == 0) {
-        std::cerr << "Buffer is empty" << std::endl;
     }
 
     std::cerr << RESET << std::endl;
@@ -203,85 +205,85 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
 
     std::cerr << timestamp;
 
-    std::cout << "\n=========== VIRTUAL SERVER ==========" << std::endl;
-    std::cout << "Host: " << virtual_server.host_ << std::endl;
-    std::cout << "Port: " << virtual_server.port_ << std::endl;
+    std::cerr << "\n=========== VIRTUAL SERVER ==========" << std::endl;
+    std::cerr << "Host: " << virtual_server.host_ << std::endl;
+    std::cerr << "Port: " << virtual_server.port_ << std::endl;
 
     // Print server names
-    std::cout << "Server Names: ";
+    std::cerr << "Server Names: ";
     if (virtual_server.server_names_.empty()) {
-        std::cout << "(default server)";
+        std::cerr << "(default server)";
     } else {
         for (size_t i = 0; i < virtual_server.server_names_.size(); ++i) {
-            std::cout << virtual_server.server_names_[i];
+            std::cerr << virtual_server.server_names_[i];
             if (i < virtual_server.server_names_.size() - 1) {
-                std::cout << ", ";
+                std::cerr << ", ";
             }
         }
     }
-    std::cout << std::endl;
+    std::cerr << std::endl;
 
     // Print client max body size with unit
-    std::cout << "Client Max Body Size: ";
+    std::cerr << "Client Max Body Size: ";
     if (virtual_server.client_max_body_size_ >= 1024 * 1024 * 1024) {
-        std::cout << (virtual_server.client_max_body_size_ /
+        std::cerr << (virtual_server.client_max_body_size_ /
                       (1024 * 1024 * 1024))
                   << "G";
     } else if (virtual_server.client_max_body_size_ >= 1024 * 1024) {
-        std::cout << (virtual_server.client_max_body_size_ / (1024 * 1024))
+        std::cerr << (virtual_server.client_max_body_size_ / (1024 * 1024))
                   << "M";
     } else if (virtual_server.client_max_body_size_ >= 1024) {
-        std::cout << (virtual_server.client_max_body_size_ / 1024) << "K";
+        std::cerr << (virtual_server.client_max_body_size_ / 1024) << "K";
     } else {
-        std::cout << virtual_server.client_max_body_size_ << " bytes";
+        std::cerr << virtual_server.client_max_body_size_ << " bytes";
     }
-    std::cout << std::endl;
+    std::cerr << std::endl;
 
     // Print error pages
-    std::cout << "Error Pages:" << std::endl;
+    std::cerr << "Error Pages:" << std::endl;
     if (virtual_server.error_pages_.empty()) {
-        std::cout << "  (none)" << std::endl;
+        std::cerr << "  (none)" << std::endl;
     } else {
         for (std::map<int, std::string>::const_iterator it =
                  virtual_server.error_pages_.begin();
              it != virtual_server.error_pages_.end(); ++it) {
-            std::cout << "  " << it->first << " -> " << it->second << std::endl;
+            std::cerr << "  " << it->first << " -> " << it->second << std::endl;
         }
     }
 
     // Print location blocks
-    std::cout << "Location Blocks (" << virtual_server.locations_.size()
+    std::cerr << "Location Blocks (" << virtual_server.locations_.size()
               << "):" << std::endl;
     for (size_t i = 0; i < virtual_server.locations_.size(); ++i) {
         const Location& loc = virtual_server.locations_[i];
-        std::cout << "  ---------- LOCATION: " << loc.path_ << " ----------"
+        std::cerr << "  ---------- LOCATION: " << loc.path_ << " ----------"
                   << std::endl;
 
-        std::cout << "    root: " << loc.root_ << std::endl;
+        std::cerr << "    root: " << loc.root_ << std::endl;
 
-        std::cout << "    autoindex: " << (loc.autoindex_ ? "on" : "off")
+        std::cerr << "    autoindex: " << (loc.autoindex_ ? "on" : "off")
                   << std::endl;
 
-        std::cout << "    allowed_methods: ";
+        std::cerr << "    allowed_methods: ";
         for (size_t j = 0; j < loc.allowed_methods_.size(); ++j) {
-            std::cout << loc.allowed_methods_[j];
+            std::cerr << loc.allowed_methods_[j];
             if (j < loc.allowed_methods_.size() - 1) {
-                std::cout << ", ";
+                std::cerr << ", ";
             }
         }
-        std::cout << std::endl;
+        std::cerr << std::endl;
 
-        std::cout << "    cgi: " << (loc.cgi_enabled_ ? "on" : "off")
+        std::cerr << "    cgi: " << (loc.cgi_enabled_ ? "on" : "off")
                   << std::endl;
 
-        std::cout << "    index: " << loc.index_ << std::endl;
+        std::cerr << "    index: " << loc.index_ << std::endl;
 
         if (!loc.redirect_.empty()) {
-            std::cout << "    redirect: " << loc.redirect_ << std::endl;
+            std::cerr << "    redirect: " << loc.redirect_ << std::endl;
         }
     }
 
-    std::cout << "================================" << RESET << std::endl;
+    std::cerr << "================================" << RESET << std::endl;
 }
 
 const char* event_to_string(uint32_t event_flags) {
