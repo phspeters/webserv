@@ -654,24 +654,49 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
         return PARSE_SUCCESS;
     }
 
-    size_t unloaded_bytes =
-        buff.unload_to(req->body_buffer_, body_remaining_bytes);
-    body_remaining_bytes -= unloaded_bytes;
+    // Log current state for debugging
+    log(LOG_DEBUG, "parse_content_body: body_remaining_bytes=%zu, buff_size=%zu, content_length=%zu",
+        body_remaining_bytes, buff.readable_bytes(), req->content_length_);
 
-    log(LOG_DEBUG, "Unloaded %zu bytes to body buffer for connection: %d",
-        unloaded_bytes, conn->client_fd_);
-
-    if (body_remaining_bytes == 0) {
-        req->body_fully_parsed_ = true;
-        log(LOG_DEBUG, "Body parsing complete for connection: %d",
-            conn->client_fd_);
+    // Calculate how many bytes we can transfer
+    size_t buff_readable = buff.readable_bytes();
+    size_t bytes_to_transfer = std::min(buff_readable, body_remaining_bytes);
+    
+    log(LOG_DEBUG, "parse_content_body: buff_readable=%zu, bytes_to_transfer=%zu", 
+        buff_readable, bytes_to_transfer);
+    
+    if (bytes_to_transfer == 0) {
+        log(LOG_DEBUG, "No bytes to transfer: buff_empty=%d, body_remaining=%zu", 
+            buff.readable_bytes() == 0, body_remaining_bytes);
         return PARSE_SUCCESS;
     }
 
-    log(LOG_DEBUG,
-        "Body parsing incomplete for connection: %d, need %zu more bytes.",
-        conn->client_fd_,
-        req->content_length_ - req->body_buffer_.readable_bytes());
+    // Transfer bytes from read buffer to body buffer
+    log(LOG_DEBUG, "About to call buff.unload_to with bytes_to_transfer=%zu", bytes_to_transfer);
+    size_t unloaded_bytes = buff.unload_to(req->body_buffer_, bytes_to_transfer);
+    log(LOG_DEBUG, "buff.unload_to returned: %zu", unloaded_bytes);
+    
+    // Check for overflow before subtraction
+    if (unloaded_bytes > body_remaining_bytes) {
+        log(LOG_ERROR, "OVERFLOW DETECTED: unloaded_bytes=%zu > body_remaining_bytes=%zu", 
+            unloaded_bytes, body_remaining_bytes);
+        body_remaining_bytes = 0;
+    } else {
+        // Update remaining bytes
+        body_remaining_bytes -= unloaded_bytes;
+        log(LOG_DEBUG, "Updated body_remaining_bytes to: %zu", body_remaining_bytes);
+    }
+    
+    log(LOG_DEBUG, "Transferred %zu bytes to body buffer, remaining: %zu", 
+        unloaded_bytes, body_remaining_bytes);
+
+    // Check if we've received the complete body
+    if (body_remaining_bytes == 0) {
+        log(LOG_DEBUG, "Complete body received for client %d", conn->client_fd_);
+        return PARSE_SUCCESS;
+    }
+
+    // More data expected
     return PARSE_INCOMPLETE;
 }
 

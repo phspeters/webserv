@@ -75,6 +75,8 @@ enum ParserState {
 
 enum MultipartState {
     FIND_INITIAL_BOUNDARY,
+    FIND_HEADERS,
+    FIND_DATA,
     READ_HEADERS,
     READ_DATA,
     CHECK_BOUNDARY_TYPE,
