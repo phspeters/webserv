@@ -261,8 +261,8 @@ ParseStatus RequestProcessor::validate_body_handling(Connection* conn) {
 
             if (static_cast<ssize_t>(body_size) >
                 conn->location_match_->client_max_body_size_) {
-                log(LOG_ERROR, "Content-Length exceeds maximum size: %zu",
-                    body_size);
+                log(LOG_ERROR, "Content-Length exceeds maximum size: %zu, limit: %zd",
+                    body_size, conn->location_match_->client_max_body_size_);
                 return PARSE_CONTENT_TOO_LARGE;
             }
         }

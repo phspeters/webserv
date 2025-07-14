@@ -1,24 +1,12 @@
 #include "common.hpp"
 
-// Server defaults
-static const int DEFAULT_PORT = 80;
-static const std::string DEFAULT_HOST = "0.0.0.0";
-static const size_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024;  // 1MB
-static const size_t DEFAULT_LOCATION_MAX_BODY_SIZE = 1024 * 1024;
-static const std::string DEFAULT_SERVER_NAME = "default_server";
-
-// Location defaults
-static const bool DEFAULT_AUTOINDEX = false;
-static const bool DEFAULT_CGI_ENABLED = false;
-static const std::string DEFAULT_INDEX = "index.html";
-
 // Constructor for Location with defaults
-Location::Location()
+Location::Location(ssize_t max_body_size)
     : type_(LOC_DEFAULT),
       autoindex_(DEFAULT_AUTOINDEX),
       cgi_enabled_(DEFAULT_CGI_ENABLED),
       index_(DEFAULT_INDEX),
-      client_max_body_size_(DEFAULT_LOCATION_MAX_BODY_SIZE) {
+      client_max_body_size_(max_body_size) {
     std::vector<std::string> methods;
     methods.push_back("GET");
     methods.push_back("POST");
@@ -110,7 +98,7 @@ bool VirtualServer::parse_location_block(std::ifstream& file,
     }
 
     // Create a new Location
-    Location location;
+    Location location(this->client_max_body_size_);
     location.path_ = path;
 
     // Parse location block
@@ -252,6 +240,8 @@ ssize_t VirtualServer::parse_client_max_body_size(const std::string& value) {
 }
 
 bool VirtualServer::parse_server_name(const std::string& value) {
+    server_names_.clear();
+
     std::istringstream iss(value);
     std::string name;
     while (iss >> name) {

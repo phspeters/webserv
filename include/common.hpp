@@ -32,7 +32,7 @@
 
 #define CRLF "\r\n"  // Carriage return + line feed
 #define DEFAULT_CHUNK_SIZE 4096
-#define ACTIVE_LOG_LEVEL LOG_TRACE
+#define ACTIVE_LOG_LEVEL LOG_DEBUG
 
 namespace http_limits {
 const time_t TIMEOUT = 30;                    // Timeout in seconds
@@ -45,6 +45,17 @@ const size_t MAX_HEADERS = 100;               // Maximum number of headers
 const size_t MAX_CONTENT_LENGTH = 8388608;    // 8MB
 const size_t MAX_CHUNK_SIZE = 1048576;        // 1MB
 }  // namespace http_limits
+
+// Server defaults
+static const int DEFAULT_PORT = 80;
+static const std::string DEFAULT_HOST = "0.0.0.0";
+static const ssize_t DEFAULT_MAX_BODY_SIZE = 1024 * 1024;  // 1MB
+static const std::string DEFAULT_SERVER_NAME = "default_server";
+
+// Location defaults
+static const bool DEFAULT_AUTOINDEX = false;
+static const bool DEFAULT_CGI_ENABLED = false;
+static const std::string DEFAULT_INDEX = "index.html";
 
 enum log_level {
     LOG_OFF,

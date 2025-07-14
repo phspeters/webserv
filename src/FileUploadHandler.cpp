@@ -1,6 +1,7 @@
 #include "common.hpp"
 
-// curl -v -F "file=@/workspaces/webserv/var/www/files/cutecat.png" http://localhost:8080/upload
+// curl -v -F "file=@/workspaces/webserv/var/www/files/cutecat.png"
+// http://localhost:8080/upload
 
 FileUploadHandler::FileUploadHandler() : AHandler() {}
 
@@ -32,7 +33,8 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
 
     // Extract boundary from content-type header
     std::string content_type = conn->request_data_->get_header("content-type");
-    std::string& boundary = conn->file_upload_context_->multipart_context_.boundary_;
+    std::string& boundary =
+        conn->file_upload_context_->multipart_context_.boundary_;
     boundary = multipart_parser_.extract_boundary(content_type);
     if (boundary.empty()) {
         log(LOG_ERROR, "No multipart boundary found for client_fd %d",
@@ -42,7 +44,8 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
     }
 
     // Initialize multipart parser state
-    conn->file_upload_context_->multipart_context_.state_ = FIND_INITIAL_BOUNDARY;
+    conn->file_upload_context_->multipart_context_.state_ =
+        FIND_INITIAL_BOUNDARY;
     conn->file_upload_context_->multipart_context_.is_file_part_ = false;
     conn->file_upload_context_->multipart_context_.part_headers_.clear();
 
@@ -51,7 +54,7 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
 
     // Do not create upload directory if it does not exist
     if (!ensure_upload_directory_exists(conn, upload_dir)) {
-        return ERROR;  
+        return ERROR;
     }
 
     std::stringstream ss;
@@ -76,15 +79,14 @@ Result FileUploadHandler::handle(Connection* conn) {
         conn->client_fd_);
 
     if (conn->request_data_->body_buffer_.empty()) {
-    if (conn->request_data_->content_length_ == 0) {
-        log(LOG_ERROR, "[UPLOAD] No body sent with request.");
-        conn->status_ = BAD_REQUEST;
-        return ERROR;
+        if (conn->request_data_->content_length_ == 0) {
+            log(LOG_ERROR, "[UPLOAD] No body sent with request.");
+            conn->status_ = BAD_REQUEST;
+            return ERROR;
+        }
+        log(LOG_DEBUG, "[UPLOAD] body_buffer_ empty, waiting for more data.");
+        return AGAIN;
     }
-    log(LOG_DEBUG, "[UPLOAD] body_buffer_ empty, waiting for more data.");
-    return AGAIN;
-}
-    log_buffer(LOG_FATAL, conn->request_data_->body_buffer_, "BODY BUFFER");
 
     ParseStatus status = multipart_parser_.parse_multipart(conn);
     if (status >= PARSE_ERROR) {
@@ -97,28 +99,33 @@ Result FileUploadHandler::handle(Connection* conn) {
     // Write any parsed file data to the temp file
     Buffer& buffer = conn->file_upload_context_->upload_buffer_;
 
-    log_buffer(LOG_WARNING, buffer, "UPLOAD BUFFER");
+    log_buffer(LOG_TRACE, buffer, "UPLOAD BUFFER");
 
     if (!buffer.empty()) {
         // Log the current file offset before writing
         off_t before_offset = lseek(file_fd, 0, SEEK_CUR);
-        log(LOG_DEBUG, "[UPLOAD] Offset before write: %jd", (intmax_t)before_offset);
+        log(LOG_DEBUG, "[UPLOAD] Offset before write: %jd",
+            (intmax_t)before_offset);
 
         // Debug: log the exact data being written
         std::string debug_data(buffer.data(), buffer.readable_bytes());
-        log(LOG_DEBUG, "[UPLOAD] About to write to temp file: length=%zu", buffer.readable_bytes());
-    
-        // Write incrementally to the temp file, without truncating or repositioning the pointer
+        log(LOG_DEBUG, "[UPLOAD] About to write to temp file: length=%zu",
+            buffer.readable_bytes());
+
+        // Write incrementally to the temp file, without truncating or
+        // repositioning the pointer
         ssize_t written = buffer.write_to(file_fd);
         if (written < 0) {
-            log(LOG_ERROR, "[UPLOAD] Error writing to temp file: %s", strerror(errno));
+            log(LOG_ERROR, "[UPLOAD] Error writing to temp file: %s",
+                strerror(errno));
             conn->status_ = INTERNAL_SERVER_ERROR;
             return ERROR;
         }
 
         // Log the file offset after writing
         off_t after_offset = lseek(file_fd, 0, SEEK_CUR);
-        log(LOG_DEBUG, "[UPLOAD] Offset after write: %jd, bytes written: %zd", (intmax_t)after_offset, written);
+        log(LOG_DEBUG, "[UPLOAD] Offset after write: %jd, bytes written: %zd",
+            (intmax_t)after_offset, written);
     }
 
     if (status == PARSE_INCOMPLETE) {
@@ -220,7 +227,8 @@ bool FileUploadHandler::ensure_upload_directory_exists(
     struct stat st;
     if (stat(upload_dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
         if (access(upload_dir.c_str(), W_OK) != 0) {
-            log(LOG_ERROR, "No write permission for upload directory: %s", upload_dir.c_str());
+            log(LOG_ERROR, "No write permission for upload directory: %s",
+                upload_dir.c_str());
             conn->status_ = FORBIDDEN;
             return false;
         }
@@ -280,7 +288,8 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
     if (stat(temp_path.c_str(), &temp_stat) == 0) {
         log(LOG_DEBUG, "Temp file exists, size: %ld bytes", temp_stat.st_size);
     } else {
-        log(LOG_ERROR, "Temp file does not exist or stat failed: %s", strerror(errno));
+        log(LOG_ERROR, "Temp file does not exist or stat failed: %s",
+            strerror(errno));
     }
 
     int src_fd = open(temp_path.c_str(), O_RDONLY);
@@ -289,22 +298,23 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
             strerror(errno));
         return false;
     }
-    
+
     // Debug: read and log the temp file content before copying
     lseek(src_fd, 0, SEEK_SET);
     char debug_buf[4096];
     ssize_t debug_read = read(src_fd, debug_buf, sizeof(debug_buf));
     if (debug_read > 0) {
         std::string debug_content(debug_buf, debug_read);
-        log(LOG_DEBUG, "Temp file content before copy: '%s' (length=%zd)", 
+        log(LOG_DEBUG, "Temp file content before copy: '%s' (length=%zd)",
             debug_content.c_str(), debug_read);
     } else {
-        log(LOG_ERROR, "Failed to read temp file for debug: %s", strerror(errno));
+        log(LOG_ERROR, "Failed to read temp file for debug: %s",
+            strerror(errno));
     }
-    
+
     // Reset position for actual copy
     lseek(src_fd, 0, SEEK_SET);
-    
+
     int dst_fd = open(final_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (dst_fd < 0) {
         log(LOG_ERROR, "Failed to open final file for writing: %s",
@@ -335,7 +345,8 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
     close(src_fd);
     close(dst_fd);
 
-    log(LOG_DEBUG, "Copy completed: %zd bytes copied from temp to final", total_copied);
+    log(LOG_DEBUG, "Copy completed: %zd bytes copied from temp to final",
+        total_copied);
 
     if (bytes_read < 0) {
         log(LOG_ERROR, "Error reading from temp file: %s", strerror(errno));
@@ -344,7 +355,8 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
 
     // Remove the temp file after successful copy
     if (unlink(temp_path.c_str()) != 0) {
-        log(LOG_ERROR, "Failed to remove temp file '%s': %s", temp_path.c_str(), strerror(errno));
+        log(LOG_ERROR, "Failed to remove temp file '%s': %s", temp_path.c_str(),
+            strerror(errno));
         // Not a fatal error, so do not return false
     } else {
         log(LOG_DEBUG, "Temp file '%s' removed after copy", temp_path.c_str());

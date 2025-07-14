@@ -54,7 +54,7 @@ struct Location {
     std::string redirect_;
     ssize_t client_max_body_size_;
 
-    Location();
+    Location(ssize_t max_body_size = DEFAULT_MAX_BODY_SIZE);
 
     bool is_valid() const;
 };  // struct Location

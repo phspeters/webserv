@@ -259,7 +259,13 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
         std::cerr << "  ---------- LOCATION: " << loc.path_ << " ----------"
                   << std::endl;
 
+        std::cerr << "    type: "
+                  << (loc.type_ == LOC_DEFAULT ? "default" : "extension")
+                  << std::endl;
+
         std::cerr << "    root: " << loc.root_ << std::endl;
+
+        std::cerr << "    path: " << loc.path_ << std::endl;
 
         std::cerr << "    autoindex: " << (loc.autoindex_ ? "on" : "off")
                   << std::endl;
@@ -281,6 +287,9 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
         if (!loc.redirect_.empty()) {
             std::cerr << "    redirect: " << loc.redirect_ << std::endl;
         }
+
+        std::cerr << "    client_max_body_size: " << loc.client_max_body_size_
+                  << " bytes" << std::endl;
     }
 
     std::cerr << "================================" << RESET << std::endl;

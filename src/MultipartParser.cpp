@@ -6,11 +6,13 @@ MultipartParser::~MultipartParser() {}
 
 // TODO: only consume from body_buffe if we have writable space in upload buffer
 ParseStatus MultipartParser::parse_multipart(Connection* conn) {
-    log(LOG_TRACE, "MultipartParser::parse_multipart called for client %d", conn->client_fd_);
+    log(LOG_TRACE, "MultipartParser::parse_multipart called for client %d",
+        conn->client_fd_);
 
     FileUploadContext* upload_ctx = conn->file_upload_context_;
     if (!upload_ctx) {
-        log(LOG_ERROR, "No upload context found for client %d", conn->client_fd_);
+        log(LOG_ERROR, "No upload context found for client %d",
+            conn->client_fd_);
         return PARSE_ERROR;
     }
 
@@ -18,7 +20,7 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
     Buffer& buffer = conn->request_data_->body_buffer_;
     size_t processed = 0;
 
-    log(LOG_DEBUG, "MultipartParser: boundary='%s', state=%d, buffer_size=%zu", 
+    log(LOG_DEBUG, "MultipartParser: boundary='%s', state=%d, buffer_size=%zu",
         ctx.boundary_.c_str(), ctx.state_, buffer.readable_bytes());
 
     while (buffer.readable_bytes() > 0) {
@@ -31,29 +33,35 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
             case FIND_INITIAL_BOUNDARY: {
                 // Look for the initial boundary
                 std::string boundary_delimiter = "--" + ctx.boundary_;
-                log(LOG_DEBUG, "Looking for boundary delimiter: '%s'", boundary_delimiter.c_str());
-                
-                size_t boundary_pos = std::string(data, len).find(boundary_delimiter);
+                log(LOG_DEBUG, "Looking for boundary delimiter: '%s'",
+                    boundary_delimiter.c_str());
+
+                size_t boundary_pos =
+                    std::string(data, len).find(boundary_delimiter);
                 log(LOG_DEBUG, "Boundary search result: pos=%zu", boundary_pos);
-                
+
                 if (boundary_pos == std::string::npos) {
-                    log(LOG_DEBUG, "Initial boundary not found, waiting for more data");
+                    log(LOG_DEBUG,
+                        "Initial boundary not found, waiting for more data");
                     return PARSE_INCOMPLETE;
                 }
 
                 // Found boundary, consume up to the end of boundary line
-                size_t line_end = std::string(data, len).find("\r\n", boundary_pos);
+                size_t line_end =
+                    std::string(data, len).find("\r\n", boundary_pos);
                 if (line_end == std::string::npos) {
-                    log(LOG_DEBUG, "Boundary line incomplete, waiting for more data");
+                    log(LOG_DEBUG,
+                        "Boundary line incomplete, waiting for more data");
                     return PARSE_INCOMPLETE;
                 }
 
-                size_t consume_len = line_end + 2; // Include \r\n
+                size_t consume_len = line_end + 2;  // Include \r\n
                 buffer.consume(consume_len);
                 processed += consume_len;
-                
+
                 ctx.state_ = READ_HEADERS;
-                log(LOG_DEBUG, "Found initial boundary, switching to READ_HEADERS");
+                log(LOG_DEBUG,
+                    "Found initial boundary, switching to READ_HEADERS");
                 break;
             }
 
@@ -68,12 +76,12 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                 // Extract and parse headers
                 std::string headers(data, empty_line_pos);
                 parse_part_headers(headers, upload_ctx);
-                
+
                 // Consume headers + empty line
-                size_t consume_len = empty_line_pos + 4; // Include \r\n\r\n
+                size_t consume_len = empty_line_pos + 4;  // Include \r\n\r\n
                 buffer.consume(consume_len);
                 processed += consume_len;
-                
+
                 ctx.state_ = READ_DATA;
                 ctx.data_start_ = buffer.data();
                 ctx.data_length_ = 0;
@@ -84,13 +92,17 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
             case READ_DATA: {
                 // Look for the next boundary
                 std::string boundary_delimiter = "\r\n--" + ctx.boundary_;
-                size_t boundary_pos = std::string(data, len).find(boundary_delimiter);
-                
+                size_t boundary_pos =
+                    std::string(data, len).find(boundary_delimiter);
+
                 if (boundary_pos == std::string::npos) {
                     // No boundary found, all data is file content
                     if (ctx.is_file_part_) {
                         upload_ctx->upload_buffer_.append(data, len);
-                        log(LOG_DEBUG, "Extracted file data: %zu bytes (no boundary found)", len);
+                        log(LOG_DEBUG,
+                            "Extracted file data: %zu bytes (no boundary "
+                            "found)",
+                            len);
                     }
                     buffer.consume(len);
                     processed += len;
@@ -100,38 +112,45 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
                 // Found boundary, extract file data up to boundary
                 if (ctx.is_file_part_ && boundary_pos > 0) {
                     upload_ctx->upload_buffer_.append(data, boundary_pos);
-                    log(LOG_DEBUG, "Extracted file data: %zu bytes (boundary found)", boundary_pos);
+                    log(LOG_DEBUG,
+                        "Extracted file data: %zu bytes (boundary found)",
+                        boundary_pos);
                 }
 
                 // Check if this is the final boundary
                 std::string final_boundary = boundary_delimiter + "--";
-                size_t final_pos = std::string(data, len).find(final_boundary, boundary_pos);
-                
+                size_t final_pos =
+                    std::string(data, len).find(final_boundary, boundary_pos);
+
                 if (final_pos != std::string::npos) {
                     // Final boundary found
-                    size_t consume_len = final_pos + final_boundary.length() + 2; // Include \r\n
+                    size_t consume_len = final_pos + final_boundary.length() +
+                                         2;  // Include \r\n
                     buffer.consume(consume_len);
                     processed += consume_len;
-                    
+
                     ctx.state_ = DONE;
                     upload_ctx->upload_complete = true;
                     log(LOG_DEBUG, "Final boundary found, upload complete");
                     return PARSE_SUCCESS;
                 } else {
                     // Next part boundary found
-                    size_t line_end = std::string(data, len).find("\r\n", boundary_pos);
+                    size_t line_end =
+                        std::string(data, len).find("\r\n", boundary_pos);
                     if (line_end == std::string::npos) {
-                        log(LOG_DEBUG, "Boundary line incomplete, waiting for more data");
+                        log(LOG_DEBUG,
+                            "Boundary line incomplete, waiting for more data");
                         return PARSE_INCOMPLETE;
                     }
-                    
-                    size_t consume_len = line_end + 2; // Include \r\n
+
+                    size_t consume_len = line_end + 2;  // Include \r\n
                     buffer.consume(consume_len);
                     processed += consume_len;
-                    
+
                     ctx.state_ = READ_HEADERS;
                     ctx.is_file_part_ = false;
-                    log(LOG_DEBUG, "Next boundary found, switching to READ_HEADERS");
+                    log(LOG_DEBUG,
+                        "Next boundary found, switching to READ_HEADERS");
                 }
                 break;
             }
@@ -151,7 +170,7 @@ ParseStatus MultipartParser::parse_multipart(Connection* conn) {
 }
 
 void MultipartParser::commit_part_data(MultipartContext* multipart_ctx,
-                                        FileUploadContext* upload_ctx) {
+                                       FileUploadContext* upload_ctx) {
     if (!multipart_ctx->is_file_part_ || !multipart_ctx->data_start_ ||
         multipart_ctx->data_length_ == 0) {
         return;
@@ -163,7 +182,7 @@ void MultipartParser::commit_part_data(MultipartContext* multipart_ctx,
 
     // Append to upload buffer
     upload_ctx->upload_buffer_.append(multipart_ctx->data_start_, data_len);
-    
+
     // Reset for next part
     multipart_ctx->data_start_ = NULL;
     multipart_ctx->data_length_ = 0;
@@ -181,12 +200,14 @@ void MultipartParser::parse_part_headers(const std::string& headers,
         size_t end = headers.find('"', start);
         if (end != std::string::npos) {
             upload_ctx->filename_ = headers.substr(start, end - start);
-            log(LOG_DEBUG, "Detected file part with filename: '%s'", upload_ctx->filename_.c_str());
+            log(LOG_DEBUG, "Detected file part with filename: '%s'",
+                upload_ctx->filename_.c_str());
         } else {
             // Malformed filename attribute - treat as non-file part
             upload_ctx->multipart_context_.is_file_part_ = false;
             upload_ctx->filename_.clear();
-            log(LOG_DEBUG, "Malformed filename attribute, treating as non-file part");
+            log(LOG_DEBUG,
+                "Malformed filename attribute, treating as non-file part");
         }
     } else {
         upload_ctx->multipart_context_.is_file_part_ = false;
@@ -210,7 +231,7 @@ std::string MultipartParser::extract_boundary(const std::string& content_type) {
         log(LOG_DEBUG, "boundary_pos >= content_type.length()");
         return "";
     }
-    
+
     std::string boundary;
     if (content_type[boundary_pos] == '\"') {
         boundary_pos++;
@@ -230,10 +251,10 @@ std::string MultipartParser::extract_boundary(const std::string& content_type) {
     }
 
     log(LOG_DEBUG, "Extracted boundary: '%s'", boundary.c_str());
-    
+
     // Add the required "--" prefix for multipart boundaries
     std::string full_boundary = "--" + boundary;
     log(LOG_DEBUG, "Full boundary with --: '%s'", full_boundary.c_str());
-    
+
     return boundary;  // Return without --, they will be added when needed
 }

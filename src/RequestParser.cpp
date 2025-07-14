@@ -615,9 +615,9 @@ ParserState RequestParser::determine_body_handling_state(Connection* conn) {
     }
 
     std::string expect = request->get_header("expect");
-    if(expect.find("100-continue") != std::string::npos) {
-        send(conn->client_fd_,
-             "HTTP/1.1 100 Continue\r\n\r\n", 25, MSG_NOSIGNAL);
+    if (expect.find("100-continue") != std::string::npos) {
+        send(conn->client_fd_, "HTTP/1.1 100 Continue\r\n\r\n", 25,
+             MSG_NOSIGNAL);
     }
 
     std::string transfer_encoding = request->get_header("transfer-encoding");
@@ -655,44 +655,39 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
     }
 
     // Log current state for debugging
-    log(LOG_DEBUG, "parse_content_body: body_remaining_bytes=%zu, buff_size=%zu, content_length=%zu",
+    log(LOG_DEBUG,
+        "parse_content_body: body_remaining_bytes=%zu, buff_size=%zu, "
+        "content_length=%zu",
         body_remaining_bytes, buff.readable_bytes(), req->content_length_);
 
     // Calculate how many bytes we can transfer
     size_t buff_readable = buff.readable_bytes();
     size_t bytes_to_transfer = std::min(buff_readable, body_remaining_bytes);
-    
-    log(LOG_DEBUG, "parse_content_body: buff_readable=%zu, bytes_to_transfer=%zu", 
+
+    log(LOG_DEBUG,
+        "parse_content_body: buff_readable=%zu, bytes_to_transfer=%zu",
         buff_readable, bytes_to_transfer);
-    
+
     if (bytes_to_transfer == 0) {
-        log(LOG_DEBUG, "No bytes to transfer: buff_empty=%d, body_remaining=%zu", 
+        log(LOG_DEBUG,
+            "No bytes to transfer: buff_empty=%d, body_remaining=%zu",
             buff.readable_bytes() == 0, body_remaining_bytes);
         return PARSE_SUCCESS;
     }
 
-    // Transfer bytes from read buffer to body buffer
-    log(LOG_DEBUG, "About to call buff.unload_to with bytes_to_transfer=%zu", bytes_to_transfer);
-    size_t unloaded_bytes = buff.unload_to(req->body_buffer_, bytes_to_transfer);
-    log(LOG_DEBUG, "buff.unload_to returned: %zu", unloaded_bytes);
-    
-    // Check for overflow before subtraction
-    if (unloaded_bytes > body_remaining_bytes) {
-        log(LOG_ERROR, "OVERFLOW DETECTED: unloaded_bytes=%zu > body_remaining_bytes=%zu", 
-            unloaded_bytes, body_remaining_bytes);
-        body_remaining_bytes = 0;
-    } else {
-        // Update remaining bytes
-        body_remaining_bytes -= unloaded_bytes;
-        log(LOG_DEBUG, "Updated body_remaining_bytes to: %zu", body_remaining_bytes);
-    }
-    
-    log(LOG_DEBUG, "Transferred %zu bytes to body buffer, remaining: %zu", 
-        unloaded_bytes, body_remaining_bytes);
+    size_t unloaded_bytes =
+        buff.unload_to(req->body_buffer_, body_remaining_bytes);
+    body_remaining_bytes -= unloaded_bytes;
+
+    log(LOG_DEBUG,
+        "Transferred %zu bytes to body buffer for client %d, remaining: %zu",
+        unloaded_bytes, conn->client_fd_, body_remaining_bytes);
 
     // Check if we've received the complete body
     if (body_remaining_bytes == 0) {
-        log(LOG_DEBUG, "Complete body received for client %d", conn->client_fd_);
+        req->body_fully_parsed_ = true;
+        log(LOG_DEBUG, "Complete body received for client %d",
+            conn->client_fd_);
         return PARSE_SUCCESS;
     }
 
