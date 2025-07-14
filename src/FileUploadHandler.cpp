@@ -50,9 +50,9 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
     // Generate temporary file name
     std::string upload_dir = get_upload_directory(conn);
 
-    // TODO: Do not create upload directory if it does not exist
+    // Do not create upload directory if it does not exist
     if (!ensure_upload_directory_exists(conn, upload_dir)) {
-        return ERROR;  // Directory creation failed
+        return ERROR;  
     }
 
     std::stringstream ss;
@@ -156,7 +156,6 @@ Result FileUploadHandler::handle(Connection* conn) {
     return AGAIN;
 }
 
-// TODO: include directory write permission
 ParseStatus FileUploadHandler::check_permissions(Connection* conn) {
     log(LOG_TRACE,
         "FileUploadHandler::check_permissions called for client_fd %d",
@@ -217,46 +216,19 @@ bool FileUploadHandler::ensure_upload_directory_exists(
         conn->client_fd_);
 
     struct stat st;
-    if (stat(upload_dir.c_str(), &st) == 0) {
-        return true;  // Directory already exists
-    }
-
-    return create_directory_recursive(conn, upload_dir);
-}
-
-// TODO: do not create directories if they do not exist, return
-// INTERNAL_SERVER_ERROR
-bool FileUploadHandler::create_directory_recursive(Connection* conn,
-                                                   const std::string& path) {
-    log(LOG_TRACE,
-        "FileUploadHandler::create_directory_recursive called for client_fd %d",
-        conn->client_fd_);
-
-    size_t pos = 0;
-    while ((pos = path.find('/', pos + 1)) != std::string::npos) {
-        if (pos > 0) {
-            std::string parent_dir = path.substr(0, pos);
-            if (mkdir(parent_dir.c_str(), 0755) != 0 && errno != EEXIST) {
-                if (errno == EACCES || errno == EPERM) {
-                    conn->status_ = FORBIDDEN;
-                } else {
-                    conn->status_ = INTERNAL_SERVER_ERROR;
-                }
-                return false;
-            }
-        }
-    }
-
-    // Create final directory
-    if (mkdir(path.c_str(), 0755) != 0 && errno != EEXIST) {
-        if (errno == EACCES || errno == EPERM) {
+    if (stat(upload_dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+        if (access(upload_dir.c_str(), W_OK) != 0) {
+            log(LOG_ERROR, "No write permission for upload directory: %s", upload_dir.c_str());
             conn->status_ = FORBIDDEN;
-        } else {
-            conn->status_ = INTERNAL_SERVER_ERROR;
+            return false;
         }
-        return false;
+        return true;  // Directory exists and is writable
     }
-    return true;
+
+    // Directory does not exist, do not create it
+    log(LOG_ERROR, "Upload directory does not exist: %s", upload_dir.c_str());
+    conn->status_ = INTERNAL_SERVER_ERROR;
+    return false;
 }
 
 std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
@@ -366,6 +338,14 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
     if (bytes_read < 0) {
         log(LOG_ERROR, "Error reading from temp file: %s", strerror(errno));
         return false;
+    }
+
+    // Remove the temp file after successful copy
+    if (unlink(temp_path.c_str()) != 0) {
+        log(LOG_ERROR, "Failed to remove temp file '%s': %s", temp_path.c_str(), strerror(errno));
+        // Not a fatal error, so do not return false
+    } else {
+        log(LOG_DEBUG, "Temp file '%s' removed after copy", temp_path.c_str());
     }
 
     return true;
