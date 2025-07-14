@@ -14,7 +14,7 @@ void generate_error_response(Connection* conn, ParseStatus parse_status);
 int get_error_page(int status_code, const VirtualServer& virtual_server);
 std::string generate_default_error_page(HttpStatus status_code,
                                         const std::string& status_message);
-                                        
+
 }  // namespace ErrorHandler
 
 #endif  // ERRORHANDLER_HPP

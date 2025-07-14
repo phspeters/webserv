@@ -133,7 +133,7 @@ void Connection::remove_io_context(IOContext* io_context) {
             io_context->fd_);  // Log error but continue cleanup
     }
 
-    if(io_context->fd_ >= 0) {
+    if (io_context->fd_ >= 0) {
         close(io_context->fd_);  // Close the file descriptor
         io_context->fd_ = -1;    // Mark as closed
     }
@@ -228,6 +228,5 @@ void Connection::reset_for_keep_alive() {
     status_ = OK;
     conn_state_ = CONN_READING_REQUEST;
 
-    log(LOG_INFO, "Connection reset for keep-alive on socket '%d'",
-        client_fd_);
+    log(LOG_INFO, "Connection reset for keep-alive on socket '%d'", client_fd_);
 }
