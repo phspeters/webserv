@@ -58,16 +58,12 @@ size_t Buffer::unload_to(Buffer& dest, size_t max_bytes) {
     if (empty()) {
         return 0;  // Nothing to move
     }
-    
-    size_t bytes_to_move = std::min(readable_bytes(), max_bytes);
-    
-    size_t bytes_actually_appended = dest.append(data(), bytes_to_move);
-    
-    consume(bytes_actually_appended);
 
-    if (empty()) {
-        reset();
-    }
+    size_t bytes_to_move = std::min(readable_bytes(), max_bytes);
+
+    size_t bytes_actually_appended = dest.append(data(), bytes_to_move);
+
+    consume(bytes_actually_appended);
 
     return bytes_actually_appended;
 }
@@ -88,10 +84,6 @@ size_t Buffer::append(const char* data, size_t size) {
     size_t bytes_to_append = std::min(size, writable_space());
     std::memcpy(write_ptr(), data, bytes_to_append);
     has_written(bytes_to_append);
-
-    if (empty()) {
-        reset();
-    }
 
     return bytes_to_append;
 }

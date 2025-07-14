@@ -45,7 +45,8 @@ struct FileUploadContext {
 
     MultipartContext multipart_context_;
 
-    FileUploadContext() : file_fd_(-1), upload_complete(false) {}
+    FileUploadContext()
+        : file_fd_(-1), upload_buffer_(8192), upload_complete(false) {}
 };
 
 #endif  // FILEUPLOADHANDLER_HPP

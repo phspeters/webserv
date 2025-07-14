@@ -88,6 +88,9 @@ Result FileUploadHandler::handle(Connection* conn) {
         return AGAIN;
     }
 
+    log_buffer(LOG_TRACE, conn->request_data_->body_buffer_,
+               "REQUEST BODY BUFFER");
+
     ParseStatus status = multipart_parser_.parse_multipart(conn);
     if (status >= PARSE_ERROR) {
         conn->status_ = parse_status_to_response_status(status);
@@ -102,16 +105,6 @@ Result FileUploadHandler::handle(Connection* conn) {
     log_buffer(LOG_TRACE, buffer, "UPLOAD BUFFER");
 
     if (!buffer.empty()) {
-        // Log the current file offset before writing
-        off_t before_offset = lseek(file_fd, 0, SEEK_CUR);
-        log(LOG_DEBUG, "[UPLOAD] Offset before write: %jd",
-            (intmax_t)before_offset);
-
-        // Debug: log the exact data being written
-        std::string debug_data(buffer.data(), buffer.readable_bytes());
-        log(LOG_DEBUG, "[UPLOAD] About to write to temp file: length=%zu",
-            buffer.readable_bytes());
-
         // Write incrementally to the temp file, without truncating or
         // repositioning the pointer
         ssize_t written = buffer.write_to(file_fd);
@@ -122,10 +115,7 @@ Result FileUploadHandler::handle(Connection* conn) {
             return ERROR;
         }
 
-        // Log the file offset after writing
-        off_t after_offset = lseek(file_fd, 0, SEEK_CUR);
-        log(LOG_DEBUG, "[UPLOAD] Offset after write: %jd, bytes written: %zd",
-            (intmax_t)after_offset, written);
+        buffer.prepare_for_next_request();
     }
 
     if (status == PARSE_INCOMPLETE) {
@@ -275,7 +265,6 @@ std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
     return safe_filename;
 }
 
-// TODO: remove .tmp file after copying
 bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
                                                 const std::string& final_path) {
     log(LOG_TRACE,
@@ -298,22 +287,6 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
             strerror(errno));
         return false;
     }
-
-    // Debug: read and log the temp file content before copying
-    lseek(src_fd, 0, SEEK_SET);
-    char debug_buf[4096];
-    ssize_t debug_read = read(src_fd, debug_buf, sizeof(debug_buf));
-    if (debug_read > 0) {
-        std::string debug_content(debug_buf, debug_read);
-        log(LOG_DEBUG, "Temp file content before copy: '%s' (length=%zd)",
-            debug_content.c_str(), debug_read);
-    } else {
-        log(LOG_ERROR, "Failed to read temp file for debug: %s",
-            strerror(errno));
-    }
-
-    // Reset position for actual copy
-    lseek(src_fd, 0, SEEK_SET);
 
     int dst_fd = open(final_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (dst_fd < 0) {
