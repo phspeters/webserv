@@ -1,7 +1,6 @@
 #include "common.hpp"
 
-// curl -v -F "file=@/webserv/var/www/files/cutecat.png"
-// http://localhost:8080/upload
+// curl -v -F "file=@/workspaces/webserv/var/www/files/cutecat.png" http://localhost:8080/upload
 
 FileUploadHandler::FileUploadHandler() : AHandler() {}
 
@@ -76,12 +75,15 @@ Result FileUploadHandler::handle(Connection* conn) {
     log(LOG_TRACE, "FileUploadHandler::handle() called for client_fd %d",
         conn->client_fd_);
 
-    // Se o body_buffer_ está vazio, aguarde mais dados
     if (conn->request_data_->body_buffer_.empty()) {
-        log(LOG_DEBUG, "[UPLOAD] body_buffer_ empty, waiting for more data.");
-        return AGAIN;
+    if (conn->request_data_->content_length_ == 0) {
+        log(LOG_ERROR, "[UPLOAD] No body sent with request.");
+        conn->status_ = BAD_REQUEST;
+        return ERROR;
     }
-
+    log(LOG_DEBUG, "[UPLOAD] body_buffer_ empty, waiting for more data.");
+    return AGAIN;
+}
     log_buffer(LOG_FATAL, conn->request_data_->body_buffer_, "BODY BUFFER");
 
     ParseStatus status = multipart_parser_.parse_multipart(conn);
