@@ -83,6 +83,9 @@ int ErrorHandler::get_error_page(int response_status,
 
     if (it != config.error_pages_.end()) {
         std::string error_page_path = it->second;
+        if (error_page_path.at(0) == '/') {
+            error_page_path = error_page_path.substr(1);
+        }
 
         error_fd = open(error_page_path.c_str(), O_RDONLY);
         if (error_fd != -1) {

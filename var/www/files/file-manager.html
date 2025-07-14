@@ -534,7 +534,7 @@
             deleteBtn.textContent = '⏳ Deleting...';
 
             // Delete file
-            fetch(`/delete/${encodeURIComponent(filename)}`, {
+            fetch(`/uploads/${encodeURIComponent(filename)}`, {
                 method: 'DELETE'
             })
             .then(response => {

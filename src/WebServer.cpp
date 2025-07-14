@@ -663,6 +663,8 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
                     conn->conn_state_ == CONN_GENERATING_RESPONSE) {
                     // Determine if we need to read a body and how
                     state = request_parser_.determine_body_handling_state(conn);
+                } else if (status == PARSE_SUCCESS) {
+                    state = PARSER_COMPLETE;
                 }
                 break;
 

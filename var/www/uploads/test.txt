@@ -1,3 +1,0 @@
-This is a test file content for upload testing.
-Multiple lines of content to test file upload functionality.
-Special characters: áéíóú ñç @#$%^&*()

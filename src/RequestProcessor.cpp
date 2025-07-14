@@ -157,12 +157,20 @@ bool RequestProcessor::process_location_redirect(Connection* conn) {
         return false;  // No redirect
     }
 
+    std::istringstream iss(location->redirect_);
+    int status;
+    std::string url;
+
+    iss >> status >> url;
+
     log(LOG_INFO, "process_location_redirect: Location %s redirecting to %s",
         location->path_.c_str(), location->redirect_.c_str());
 
     // Set up redirect response
-    conn->response_data_->set_header("Location", location->redirect_);
-    conn->status_ = MOVED_PERMANENTLY;
+    conn->response_data_->set_header("Location", url);
+    conn->response_data_->status_code_ = static_cast<HttpStatus>(status);
+
+    log(LOG_FATAL, "status: %d, url: %s", conn->status_, url.c_str());
 
     return true;
 }
@@ -199,7 +207,7 @@ bool RequestProcessor::process_directory_redirect(Connection* conn,
         }
 
         conn->response_data_->set_header("Location", redirect_url);
-        conn->status_ = MOVED_PERMANENTLY;
+        conn->response_data_->status_code_ = MOVED_PERMANENTLY;
 
         return true;
     }

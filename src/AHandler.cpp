@@ -13,31 +13,20 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
         request_root = request_root.substr(1);
     }
 
-    // Calculate the path relative to the location
-    std::string relative_path = "";
-
-    // Calculate where the relative part starts
-    size_t location_len = request_location->path_.length();
-
-    // If location path ends with /, exclude it from length calculation
-    if (!request_location->path_.empty() &&
-        request_location->path_[location_len - 1] == '/') {
-        location_len--;
+    // Ensure root path does not have a trailing slash
+    if (!request_root.empty() &&
+        request_root[request_root.length() - 1] == '/') {
+        request_root.erase(request_root.length() - 1);
     }
 
-    // Extract the relative part (starting after the location path)
-    if (request_path.length() > location_len) {
-        relative_path = request_path.substr(location_len + 1);
-        if (relative_path[0] != '/') {
-            relative_path = "/" + relative_path;
-        }
-    }
+    // The relative path is simply the request path.
+    // The combination of a clean root and the request path will be correct.
+    std::string absolute_path = request_root + request_path;
 
-    std::string absolute_path = request_root + relative_path;
     log(LOG_DEBUG,
-        "parse_absolute_path: Request root: %s, Relative path: %s, Absolute "
+        "parse_absolute_path: Request root: %s, Request path: %s, Absolute "
         "path: %s",
-        request_root.c_str(), relative_path.c_str(), absolute_path.c_str());
+        request_root.c_str(), request_path.c_str(), absolute_path.c_str());
 
     return (absolute_path);
 }
