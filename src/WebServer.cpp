@@ -560,6 +560,13 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
         if (conn->conn_state_ == CONN_READING_REQUEST ||
             conn->conn_state_ == CONN_GENERATING_RESPONSE) {
             ParseStatus status = handle_request_parsing(conn);
+            if (status == PARSE_INCOMPLETE) {
+                log(LOG_DEBUG,
+                    "handle_client_socket_event: Incomplete request for "
+                    "client %d, waiting for more data",
+                    conn->client_fd_);
+                return;  // Wait for more data
+            }
             if (status >= PARSE_ERROR) {
                 conn->status_ = parse_status_to_response_status(status);
                 handle_error_response(conn);

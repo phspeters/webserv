@@ -301,7 +301,7 @@ ParseStatus RequestProcessor::validate_method_location_access(
     if (method != "GET" && method != "POST" && method != "DELETE") {
         log(LOG_ERROR, "Invalid HTTP method '%s' in request for connection: %d",
             method.c_str(), conn->client_fd_);
-        return PARSE_METHOD_NOT_IMPLEMENTED;
+        return PARSE_METHOD_NOT_ALLOWED;
     }
 
     // Check if the method is allowed for the matched location

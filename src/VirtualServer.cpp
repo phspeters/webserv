@@ -100,6 +100,9 @@ bool VirtualServer::parse_location_block(std::ifstream& file,
     // Create a new Location
     Location location(this->client_max_body_size_);
     location.path_ = path;
+    if (path.at(0) == '.') {
+        location.type_ = LOC_EXTENSION;
+    }
 
     // Parse location block
     std::string locLine;
