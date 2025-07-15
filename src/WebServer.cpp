@@ -578,18 +578,20 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
             log_request(LOG_TRACE, conn);
         }
 
-        if (conn->active_handler_ && conn->active_handler_->is_asynchronous()) {
-            log(LOG_INFO,
-                "Asynchronous handler set for connection: %d, awaiting for "
-                "epoll event.",
-                conn->client_fd_);
-            return;  // Wait for next event
-        }
+        if (conn->active_handler_) {
+            if (conn->active_handler_->is_asynchronous()) {
+                log(LOG_INFO,
+                    "Asynchronous handler set for connection: %d, awaiting for "
+                    "epoll event.",
+                    conn->client_fd_);
+                return;  // Wait for next event
+            }
 
-        if (conn->conn_state_ == CONN_GENERATING_RESPONSE) {
-            Result result = conn->active_handler_->handle(conn);
-            if (!handle_result(result, conn, "handle")) {
-                return;
+            if (conn->conn_state_ == CONN_GENERATING_RESPONSE) {
+                Result result = conn->active_handler_->handle(conn);
+                if (!handle_result(result, conn, "handle")) {
+                    return;
+                }
             }
         }
 
