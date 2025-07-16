@@ -91,19 +91,18 @@ out=$(curl -sv -H "Content-Type: text/plain" --data-binary @/tmp/test.txt "$SERV
 check_status 415 "$out" "Incorrect Content-Type"
 sleep 1
 
-# TO DO: VERIFY STATUS CODES FOR THIS TEST
 echo "13. Missing boundary"
 out=$(curl -sv -H "Content-Type: multipart/form-data" --data-binary @/tmp/test.txt "$SERVER_URL" 2>&1)
 check_status 400 "$out" "Missing boundary"
 sleep 1
 
-# echo "14. Missing Content-Length (not testable with standard curl)"
-# echo "(Skipping - requires custom tool)"
-# sleep 1
+echo "14. Missing Content-Length (not testable with standard curl)"
+echo "(Skipping - requires custom tool)"
+sleep 1
 
-# echo "15. Interrupted upload (simulate manually with ctrl+c during large upload)"
-# echo "(Skipping - simulate manually if needed)"
-# sleep 1
+echo "15. Interrupted upload (simulate manually with ctrl+c during large upload)"
+echo "(Skipping - simulate manually if needed)"
+sleep 1
 
 echo "16. Duplicate upload (same file twice)"
 out=$(curl -sv -F "file=@/tmp/test.txt" "$SERVER_URL" 2>&1)
@@ -125,13 +124,12 @@ out=$(curl -sv -F "file=@/tmp/${LONGNAME2}.txt" "$SERVER_URL" 2>&1)
 check_status 201 "$out" "Upload with very long name"
 sleep 1
 
-# TO DO: VERIFY STATUS CODES FOR THIS TEST
 echo "19. Upload to non-existent directory (should return 404 or 500)"
 out=$(curl -sv -F "file=@/tmp/test.txt" "http://localhost:8090/nonexistent/" 2>&1)
 check_status 404 "$out" "Upload to non-existent directory"
 sleep 1
 
-# TO DO: VERIFY STATUS CODES FOR THIS TEST
+# THIS TEST REQUIRES SERVER CONFIGURATION
 echo "20. Upload to directory without write permission (should return 403)"
 mkdir -p /tmp/readonly_dir
 chmod 555 /tmp/readonly_dir
@@ -157,7 +155,7 @@ echo "[OK] Concurrent uploads finished (check server for all files)"
 rm -f /tmp/test1.txt /tmp/test2.txt /tmp/test3.txt
 sleep 1
 
-Clean up temporary files
+# Clean up temporary files
 rm -f /tmp/bigfile.jpg /tmp/test.txt /tmp/test.zip /tmp/noext "/tmp/${LONGNAME}.txt" "/tmp/a@b#c\$.txt" /tmp/dotfile /tmp/path_traversal.txt /tmp/hugefile /tmp/emptyfile "/tmp/${LONGNAME2}.txt"
 
 echo "All tests finished!"

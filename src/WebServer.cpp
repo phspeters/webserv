@@ -562,7 +562,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
             conn->conn_state_ == CONN_GENERATING_RESPONSE) {
             ParseStatus status = handle_request_parsing(conn);
             if (status >= PARSE_ERROR) {
-                conn->status_ = parse_status_to_response_status(status);
+                    conn->status_ = parse_status_to_response_status(status);
                 handle_error_response(conn);
                 return;
             }
@@ -765,7 +765,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
 
         result = conn->active_handler_->setup_handler(conn);
         if (result != COMPLETE) {
-            return PARSE_INTERNAL_ERROR;
+                return PARSE_INTERNAL_ERROR;
         }
 
         conn->conn_state_ = CONN_GENERATING_RESPONSE;
@@ -896,7 +896,8 @@ bool WebServer::handle_result(Result result, Connection* conn,
 
         case ERROR:
             log(LOG_ERROR, "%s: Encountered an error.", context_str);
-            conn->status_ = INTERNAL_SERVER_ERROR;
+            if (conn->status_ == OK) // Only overwrite if not already set
+                conn->status_ = INTERNAL_SERVER_ERROR;
             handle_error_response(conn);
             return false;  // false means "stop processing"
 

@@ -217,18 +217,24 @@ bool FileUploadHandler::ensure_upload_directory_exists(
     struct stat st;
     if (stat(upload_dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
         if (access(upload_dir.c_str(), W_OK) != 0) {
-            log(LOG_ERROR, "No write permission for upload directory: %s",
-                upload_dir.c_str());
+            log(LOG_ERROR, "No write permission for upload directory: %s", upload_dir.c_str());
             conn->status_ = FORBIDDEN;
             return false;
         }
         return true;  // Directory exists and is writable
+    } else {
+        if (errno == ENOENT) {
+            log(LOG_ERROR, "Upload directory does not exist: %s", upload_dir.c_str());
+            conn->status_ = NOT_FOUND;
+        } else if (errno == EACCES) {
+            log(LOG_ERROR, "No permission to stat upload directory: %s", upload_dir.c_str());
+            conn->status_ = FORBIDDEN;
+        } else {
+            log(LOG_ERROR, "Error accessing upload directory: %s", strerror(errno));
+            conn->status_ = INTERNAL_SERVER_ERROR;
+        }
+        return false;
     }
-
-    // Directory does not exist, do not create it
-    log(LOG_ERROR, "Upload directory does not exist: %s", upload_dir.c_str());
-    conn->status_ = INTERNAL_SERVER_ERROR;
-    return false;
 }
 
 std::string FileUploadHandler::sanitize_filename(const std::string& filename) {
