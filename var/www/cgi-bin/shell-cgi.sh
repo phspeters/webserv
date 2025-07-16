@@ -6,6 +6,7 @@
 
 # Function to generate the HTML body
 generate_html_body() {
+    local post_data_content="$1"
     # Get current time
     local CURRENT_TIME=$(date "+%Y-%m-%d %H:%M:%S")
 
@@ -44,7 +45,7 @@ generate_html_body() {
 HTML_START
 
     # List important CGI environment variables
-    local important_vars="SERVER_NAME SERVER_PORT REQUEST_METHOD REQUEST_URI QUERY_STRING CONTENT_TYPE CONTENT_LENGTH HTTP_HOST HTTP_USER_AGENT SCRIPT_NAME PATH_INFO"
+    local important_vars="SERVER_NAME SERVER_PORT REQUEST_METHOD REQUEST_URI QUERY_STRING CONTENT_TYPE CONTENT_LENGTH HTTP_HOST HTTP_USER_AGENT SCRIPT_FILENAME PATH_INFO"
 
     for var in $important_vars; do
         local value="${!var}"
@@ -83,12 +84,10 @@ HTML_START
     echo "    <div class=\"section\">"
     echo "        <h2>POST Data</h2>"
 
-    # Handle POST data
+     # Handle POST data using the passed argument
     if [ "$REQUEST_METHOD" = "POST" ]; then
-        if [ -n "$CONTENT_LENGTH" ]; then
-            # Read POST data
-            local post_data=$(dd bs="$CONTENT_LENGTH" count=1 2>/dev/null)
-            echo "        <p><strong>POST Data:</strong> <span class=\"env-var\">$post_data</span></p>"
+        if [ -n "$CONTENT_LENGTH" ] && [ "$CONTENT_LENGTH" -gt 0 ]; then
+            echo "        <p><strong>POST Data Read:</strong> <pre class=\"env-var\">$post_data_content</pre></p>"
         else
             echo "        <p><em>POST request but no content length or data</em></p>"
         fi
@@ -115,8 +114,15 @@ HTML_START
 HTML_END
 }
 
-# Generate the HTML body and store it in a variable
-html_body=$(generate_html_body)
+POST_DATA_CAPTURED=""
+if [ "$REQUEST_METHOD" = "POST" ]; then
+    if [ -n "$CONTENT_LENGTH" ] && [ "$CONTENT_LENGTH" -gt 0 ]; then
+        read -r -n "$CONTENT_LENGTH" POST_DATA_CAPTURED
+    fi
+fi
+
+# Generate the HTML body and store it in a variable, passing the captured POST data.
+html_body=$(generate_html_body "$POST_DATA_CAPTURED")
 
 # Calculate the content length
 content_length=$(echo -n "$html_body" | wc -c)

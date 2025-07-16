@@ -51,14 +51,30 @@
     <div class="test-section">
         <h2>2. CGI Script Tests</h2>
         <div class="test-case">
-            <h3>CGI with GET Request</h3>
+            <h3>Shell CGI with GET Request</h3>
             <p>Sends a GET request with a query string to the CGI script.</p>
             <a href="/cgi-bin/shell-cgi.sh?name=GET_Request&value=Success">Run CGI with GET</a>
         </div>
         <div class="test-case">
-            <h3>CGI with POST Request</h3>
+            <h3>Python CGI with GET Request</h3>
+            <p>Sends a GET request with a query string to the CGI script.</p>
+            <a href="/cgi-bin/python-cgi.py?name=GET_Request&value=Success">Run CGI with GET</a>
+        </div>
+        <div class="test-case">
+            <h3>Shell CGI with POST Request</h3>
             <p>Sends a POST request with form data to the CGI script.</p>
             <form action="/cgi-bin/shell-cgi.sh" method="POST">
+                <label for="cgi-name">Name:</label>
+                <input type="text" id="cgi-name" name="name" value="CGI_POST_Test">
+                <label for="cgi-data">Data:</label>
+                <input type="text" id="cgi-data" name="data" value="Some POST data">
+                <input type="submit" value="Run CGI with POST">
+            </form>
+        </div>
+        <div class="test-case">
+            <h3>Python CGI with POST Request</h3>
+            <p>Sends a POST request with form data to the CGI script.</p>
+            <form action="/cgi-bin/python-cgi.py" method="POST">
                 <label for="cgi-name">Name:</label>
                 <input type="text" id="cgi-name" name="name" value="CGI_POST_Test">
                 <label for="cgi-data">Data:</label>

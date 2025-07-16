@@ -15,7 +15,7 @@ env_vars_html = ""
 important_vars = [
     'SERVER_NAME', 'SERVER_PORT', 'REQUEST_METHOD', 'REQUEST_URI', 
     'QUERY_STRING', 'CONTENT_TYPE', 'CONTENT_LENGTH', 'HTTP_HOST',
-    'HTTP_USER_AGENT', 'SCRIPT_NAME', 'PATH_INFO'
+    'HTTP_USER_AGENT', 'SCRIPT_FILENAME', 'PATH_INFO'
 ]
 
 for var in important_vars:

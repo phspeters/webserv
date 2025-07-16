@@ -152,7 +152,8 @@ bool WebServer::update_context_in_epoll(IOContext* ctx, uint32_t events) {
 
 bool WebServer::remove_context_from_epoll(IOContext* ctx) {
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, ctx->fd_, NULL) < 0) {
-        log(LOG_ERROR, "Failed to unregister socket '%d' on epoll", ctx->fd_);
+        log(LOG_ERROR, "Failed to unregister socket '%d' on epoll, %s",
+            ctx->fd_, strerror(errno));
         return false;
     }
 
@@ -191,33 +192,33 @@ void WebServer::event_loop() {
             IOContext* ctx = static_cast<IOContext*>(events[i].data.ptr);
             uint32_t event_flags = events[i].events;
 
+            // Based on fd type, we call a specific handle function
+            if (event_flags & (EPOLLIN | EPOLLOUT)) {
+                switch (ctx->type_) {
+                    case FD_LISTENER:
+                        accept_new_connection(ctx->fd_);
+                        break;
+                    case FD_CLIENT_SOCKET:
+                        handle_client_socket_event(ctx, event_flags);
+                        break;
+                    case FD_CGI_PIPE_WRITE:
+                        handle_cgi_write_event(ctx, event_flags);
+                        break;
+                    case FD_CGI_PIPE_READ:
+                        handle_cgi_read_event(ctx, event_flags);
+                        break;
+                }
+            }
+
             if (event_flags & (EPOLLERR | EPOLLHUP)) {
                 log(LOG_ERROR, "Epoll error or hangup on fd %d (type: %d)",
                     ctx->fd_, ctx->type_);
 
                 if (ctx->type_ == FD_LISTENER) {
                     remove_listener_context(ctx);
-                } else {
+                } else if (ctx->type_ == FD_CLIENT_SOCKET) {
                     close_client_connection(ctx->conn_);
                 }
-
-                continue;
-            }
-
-            // Based on fd type, we call a specific handle function
-            switch (ctx->type_) {
-                case FD_LISTENER:
-                    accept_new_connection(ctx->fd_);
-                    break;
-                case FD_CLIENT_SOCKET:
-                    handle_client_socket_event(ctx, event_flags);
-                    break;
-                case FD_CGI_PIPE_WRITE:
-                    handle_cgi_write_event(ctx, event_flags);
-                    break;
-                case FD_CGI_PIPE_READ:
-                    handle_cgi_read_event(ctx, event_flags);
-                    break;
             }
         }
     }

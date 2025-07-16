@@ -148,8 +148,7 @@ Result CgiHandler::setup_handler(Connection* conn) {
             return ERROR;
         }
 
-        if (request_method == "POST" &&
-            !conn->request_data_->body_buffer_.empty()) {
+        if (request_method == "POST") {
             IOContext* stdin_ctx =
                 conn->add_io_context(conn->cgi_context_->cgi_pipe_stdin_fd_,
                                      FD_CGI_PIPE_WRITE, EPOLLOUT);
@@ -169,7 +168,7 @@ Result CgiHandler::setup_handler(Connection* conn) {
                 conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
                 log(LOG_DEBUG,
                     "CGI: Closed stdin pipe immediately for "
-                    "non-POST/empty-POST for client %d",
+                    "non-POST for client %d",
                     conn->client_fd_);
             }
 
@@ -224,7 +223,7 @@ bool CgiHandler::setup_cgi_pipes(Connection* conn, int server_to_cgi_pipe[2],
 void CgiHandler::handle_child_pipes(int server_to_cgi_pipe[2],
                                     int cgi_to_server_pipe[2]) {
     int stderr_fd =
-        open("./cgi_errors.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+        open("./cgi_errors.log", O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (stderr_fd != -1) {
         if (dup2(stderr_fd, STDERR_FILENO) == -1) {
             close(stderr_fd);
@@ -268,19 +267,21 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
     std::vector<char*> envp_char_array;
 
     cgi_env_strings.push_back("REQUEST_METHOD=" + conn->request_data_->method_);
-    cgi_env_strings.push_back("SCRIPT_NAME=" +
-                              conn->cgi_context_->cgi_script_path_);
+    size_t last_slash = conn->cgi_context_->cgi_script_path_.find_last_of('/');
+    std::string script_path =
+        conn->cgi_context_->cgi_script_path_.substr(0, last_slash + 1);
+    std::string cgi_script_name =
+        conn->cgi_context_->cgi_script_path_.substr(last_slash + 1);
+    cgi_env_strings.push_back("SCRIPT_FILENAME=" + cgi_script_name);
+    cgi_env_strings.push_back("PATH_INFO=" + script_path);
     cgi_env_strings.push_back("SERVER_PROTOCOL=" +
                               conn->request_data_->version_);
     cgi_env_strings.push_back("SERVER_SOFTWARE=webserv/4.2");
-
+    cgi_env_strings.push_back("REQUEST_URI=" + conn->request_data_->uri_);
     if (!conn->request_data_->query_string_.empty()) {
         cgi_env_strings.push_back("QUERY_STRING=" +
                                   conn->request_data_->query_string_);
     }
-
-    cgi_env_strings.push_back("SCRIPT_FILENAME=" +
-                              conn->cgi_context_->cgi_script_path_);
     cgi_env_strings.push_back("GATEWAY_INTERFACE=CGI/1.1");
     cgi_env_strings.push_back("SERVER_NAME=" + conn->virtual_server_->host_);
     std::ostringstream oss;
@@ -371,13 +372,13 @@ void CgiHandler::execute_cgi_script(Connection* conn, char** envp) {
 
     log(LOG_INFO,
         "execute_cgi_script: connection '%d' attempting to execute '%s'",
-        conn->client_fd_, script_path.c_str());
+        conn->client_fd_, cgi_script_name_cstr);
 
     if (execve(cgi_script_name_cstr, argv, envp) == -1) {
         log(LOG_ERROR,
             "execute_cgi_script: connection '%d' failed to execute CGI script "
             "'%s': %s",
-            conn->client_fd_, script_path.c_str(), strerror(errno));
+            conn->client_fd_, cgi_script_name_cstr, strerror(errno));
         _exit(EXIT_FAILURE);
     }
 }
@@ -480,8 +481,8 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
         return ERROR;
     }
 
-    log(LOG_TRACE, "CgiHandler::handle_cgi_write called for client %d",
-        conn->client_fd_);
+    log(LOG_TRACE, "CgiHandler::handle_cgi_write called for client %d on fd %d",
+        conn->client_fd_, conn->cgi_context_->cgi_pipe_stdin_fd_);
 
     Buffer& body_buffer = conn->request_data_->body_buffer_;
     int fd = conn->cgi_context_->cgi_pipe_stdin_fd_;
@@ -496,8 +497,7 @@ Result CgiHandler::handle_cgi_write(Connection* conn) {
     }
 
     if (conn->request_data_->body_fully_parsed_ && body_buffer.empty()) {
-        close(fd);
-        conn->cgi_context_->cgi_pipe_stdin_fd_ = -1;
+        conn->remove_io_context(conn->io_contexts_[FD_CGI_PIPE_WRITE]);
 
         IOContext* stdout_ctx = conn->add_io_context(
             conn->cgi_context_->cgi_pipe_stdout_fd_, FD_CGI_PIPE_READ, EPOLLIN);
