@@ -296,20 +296,34 @@ void log_virtual_server(log_level level, const VirtualServer& virtual_server) {
 }
 
 const char* event_to_string(uint32_t event_flags) {
-    switch (event_flags) {
-        case EPOLLIN:
-            return "EPOLLIN";
-        case EPOLLOUT:
-            return "EPOLLOUT";
-        case EPOLLIN | EPOLLOUT:
-            return "EPOLLIN | EPOLLOUT";
-        case EPOLLERR:
-            return "EPOLLERR";
-        case EPOLLHUP:
-            return "EPOLLHUP";
-        case EPOLLRDHUP:
-            return "EPOLLRDHUP";
-        default:
-            return "UNKNOWN EVENT";
+    static std::string event_str;
+    event_str.clear();
+
+    if (event_flags & EPOLLIN) {
+        event_str += "EPOLLIN | ";
     }
+    if (event_flags & EPOLLOUT) {
+        event_str += "EPOLLOUT | ";
+    }
+    if (event_flags & EPOLLERR) {
+        event_str += "EPOLLERR | ";
+    }
+    if (event_flags & EPOLLHUP) {
+        event_str += "EPOLLHUP | ";
+    }
+    if (event_flags & EPOLLRDHUP) {
+        event_str += "EPOLLRDHUP | ";
+    }
+    if (event_flags & EPOLLPRI) {
+        event_str += "EPOLLPRI | ";
+    }
+
+    if (event_str.empty()) {
+        return "UNKNOWN EVENT";
+    }
+
+    // Remove the trailing " | "
+    event_str.erase(event_str.length() - 3);
+
+    return event_str.c_str();
 }
