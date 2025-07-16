@@ -28,7 +28,24 @@ ParseStatus StaticFileHandler::check_permissions(Connection* conn) {
         "StaticFileHandler::check_permissions called for client_fd %d",
         conn->client_fd_);
 
-    // TODO: Implement permission checks based on the request method
+    // Parse and validate the absolute path
+    std::string absolute_path;
+    ParseStatus status = resolve_absolute_path(conn, absolute_path);
+    if (status != PARSE_SUCCESS) {
+        return status;
+    }
+
+    // Handle directory requests (index files, autoindex, etc.)
+    status = handle_directory_request(conn, absolute_path);
+    if (status != PARSE_SUCCESS) {
+        return status;
+    }
+
+    // Validate file existence and permissions
+    status = validate_file_access(conn, absolute_path);
+    if (status != PARSE_SUCCESS) {
+        return status;
+    }
 
     return PARSE_SUCCESS;
 }
@@ -37,39 +54,28 @@ Result StaticFileHandler::setup_handler(Connection* conn) {
     log(LOG_TRACE, "StaticFileHandler::setup_handler called for client_fd %d",
         conn->client_fd_);
 
-    // TODO: implement handler setup
-
-    return COMPLETE;
+    return prepare_file_response(conn, conn->static_file_context_->absolute_path_);
 }
 
 Result StaticFileHandler::handle(Connection* conn) {
     log(LOG_TRACE, "StaticFileHandler::handle called for client_fd %d",
         conn->client_fd_);
 
-    // Parse and validate the absolute path
-    std::string absolute_path;
-    Result result = resolve_absolute_path(conn, absolute_path);
-    if (result != COMPLETE) {
-        return result;
+    // Get file stats
+    struct stat file_info;
+    if (fstat(conn->static_file_context_->file_fd_, &file_info) == -1) {
+        close(conn->static_file_context_->file_fd_);
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
     }
 
-    // Handle directory requests (index files, autoindex, etc.)
-    result = handle_directory_request(conn, absolute_path);
-    if (result != COMPLETE) {
-        return result;
-    }
+    set_response_headers(conn, file_info, conn->static_file_context_->absolute_path_);
+    log(LOG_INFO, "StaticFileHandler: File prepared to be served for client_fd %d",
+        conn->client_fd_);
+    return COMPLETE;
+}   
 
-    // Validate file existence and permissions
-    result = validate_file_access(conn, absolute_path);
-    if (result != COMPLETE) {
-        return result;
-    }
-
-    // Open file and prepare response
-    return prepare_file_response(conn, absolute_path);
-}
-
-Result StaticFileHandler::resolve_absolute_path(Connection* conn,
+ParseStatus StaticFileHandler::resolve_absolute_path(Connection* conn,
                                                 std::string& absolute_path) {
     log(LOG_TRACE,
         "StaticFileHandler::resolve_absolute_path called for client_fd %d",
@@ -80,66 +86,207 @@ Result StaticFileHandler::resolve_absolute_path(Connection* conn,
         log(LOG_ERROR,
             "StaticFileHandler: Empty absolute path for client_fd %d",
             conn->client_fd_);
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR;
+        // conn->status_ = INTERNAL_SERVER_ERROR;
+        return PARSE_INTERNAL_ERROR;
     }
-    return COMPLETE;
+    return PARSE_SUCCESS;
 }
 
-Result StaticFileHandler::handle_directory_request(Connection* conn,
+ParseStatus StaticFileHandler::handle_directory_request(Connection* conn,
                                                    std::string& absolute_path) {
     log(LOG_TRACE,
-        "StaticFileHandler::handle_directory_request called for client_fd %d",
-        conn->client_fd_);
+        "StaticFileHandler::handle_directory_request called for path: %s",
+        absolute_path.c_str());
 
-    if (absolute_path[absolute_path.length() - 1] != '/') {
-        return COMPLETE;
+    // 1. Check if the path is actually a directory. If not, do nothing.
+    struct stat path_stat;
+    if (stat(absolute_path.c_str(), &path_stat) != 0 || !S_ISDIR(path_stat.st_mode)) {
+        return PARSE_SUCCESS; // Not a directory, so the main handler will treat it as a file.
     }
 
-    bool need_autoindex = false;
-    if (process_directory_index(conn, absolute_path, need_autoindex)) {
-        if (need_autoindex) {
-            generate_directory_listing(conn, absolute_path);
-            return COMPLETE;
-        }
-    } else {
-        conn->status_ = FORBIDDEN;
-        return ERROR;
+    // 2. HIGHEST PRIORITY: Handle redirect for missing trailing slash.
+    if (handle_missing_slash_redirect(conn)) {
+        return PARSE_MOVED_PERMANENTLY; // A 301 redirect response was prepared. We are done.
     }
 
-    std::string index_file = conn->location_match_->index_;
-    absolute_path = absolute_path + index_file;
-    return COMPLETE;
+    // 3. SECOND PRIORITY: Try to find and serve an index file.
+    std::string original_path = absolute_path; // Keep for autoindex if needed
+    if (resolve_index_file(conn, absolute_path)) {
+        // Index file was found and absolute_path was modified to point to it.
+        // Return COMPLETE to let the main handler serve it as a regular file.
+        log(LOG_DEBUG, "Directory request resolved to index file: %s", absolute_path.c_str());
+        return PARSE_SUCCESS;
+    }
+
+    // CHECK: how does it now if the response are ready to be sent? Can not return PARSE_SUCCESS
+    // 4. THIRD PRIORITY: Check if autoindex is on.
+    if (conn->location_match_->autoindex_) {
+        return generate_directory_listing(conn, original_path); // A 200 OK response with the listing can be prepared. We are done.
+    }
+
+    // 5. FINAL FALLBACK: No index file and autoindex is off.
+    log(LOG_DEBUG, "Directory request for '%s' is forbidden (no index, autoindex off)",
+        original_path.c_str());
+    // conn->status_ = FORBIDDEN;
+    return PARSE_FORBIDDEN;
 }
 
-Result StaticFileHandler::validate_file_access(
+ParseStatus StaticFileHandler::validate_file_access(
     Connection* conn, const std::string& absolute_path) {
     log(LOG_TRACE,
         "StaticFileHandler::validate_file_access called for client_fd %d",
         conn->client_fd_);
 
+    log(LOG_ERROR, "absolute_path = %s", absolute_path.c_str());
+
     struct stat file_info;
     if (stat(absolute_path.c_str(), &file_info) == -1) {
         if (errno == ENOENT || errno == ENOTDIR) {
-            conn->status_ = NOT_FOUND;
+            // conn->status_ = NOT_FOUND;
+            return PARSE_NOT_FOUND;
         } else if (errno == EACCES) {
-            conn->status_ = FORBIDDEN;
+            // conn->status_ = FORBIDDEN;
+            return PARSE_FORBIDDEN;
         } else {
-            conn->status_ = INTERNAL_SERVER_ERROR;
+            // conn->status_ = INTERNAL_SERVER_ERROR;
+            return PARSE_INTERNAL_ERROR;
         }
-        return ERROR;
     }
 
     if (!S_ISREG(file_info.st_mode)) {
-        conn->status_ = FORBIDDEN;
-        return ERROR;
+        // conn->status_ = FORBIDDEN;
+        return PARSE_FORBIDDEN;
     }
 
     conn->static_file_context_->absolute_path_ = absolute_path;
     log(LOG_DEBUG,
         "StaticFileHandler: Permissions check passed for client_fd %d",
         conn->client_fd_);
-    return COMPLETE;
+    return PARSE_SUCCESS;
+}
+
+bool StaticFileHandler::handle_missing_slash_redirect(Connection* conn) {
+    // Check if the request URI is missing a trailing slash.
+    const std::string& path = conn->request_data_->path_;
+    bool path_ends_with_slash = !path.empty() && path[path.length() - 1] == '/';
+
+    if (path_ends_with_slash) {
+        return false; // Has a slash, no redirect needed.
+    }
+
+    // If URI doesn't end with slash, redirect to add the slash.
+    std::string query = conn->request_data_->query_string_;
+    std::string redirect_url = path + "/";
+    if (!query.empty()) {
+        redirect_url += "?" + query;
+    }
+
+    log(LOG_DEBUG, "handle_missing_slash_redirect: Redirecting to %s for client_fd %d",
+        redirect_url.c_str(), conn->client_fd_);
+    
+    conn->status_ = MOVED_PERMANENTLY;
+    conn->response_data_->status_code_ = 301;
+    conn->response_data_->status_message_ = "Moved Permanently";
+    conn->response_data_->set_header("Location", redirect_url);
+    conn->status_ = MOVED_PERMANENTLY;
+
+    return true;
+}
+
+bool StaticFileHandler::resolve_index_file(Connection* conn, std::string& absolute_path) {
+    const Location* location = conn->location_match_;
+    if (!location || location->index_.empty()) {
+        return false; // No index file configured for this location.
+    }
+
+    std::string index_path = absolute_path + location->index_;
+    struct stat index_stat;
+
+    // Check if the index file exists and is a regular file.
+    if (stat(index_path.c_str(), &index_stat) == 0 && S_ISREG(index_stat.st_mode)) {
+        // Index file found! Modify the absolute_path to point to it.
+        absolute_path = index_path;
+        return true;
+    }
+
+    return false; // Index file not found or is not a regular file.
+}
+
+ParseStatus StaticFileHandler::generate_directory_listing(
+    Connection* conn, const std::string& dir_path) {
+    log(LOG_TRACE,
+        "StaticFileHandler::generate_directory_listing called for client_fd %d",
+        conn->client_fd_);
+
+    DIR* dir = opendir(dir_path.c_str());
+    if (!dir) {
+        log(LOG_ERROR, "Failed to open directory for listing: %s",
+            strerror(errno));
+        // conn->status_ = INTERNAL_SERVER_ERROR;
+        return PARSE_INTERNAL_ERROR;
+    }
+
+    // Minimalist HTML structure, similar to Nginx
+    std::string html = "<html>\n<head><title>Index of " +
+                       conn->request_data_->path_ +
+                       "</title></head>\n<body>\n<h1>Index of " +
+                       conn->request_data_->path_ + "</h1><hr><pre>";
+
+    // Add parent directory link
+    html += "<a href=\"../\">../</a>\n";
+
+    // Read and store directory entries to sort them later
+    std::vector<std::pair<std::string, bool> >
+        entries;  // Pair: <name, is_directory>
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        std::string name = entry->d_name;
+        if (name == "." || name == "..") {
+            continue;
+        }
+        std::string full_path = dir_path + name;
+        struct stat st;
+        if (stat(full_path.c_str(), &st) == 0) {
+            entries.push_back(std::make_pair(name, S_ISDIR(st.st_mode)));
+        }
+    }
+    closedir(dir);
+
+    // Sort entries alphabetically
+    std::sort(entries.begin(), entries.end());
+
+    // Add sorted entries to the HTML
+    for (size_t i = 0; i < entries.size(); ++i) {
+        std::string name = entries[i].first;
+        bool is_dir = entries[i].second;
+        if (is_dir) {
+            name += "/";
+        }
+        html += "<a href=\"" + name + "\">" + name + "</a>\n";
+    }
+
+    html += "</pre><hr></body>\n</html>";
+
+    // Set the response data for a 200 OK status
+    log(LOG_DEBUG,
+        "generate_directory_listing: Generated directory listing for %s",
+        dir_path.c_str());
+
+
+    // CHECK: how does it now if the response are ready to be sent? Can not return PARSE_SUCCESS
+
+    conn->response_data_->headers_.clear();
+    conn->response_data_->body_data_.clear();
+
+    conn->response_data_->status_code_ = OK; 
+    conn->response_data_->status_message_ = "OK";
+    conn->response_data_->set_header("Content-Type", "text/html");
+    std::ostringstream content_stream;
+    content_stream << html.size();
+    conn->response_data_->set_header("Content-Length", content_stream.str());
+    conn->response_data_->body_data_.assign(html.begin(), html.end());
+
+    return PARSE_SUCCESS;
 }
 
 Result StaticFileHandler::prepare_file_response(
@@ -153,19 +300,21 @@ Result StaticFileHandler::prepare_file_response(
         return handle_file_open_error(conn);
     }
 
+    // Moved to handle method
     // Get file stats
-    struct stat file_info;
-    if (fstat(fd, &file_info) == -1) {
-        close(fd);
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return ERROR;
-    }
+    // struct stat file_info;
+    // if (fstat(fd, &file_info) == -1) {
+    //     close(fd);
+    //     conn->status_ = INTERNAL_SERVER_ERROR;
+    //     return ERROR;
+    // }
 
     conn->static_file_context_->file_fd_ = fd;
 
-    set_response_headers(conn, file_info, absolute_path);
+    // Moved to handle method
+    // set_response_headers(conn, file_info, absolute_path);
 
-    log(LOG_INFO, "StaticFileHandler: File ready to be served for client_fd %d",
+    log(LOG_INFO, "StaticFileHandler: File prepared to be read for client_fd %d",
         conn->client_fd_);
     return COMPLETE;
 }
@@ -255,116 +404,4 @@ void StaticFileHandler::cleanup_handler(Connection* conn) {
         delete conn->static_file_context_;
         conn->static_file_context_ = NULL;
     }
-}
-
-bool StaticFileHandler::process_directory_index(Connection* conn,
-                                                std::string& absolute_path,
-                                                bool& need_autoindex) {
-    log(LOG_TRACE,
-        "StaticFileHandler::process_directory_index called for client_fd %d",
-        conn->client_fd_);
-
-    // Get location config
-    const Location* location = conn->location_match_;
-    std::string index = location->index_;
-    if (!index.empty()) {
-        std::string index_path = absolute_path + index;
-        struct stat index_stat;
-        log(LOG_DEBUG, "process_directory_index: Checking for index file at %s",
-            index_path.c_str());
-        // Check if index file exists and is a regular file
-        if (stat(index_path.c_str(), &index_stat) == 0 &&
-            S_ISREG(index_stat.st_mode)) {
-            return true;  // Found and using index file
-        }
-    }
-
-    // No index file found, check if autoindex is enabled
-    if (location->autoindex_) {
-        need_autoindex = true;
-        log(LOG_DEBUG,
-            "process_directory_index: No index file found, autoindex enabled "
-            "for %s",
-            absolute_path.c_str());
-        return true;  // Will use autoindex
-    }
-
-    log(LOG_DEBUG,
-        "process_directory_index: No index file and autoindex disabled for %s",
-        absolute_path.c_str());
-    return false;
-}
-
-bool StaticFileHandler::generate_directory_listing(
-    Connection* conn, const std::string& dir_path) {
-    log(LOG_TRACE,
-        "StaticFileHandler::generate_directory_listing called for client_fd %d",
-        conn->client_fd_);
-
-    DIR* dir = opendir(dir_path.c_str());
-    if (!dir) {
-        log(LOG_ERROR, "Failed to open directory for listing: %s",
-            strerror(errno));
-        conn->status_ = INTERNAL_SERVER_ERROR;
-        return false;
-    }
-
-    // Minimalist HTML structure, similar to Nginx
-    std::string html = "<html>\n<head><title>Index of " +
-                       conn->request_data_->path_ +
-                       "</title></head>\n<body>\n<h1>Index of " +
-                       conn->request_data_->path_ + "</h1><hr><pre>";
-
-    // Add parent directory link
-    html += "<a href=\"../\">../</a>\n";
-
-    // Read and store directory entries to sort them later
-    std::vector<std::pair<std::string, bool> >
-        entries;  // Pair: <name, is_directory>
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != NULL) {
-        std::string name = entry->d_name;
-        if (name == "." || name == "..") {
-            continue;
-        }
-        std::string full_path = dir_path + name;
-        struct stat st;
-        if (stat(full_path.c_str(), &st) == 0) {
-            entries.push_back(std::make_pair(name, S_ISDIR(st.st_mode)));
-        }
-    }
-    closedir(dir);
-
-    // Sort entries alphabetically
-    std::sort(entries.begin(), entries.end());
-
-    // Add sorted entries to the HTML
-    for (size_t i = 0; i < entries.size(); ++i) {
-        std::string name = entries[i].first;
-        bool is_dir = entries[i].second;
-        if (is_dir) {
-            name += "/";
-        }
-        html += "<a href=\"" + name + "\">" + name + "</a>\n";
-    }
-
-    html += "</pre><hr></body>\n</html>";
-
-    // Set the response data for a 200 OK status
-    log(LOG_DEBUG,
-        "generate_directory_listing: Generated directory listing for %s",
-        dir_path.c_str());
-
-    conn->response_data_->headers_.clear();
-    conn->response_data_->body_data_.clear();
-
-    conn->response_data_->status_code_ = OK;
-    conn->response_data_->status_message_ = "OK";
-    conn->response_data_->set_header("Content-Type", "text/html");
-    std::ostringstream content_stream;
-    content_stream << html.size();
-    conn->response_data_->set_header("Content-Length", content_stream.str());
-    conn->response_data_->body_data_.assign(html.begin(), html.end());
-
-    return true;
 }

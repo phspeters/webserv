@@ -20,10 +20,14 @@ class StaticFileHandler : public AHandler {
     bool is_asynchronous() const { return false; }
 
    private:
-    Result resolve_absolute_path(Connection* conn, std::string& absolute_path);
-    Result handle_directory_request(Connection* conn,
+    ParseStatus resolve_absolute_path(Connection* conn, std::string& absolute_path);
+    ParseStatus handle_directory_request(Connection* conn,
                                     std::string& absolute_path);
-    Result validate_file_access(Connection* conn,
+    bool handle_missing_slash_redirect(Connection* conn);
+    bool resolve_index_file(Connection* conn, std::string& absolute_path);
+    ParseStatus generate_directory_listing(Connection* conn,
+                                    const std::string& dir_path);
+    ParseStatus validate_file_access(Connection* conn,
                                 const std::string& absolute_path);
     Result prepare_file_response(Connection* conn,
                                  const std::string& absolute_path);
@@ -31,11 +35,7 @@ class StaticFileHandler : public AHandler {
     void set_response_headers(Connection* conn, const struct stat& file_info,
                               const std::string& absolute_path);
     std::string determine_content_type(const std::string& path);
-
-    bool process_directory_index(Connection* conn, std::string& absolute_path,
-                                 bool& need_autoindex);
-    bool generate_directory_listing(Connection* conn,
-                                    const std::string& dir_path);
+    
 
     // Prevent copying
     StaticFileHandler(const StaticFileHandler&);
