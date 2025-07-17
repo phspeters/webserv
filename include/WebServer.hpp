@@ -47,7 +47,7 @@ class WebServer {
     //--------------------------------------
     int epoll_fd_;
     std::vector<struct epoll_event> epoll_events_;
-    static const int MAX_EPOLL_EVENTS = 10240;
+    static const int MAX_EPOLL_EVENTS = 1024;
 
     //--------------------------------------
     // WebServer State & Configuration
