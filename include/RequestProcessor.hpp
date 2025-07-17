@@ -16,7 +16,7 @@ class RequestProcessor {
     bool handle_redirects(Connection* conn);
     bool process_location_redirect(Connection* conn);
     bool process_directory_redirect(Connection* conn,
-                                    std::string& absolute_path);
+                                    std::string& request_path);
     ParseStatus validate_version(Connection* conn);
     ParseStatus validate_method_location_access(Connection* conn);
     ParseStatus validate_body_handling(Connection* conn);

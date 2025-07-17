@@ -21,12 +21,7 @@ class StaticFileHandler : public AHandler {
 
    private:
     ParseStatus resolve_absolute_path(Connection* conn, std::string& absolute_path);
-    ParseStatus handle_directory_request(Connection* conn,
-                                    std::string& absolute_path);
-    bool handle_missing_slash_redirect(Connection* conn);
-    bool resolve_index_file(Connection* conn, std::string& absolute_path);
-    ParseStatus generate_directory_listing(Connection* conn,
-                                    const std::string& dir_path);
+    ParseStatus resolve_index_file(Connection* conn, std::string& absolute_path);
     ParseStatus validate_file_access(Connection* conn,
                                 const std::string& absolute_path);
     Result prepare_file_response(Connection* conn,
@@ -35,6 +30,8 @@ class StaticFileHandler : public AHandler {
     void set_response_headers(Connection* conn, const struct stat& file_info,
                               const std::string& absolute_path);
     std::string determine_content_type(const std::string& path);
+    Result generate_directory_listing(Connection* conn,
+                                    const std::string& dir_path);
     
 
     // Prevent copying
@@ -46,8 +43,9 @@ class StaticFileHandler : public AHandler {
 struct StaticFileContext {
     int file_fd_;
     std::string absolute_path_;
+    bool needs_autoindex_;
 
-    StaticFileContext() : file_fd_(-1) {}
+    StaticFileContext() : file_fd_(-1), needs_autoindex_(false) {}
 };
 
 #endif  // STATICFILEHANDLER_HPP

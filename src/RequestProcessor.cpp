@@ -176,43 +176,56 @@ bool RequestProcessor::process_location_redirect(Connection* conn) {
 }
 
 bool RequestProcessor::process_directory_redirect(Connection* conn,
-                                                  std::string& absolute_path) {
+                                                  std::string& request_path) {
     log(LOG_TRACE,
         "RequestProcessor::process_directory_redirect called for client_fd %d",
         conn->client_fd_);
 
-    std::string path = conn->request_data_->path_;
+    const Location* request_location = conn->location_match_;
+    std::string request_root = request_location->root_;
+    const std::string& location_path = request_location->path_;
 
-    // Check if the request URI ends with a slash (indicating directory)
+    if (request_root[0] == '/') {
+        request_root = request_root.substr(1);
+    }
+    if (!request_root.empty() &&
+        request_root[request_root.length() - 1] == '/') {
+        request_root.erase(request_root.length() - 1);
+    }
+    std::string relative_path;
+    if (request_path.length() >= location_path.length()) {
+        relative_path = request_path.substr(location_path.length());
+    }
+    std::string absolute_path = request_root + "/" + relative_path;
+
+    // Check if the path is actually a directory. If not, do nothing.
+    struct stat path_stat;
+    if (stat(absolute_path.c_str(), &path_stat) != 0 || !S_ISDIR(path_stat.st_mode)) {
+        return false; // Not a directory, so the main handler will treat it as a file.
+    }
+
+    // Check if the request URI is missing a trailing slash.
+    const std::string& path = conn->request_data_->path_;
     bool path_ends_with_slash = !path.empty() && path[path.length() - 1] == '/';
 
-    // Check if the absolute path is a directory
-    struct stat path_stat;
-    if (stat(absolute_path.c_str(), &path_stat) != 0 ||
-        !S_ISDIR(path_stat.st_mode)) {
-        // Not a directory or couldn't stat
-        return false;
+    if (path_ends_with_slash) {
+        return false; // Has a slash, no redirect needed.
     }
 
-    // If URI doesn't end with slash, redirect to add the slash (nginx behavior)
-    if (!path_ends_with_slash) {
-        std::string query = conn->request_data_->query_string_;
-
-        // Create redirect URL (same path + /)
-        std::string redirect_url = path + "/";
-
-        // If there's a query string, append it
-        if (!query.empty()) {
-            redirect_url += "?" + query;
-        }
-
-        conn->response_data_->set_header("Location", redirect_url);
-        conn->response_data_->status_code_ = MOVED_PERMANENTLY;
-
-        return true;
+    // If URI doesn't end with slash, redirect to add the slash.
+    std::string query = conn->request_data_->query_string_;
+    std::string redirect_url = path + "/";
+    if (!query.empty()) {
+        redirect_url += "?" + query;
     }
 
-    return false;
+    log(LOG_DEBUG, "RequestProcessor::process_directory_redirect: redirecting to %s for client_fd %d",
+        redirect_url.c_str(), conn->client_fd_);
+    
+    conn->response_data_->status_code_ = 301;
+    conn->response_data_->set_header("Location", redirect_url);
+
+    return true;
 }
 
 ParseStatus RequestProcessor::validate_version(Connection* conn) {
