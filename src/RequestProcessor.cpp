@@ -181,22 +181,15 @@ bool RequestProcessor::process_directory_redirect(Connection* conn,
         "RequestProcessor::process_directory_redirect called for client_fd %d",
         conn->client_fd_);
 
-    const Location* request_location = conn->location_match_;
-    std::string request_root = request_location->root_;
-    const std::string& location_path = request_location->path_;
-
-    if (request_root[0] == '/') {
-        request_root = request_root.substr(1);
+    const Location* location = conn->location_match_;
+    std::string root_path = location->root_;
+    if (!root_path.empty() && root_path[0] == '/') {
+        root_path = root_path.substr(1);
     }
-    if (!request_root.empty() &&
-        request_root[request_root.length() - 1] == '/') {
-        request_root.erase(request_root.length() - 1);
+    if (!root_path.empty() && root_path[root_path.length() - 1] == '/') {
+        root_path.erase(root_path.length() - 1);
     }
-    std::string relative_path;
-    if (request_path.length() >= location_path.length()) {
-        relative_path = request_path.substr(location_path.length());
-    }
-    std::string absolute_path = request_root + "/" + relative_path;
+    std::string absolute_path = root_path + request_path;
 
     // Check if the path is actually a directory. If not, do nothing.
     struct stat path_stat;

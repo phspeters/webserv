@@ -159,8 +159,7 @@ ParseStatus StaticFileHandler::validate_file_access(
         }
     }
 
-    if (!S_ISREG(file_info.st_mode)) {
-        // conn->status_ = FORBIDDEN;
+    if (access(absolute_path.c_str(), R_OK) == -1 || !S_ISREG(file_info.st_mode)) {
         return PARSE_FORBIDDEN;
     }
 
@@ -184,7 +183,8 @@ Result StaticFileHandler::prepare_file_response(
 
     int fd = open(absolute_path.c_str(), O_RDONLY | O_NONBLOCK);
     if (fd == -1) {
-        return handle_file_open_error(conn);
+        conn->status_ = INTERNAL_SERVER_ERROR;
+        return ERROR;
     }
 
     conn->static_file_context_->file_fd_ = fd;
@@ -192,17 +192,6 @@ Result StaticFileHandler::prepare_file_response(
     log(LOG_INFO, "StaticFileHandler: File prepared to be read for client_fd %d",
         conn->client_fd_);
     return COMPLETE;
-}
-
-Result StaticFileHandler::handle_file_open_error(Connection* conn) {
-    if (errno == ENOENT) {
-        conn->status_ = NOT_FOUND;
-    } else if (errno == EACCES) {
-        conn->status_ = FORBIDDEN;
-    } else {
-        conn->status_ = INTERNAL_SERVER_ERROR;
-    }
-    return ERROR;
 }
 
 void StaticFileHandler::set_response_headers(Connection* conn,
