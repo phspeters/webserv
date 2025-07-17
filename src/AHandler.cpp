@@ -24,8 +24,11 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     std::string absolute_path = root_path + request_path;
 
     log(LOG_DEBUG,
-        "parse_absolute_path: Root: '%s', Request Path: '%s', Absolute Path: '%s'",
-        location->root_.c_str(), request_path.c_str(), absolute_path.c_str());
+        "parse_absolute_path: Location path: %s, Request root: %s, Request "
+        "path: %s, Absolute "
+        "path: %s",
+        location->path_.c_str(), root_path.c_str(), request_path.c_str(),
+        absolute_path.c_str());
 
     return absolute_path;
 }

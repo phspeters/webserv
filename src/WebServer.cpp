@@ -218,6 +218,8 @@ void WebServer::event_loop() {
                     remove_listener_context(ctx);
                 } else if (ctx->type_ == FD_CLIENT_SOCKET) {
                     close_client_connection(ctx->conn_);
+                } else if (event_flags & EPOLLERR) {
+                    close_client_connection(ctx->conn_);
                 }
             }
         }
@@ -226,6 +228,11 @@ void WebServer::event_loop() {
 }
 
 void WebServer::close_client_connection(Connection* conn) {
+    if (!conn) {
+        log(LOG_FATAL, "close_client_connection: NULL connection provided");
+        return;
+    }
+
     int fd = conn->client_fd_;
     std::map<int, Connection*>::iterator it = active_connections_.find(fd);
 
@@ -467,7 +474,6 @@ bool WebServer::setup_signal_handlers() {
         return false;
     }
 
-    // TODO: Remove this handler and only use sockets and send?
     if (sigaction(SIGPIPE, &sa, NULL) < 0) {
         log(LOG_ERROR, "Failed to set up SIGPIPE handler");
         return false;
@@ -536,6 +542,7 @@ Connection* WebServer::create_client_connection(
         log(LOG_ERROR, "Failed to create connection for fd %d: %s", client_fd,
             e.what());
         close(client_fd);
+        client_fd = -1;
         return NULL;
     }
 }
@@ -562,7 +569,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
             conn->conn_state_ == CONN_GENERATING_RESPONSE) {
             ParseStatus status = handle_request_parsing(conn);
             if (status >= PARSE_ERROR) {
-                    conn->status_ = parse_status_to_response_status(status);
+                conn->status_ = parse_status_to_response_status(status);
                 handle_error_response(conn);
                 return;
             }
@@ -726,6 +733,8 @@ ParseStatus WebServer::process_request(Connection* conn) {
         conn->client_fd_);
 
     if (conn->conn_state_ == CONN_READING_REQUEST) {
+        log_request(LOG_TRACE, conn);
+
         ParseStatus status = request_processor_.validate_version(conn);
         if (status != PARSE_SUCCESS) {
             return status;
@@ -765,7 +774,7 @@ ParseStatus WebServer::process_request(Connection* conn) {
 
         result = conn->active_handler_->setup_handler(conn);
         if (result != COMPLETE) {
-                return PARSE_INTERNAL_ERROR;
+            return PARSE_INTERNAL_ERROR;
         }
 
         conn->conn_state_ = CONN_GENERATING_RESPONSE;
@@ -896,7 +905,7 @@ bool WebServer::handle_result(Result result, Connection* conn,
 
         case ERROR:
             log(LOG_ERROR, "%s: Encountered an error.", context_str);
-            if (conn->status_ == OK) // Only overwrite if not already set
+            if (conn->status_ == OK)  // Only overwrite if not already set
                 conn->status_ = INTERNAL_SERVER_ERROR;
             handle_error_response(conn);
             return false;  // false means "stop processing"

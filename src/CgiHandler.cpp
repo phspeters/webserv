@@ -52,18 +52,13 @@ ParseStatus CgiHandler::check_permissions(Connection* conn) {
     }
 
     // Check script extension against allowed types
-    bool is_valid_extension = false;
     std::string extension;
     size_t dot_pos = script_path.find_last_of('.');
     if (dot_pos != std::string::npos) {
-        extension = script_path.substr(dot_pos + 1);
-        // This should ideally come from the config file
-        if (extension == "php" || extension == "py" || extension == "sh") {
-            is_valid_extension = true;
-        }
+        extension = script_path.substr(dot_pos);
     }
 
-    if (!is_valid_extension) {
+    if (!is_cgi_extension(extension)) {
         log(LOG_ERROR,
             "CgiHandler: Invalid script extension '%s' for script '%s'",
             extension.c_str(), script_path.c_str());
@@ -267,13 +262,15 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
     std::vector<char*> envp_char_array;
 
     cgi_env_strings.push_back("REQUEST_METHOD=" + conn->request_data_->method_);
+    cgi_env_strings.push_back("SCRIPT_NAME=" +
+                              conn->request_data_->path_);
     size_t last_slash = conn->cgi_context_->cgi_script_path_.find_last_of('/');
     std::string script_path =
         conn->cgi_context_->cgi_script_path_.substr(0, last_slash + 1);
     std::string cgi_script_name =
         conn->cgi_context_->cgi_script_path_.substr(last_slash + 1);
     cgi_env_strings.push_back("SCRIPT_FILENAME=" + cgi_script_name);
-    cgi_env_strings.push_back("PATH_INFO=" + script_path);
+    cgi_env_strings.push_back("PATH_INFO=");
     cgi_env_strings.push_back("SERVER_PROTOCOL=" +
                               conn->request_data_->version_);
     cgi_env_strings.push_back("SERVER_SOFTWARE=webserv/4.2");

@@ -54,15 +54,17 @@ Result StaticFileHandler::setup_handler(Connection* conn) {
     log(LOG_TRACE, "StaticFileHandler::setup_handler called for client_fd %d",
         conn->client_fd_);
 
-    return prepare_file_response(conn, conn->static_file_context_->absolute_path_);
+    return prepare_file_response(conn,
+                                 conn->static_file_context_->absolute_path_);
 }
 
 Result StaticFileHandler::handle(Connection* conn) {
     log(LOG_TRACE, "StaticFileHandler::handle called for client_fd %d",
         conn->client_fd_);
 
-    if(conn->static_file_context_->needs_autoindex_) {
-        generate_directory_listing(conn, conn->static_file_context_->absolute_path_);
+    if (conn->static_file_context_->needs_autoindex_) {
+        generate_directory_listing(conn,
+                                   conn->static_file_context_->absolute_path_);
         return COMPLETE;
     }
 
@@ -70,18 +72,21 @@ Result StaticFileHandler::handle(Connection* conn) {
     struct stat file_info;
     if (fstat(conn->static_file_context_->file_fd_, &file_info) == -1) {
         close(conn->static_file_context_->file_fd_);
+        conn->static_file_context_->file_fd_ = -1;
         conn->status_ = INTERNAL_SERVER_ERROR;
         return ERROR;
     }
 
-    set_response_headers(conn, file_info, conn->static_file_context_->absolute_path_);
-    log(LOG_INFO, "StaticFileHandler: File prepared to be served for client_fd %d",
+    set_response_headers(conn, file_info,
+                         conn->static_file_context_->absolute_path_);
+    log(LOG_INFO,
+        "StaticFileHandler: File prepared to be served for client_fd %d",
         conn->client_fd_);
     return COMPLETE;
-}   
+}
 
-ParseStatus StaticFileHandler::resolve_absolute_path(Connection* conn,
-                                                std::string& absolute_path) {
+ParseStatus StaticFileHandler::resolve_absolute_path(
+    Connection* conn, std::string& absolute_path) {
     log(LOG_TRACE,
         "StaticFileHandler::resolve_absolute_path called for client_fd %d",
         conn->client_fd_);
@@ -98,15 +103,16 @@ ParseStatus StaticFileHandler::resolve_absolute_path(Connection* conn,
 }
 
 ParseStatus StaticFileHandler::resolve_index_file(Connection* conn,
-                                                   std::string& absolute_path) {
-    log(LOG_TRACE,
-        "StaticFileHandler::resolve_index_file called for path: %s",
+                                                  std::string& absolute_path) {
+    log(LOG_TRACE, "StaticFileHandler::resolve_index_file called for path: %s",
         absolute_path.c_str());
 
     // Check if the path is actually a directory. If not, do nothing.
     struct stat path_stat;
-    if (stat(absolute_path.c_str(), &path_stat) != 0 || !S_ISDIR(path_stat.st_mode)) {
-        return PARSE_SUCCESS; // Not a directory, so the main handler will treat it as a file.
+    if (stat(absolute_path.c_str(), &path_stat) != 0 ||
+        !S_ISDIR(path_stat.st_mode)) {
+        return PARSE_SUCCESS;  // Not a directory, so the main handler will
+                               // treat it as a file.
     }
 
     // Try to find an index file to validate
@@ -115,7 +121,8 @@ ParseStatus StaticFileHandler::resolve_index_file(Connection* conn,
     struct stat index_stat;
 
     // Check if the index file exists and is a regular file.
-    if (stat(index_path.c_str(), &index_stat) == 0 && S_ISREG(index_stat.st_mode)) {
+    if (stat(index_path.c_str(), &index_stat) == 0 &&
+        S_ISREG(index_stat.st_mode)) {
         // Index file found! Modify the absolute_path to point to it.
         absolute_path = index_path;
         return PARSE_SUCCESS;
@@ -128,7 +135,8 @@ ParseStatus StaticFileHandler::resolve_index_file(Connection* conn,
     }
 
     // No index file and autoindex is off.
-    log(LOG_DEBUG, "Directory request for '%s' is forbidden (no index, autoindex off)",
+    log(LOG_DEBUG,
+        "Directory request for '%s' is forbidden (no index, autoindex off)",
         absolute_path.c_str());
 
     return PARSE_FORBIDDEN;
@@ -142,7 +150,7 @@ ParseStatus StaticFileHandler::validate_file_access(
 
     if (conn->static_file_context_->needs_autoindex_) {
         conn->static_file_context_->absolute_path_ = absolute_path;
-        return PARSE_SUCCESS; 
+        return PARSE_SUCCESS;
     }
 
     struct stat file_info;
@@ -177,7 +185,8 @@ Result StaticFileHandler::prepare_file_response(
         conn->client_fd_);
 
     if (conn->static_file_context_->needs_autoindex_) {
-        conn->static_file_context_->file_fd_ = -1; // No file to read, autoindex will be generated
+        conn->static_file_context_->file_fd_ =
+            -1;  // No file to read, autoindex will be generated
         return COMPLETE;
     }
 
@@ -189,7 +198,8 @@ Result StaticFileHandler::prepare_file_response(
 
     conn->static_file_context_->file_fd_ = fd;
 
-    log(LOG_INFO, "StaticFileHandler: File prepared to be read for client_fd %d",
+    log(LOG_INFO,
+        "StaticFileHandler: File prepared to be read for client_fd %d",
         conn->client_fd_);
     return COMPLETE;
 }
@@ -311,9 +321,10 @@ Result StaticFileHandler::generate_directory_listing(
 
     conn->response_data_->headers_.clear();
     conn->response_data_->body_data_.clear();
-    conn->response_data_->body_fd_ = -1; // No file descriptor, we send HTML content directly
+    conn->response_data_->body_fd_ =
+        -1;  // No file descriptor, we send HTML content directly
 
-    conn->response_data_->status_code_ = OK; 
+    conn->response_data_->status_code_ = OK;
     conn->response_data_->status_message_ = "OK";
     conn->response_data_->set_header("Content-Type", "text/html");
     std::ostringstream content_stream;
@@ -322,7 +333,8 @@ Result StaticFileHandler::generate_directory_listing(
     conn->response_data_->body_data_.assign(html.begin(), html.end());
 
     // Log the body for debugging
-    std::string body_str(conn->response_data_->body_data_.begin(), conn->response_data_->body_data_.end());
+    std::string body_str(conn->response_data_->body_data_.begin(),
+                         conn->response_data_->body_data_.end());
     log(LOG_DEBUG, "Generated autoindex body:\n%s", body_str.c_str());
 
     return COMPLETE;

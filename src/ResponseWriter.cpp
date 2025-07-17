@@ -111,13 +111,10 @@ std::string ResponseWriter::get_response_head_string(HttpResponse* resp) {
 
     if (resp->headers_.find("content-length") == resp->headers_.end()) {
         headers << "Content-Length: " << resp->content_length_ << "\r\n";
-    }
-
-    if (resp->headers_.find("connection") == resp->headers_.end()) {
-        headers << "Connection: "
-                << (resp->get_header("Connection") == "close" ? "close"
-                                                              : "keep-alive")
-                << "\r\n";
+    } else if (resp->content_length_ == 0) {
+        // If content length is zero, ensure it's set correctly
+        resp->content_length_ =
+            std::strtoul(resp->get_header("Content-Length").c_str(), NULL, 10);
     }
 
     headers << "\r\n";  // End of headers
@@ -199,32 +196,8 @@ Result ResponseWriter::write_response_body_from_fd(Connection* conn) {
 
     conn->writer_context_.body_bytes_written_ += bytes_written;
 
-    if ((conn->response_data_->content_length_ ==
-         conn->writer_context_.body_bytes_written_) ||
+    if ((resp->content_length_ == conn->writer_context_.body_bytes_written_) ||
         bytes_written < 0) {
-        IOContext* ctx_to_remove = NULL;
-        for (std::map<FdType, IOContext*>::iterator it =
-                 conn->io_contexts_.begin();
-             it != conn->io_contexts_.end(); ++it) {
-            if (it->second && it->second->fd_ == resp->body_fd_) {
-                ctx_to_remove = it->second;
-                break;
-            }
-        }
-
-        if (ctx_to_remove) {
-            log(LOG_DEBUG,
-                "ResponseWriter: Removing IO context for completed fd %d",
-                resp->body_fd_);
-            conn->remove_io_context(ctx_to_remove);
-        } else {
-            log(LOG_FATAL,
-                "ResponseWriter::write_response_body_from_fd: No IO context "
-                "found for fd %d, cannot remove",
-                resp->body_fd_);
-            close(resp->body_fd_);
-            resp->body_fd_ = -1;
-        }
         return COMPLETE;
     }
 
