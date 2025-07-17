@@ -58,6 +58,12 @@ GET {{baseUrl}}/subdir/page.html
 Host: example.com
 User-Agent: {{userAgent}}
 
+### Test 1.6: Get a gif from a subdirectory
+# Expects: 200 OK with content of op.gif
+GET {{baseUrl}}/blogs/op.gif
+Host: example.com
+User-Agent: {{userAgent}}
+
 ### ============================================
 ### Section 2: Directory Handling
 ### ============================================
