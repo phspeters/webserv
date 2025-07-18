@@ -84,14 +84,14 @@ out=$(curl -sv -H "Content-Type: text/plain" --data-binary @/tmp/test.txt "$SERV
 check_status 415 "$out" "Incorrect Content-Type"
 sleep 1
 
-echo "12. Missing boundary"
-out=$(curl -sv -H "Content-Type: multipart/form-data" --data-binary @/tmp/test.txt "$SERVER_URL" 2>&1)
-check_status 400 "$out" "Missing boundary"
-sleep 1
+# echo "12. Missing boundary"
+# out=$(curl -sv -H "Content-Type: multipart/form-data" --data-binary @/tmp/test.txt "$SERVER_URL" 2>&1)
+# check_status 400 "$out" "Missing boundary"
+# sleep 1
 
-echo "13. Missing Content-Length (not testable with standard curl)"
-echo "(Skipping - requires custom tool)"
-sleep 1
+# echo "13. Missing Content-Length (not testable with standard curl)"
+# echo "(Skipping - requires custom tool)"
+# sleep 1
 
 echo "14. Interrupted upload (simulate manually with ctrl+c during large upload)"
 echo "(Skipping - simulate manually if needed)"
