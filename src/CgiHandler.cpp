@@ -262,8 +262,7 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
     std::vector<char*> envp_char_array;
 
     cgi_env_strings.push_back("REQUEST_METHOD=" + conn->request_data_->method_);
-    cgi_env_strings.push_back("SCRIPT_NAME=" +
-                              conn->request_data_->path_);
+    cgi_env_strings.push_back("SCRIPT_NAME=" + conn->request_data_->path_);
     size_t last_slash = conn->cgi_context_->cgi_script_path_.find_last_of('/');
     std::string script_path =
         conn->cgi_context_->cgi_script_path_.substr(0, last_slash + 1);
@@ -812,13 +811,7 @@ void CgiHandler::set_cgi_body_handling(Connection* conn) {
             std::strtol(content_length_str.c_str(), NULL, 10);
     }
 
-    if (conn->response_data_->content_length_ > readable_bytes) {
-        resp->body_fd_ = conn->cgi_context_->cgi_pipe_stdout_fd_;
-    } else {
-        if (conn->io_contexts_.count(FD_CGI_PIPE_READ) > 0) {
-            conn->remove_io_context(conn->io_contexts_[FD_CGI_PIPE_READ]);
-        }
-    }
+    resp->body_fd_ = conn->cgi_context_->cgi_pipe_stdout_fd_;
 
     log(LOG_DEBUG, "CGI: Body handling setup complete for client %d",
         conn->client_fd_);

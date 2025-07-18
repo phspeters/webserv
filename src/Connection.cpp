@@ -139,7 +139,7 @@ void Connection::remove_io_context(IOContext* io_context) {
     }
 
     // Clean up
-    log(LOG_DEBUG, "I/O context removed for socket '%d'", io_context->fd_);
+    log(LOG_DEBUG, "I/O context removed");
     delete io_context;
     io_contexts_.erase(it);
 }
