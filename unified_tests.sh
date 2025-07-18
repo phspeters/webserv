@@ -230,6 +230,16 @@ run_test "Very long URL" "414" "${LONG_URL}" # Expect 414 URI Too Long, or 404 i
 run_test "URL with special characters" "200" "${SERVER_URL}/files/cat-css/cat.html"
 run_test "Multiple slashes (should normalize to /)" "200" "${SERVER_URL}///"
 
+# =================== CLIENT BODY SIZE LIMIT ===================
+print_header "10. Client Body Size Limit"
+
+# Adjust these values as per your server's configured client_max_body_size
+SMALL_BODY=$(head -c 1024 < /dev/zero | tr '\0' 'a')   # 1KB
+LARGE_BODY=$(head -c 10485760 < /dev/zero | tr '\0' 'a') # 10MB
+
+run_test "POST small body (should succeed)" "200" "$SERVER_URL/" -X POST -H "Content-Type: text/plain" --data "$SMALL_BODY"
+run_test "POST large body (should fail with 413)" "413" "$SERVER_URL/" -X POST -H "Content-Type: text/plain" --data "$LARGE_BODY"
+
 # =================== FILE DELETION (DELETE) ===================
 print_header "7. File Deletion (DELETE)"
 run_test "Successful file deletion" "204" "${DELETE_URL}/deletable_file.txt" -X DELETE
