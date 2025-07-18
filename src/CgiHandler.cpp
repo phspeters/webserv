@@ -269,7 +269,7 @@ std::vector<char*> CgiHandler::create_cgi_envp(Connection* conn) {
     std::string cgi_script_name =
         conn->cgi_context_->cgi_script_path_.substr(last_slash + 1);
     cgi_env_strings.push_back("SCRIPT_FILENAME=" + cgi_script_name);
-    cgi_env_strings.push_back("PATH_INFO=");
+    cgi_env_strings.push_back("PATH_INFO=" + conn->request_data_->path_);
     cgi_env_strings.push_back("SERVER_PROTOCOL=" +
                               conn->request_data_->version_);
     cgi_env_strings.push_back("SERVER_SOFTWARE=webserv/4.2");
