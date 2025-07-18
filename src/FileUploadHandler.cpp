@@ -1,7 +1,6 @@
 #include "common.hpp"
 
-// curl -v -F "file=@/workspaces/webserv/var/www/files/cutecat.png"
-// http://localhost:8080/upload
+// curl -v -F "file=@/workspaces/webserv/var/www/files/cutecat.png" http://localhost:8090/upload
 
 FileUploadHandler::FileUploadHandler() : AHandler() {}
 
@@ -31,32 +30,14 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
     log(LOG_TRACE, "FileUploadHandler::setup_handler called for client_fd %d",
         conn->client_fd_);
 
-    // Extract boundary from content-type header
-    std::string content_type = conn->request_data_->get_header("content-type");
-    std::string& boundary =
-        conn->file_upload_context_->multipart_context_.boundary_;
-    boundary = multipart_parser_.extract_boundary(content_type);
-    if (boundary.empty()) {
-        log(LOG_ERROR, "No multipart boundary found for client_fd %d",
-            conn->client_fd_);
-        conn->status_ = BAD_REQUEST;
-        return ERROR;
-    }
-
-    // Initialize multipart parser state
+    // Initialize state of parser multipart
     conn->file_upload_context_->multipart_context_.state_ =
         FIND_INITIAL_BOUNDARY;
     conn->file_upload_context_->multipart_context_.is_file_part_ = false;
     conn->file_upload_context_->multipart_context_.part_headers_.clear();
 
-    // Generate temporary file name
+    // Generate temp file name
     std::string upload_dir = get_upload_directory(conn);
-
-    // Do not create upload directory if it does not exist
-    if (!ensure_upload_directory_exists(conn, upload_dir)) {
-        return ERROR;
-    }
-
     std::stringstream ss;
     ss << conn->client_fd_;
     std::string temp_filename = upload_dir + "upload_" + ss.str() + ".tmp";
@@ -67,12 +48,13 @@ Result FileUploadHandler::setup_handler(Connection* conn) {
         return ERROR;
     }
 
-    // Initialize context
+    // Initialize file upload context
     conn->file_upload_context_->file_fd_ = file_fd;
     conn->file_upload_context_->temp_path_ = temp_filename;
 
     return COMPLETE;
 }
+
 
 Result FileUploadHandler::handle(Connection* conn) {
     log(LOG_TRACE, "FileUploadHandler::handle() called for client_fd %d",
@@ -163,6 +145,28 @@ ParseStatus FileUploadHandler::check_permissions(Connection* conn) {
     std::string content_type = conn->request_data_->get_header("content-type");
     if (content_type.empty() || content_type.find("multipart/form-data") != 0) {
         return PARSE_UNSUPPORTED_MEDIA;
+    }
+
+    // Extract boundary from the content type header
+    std::string& boundary =
+        conn->file_upload_context_->multipart_context_.boundary_;
+    boundary = multipart_parser_.extract_boundary(content_type);
+    if (boundary.empty()) {
+        log(LOG_ERROR, "No multipart boundary found for client_fd %d",
+            conn->client_fd_);
+        return PARSE_ERROR;
+    }
+
+    // Check permissions for the upload directory
+    std::string upload_dir = get_upload_directory(conn);
+    if (!ensure_upload_directory_exists(conn, upload_dir)) {
+        if (conn->status_ == NOT_FOUND) {
+            return PARSE_NOT_FOUND;
+        }
+        if (conn->status_ == FORBIDDEN) {
+            return PARSE_FORBIDDEN;
+        }
+        return PARSE_INTERNAL_ERROR;
     }
 
     log(LOG_DEBUG,

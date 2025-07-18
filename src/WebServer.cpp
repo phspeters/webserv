@@ -774,15 +774,6 @@ ParseStatus WebServer::process_request(Connection* conn) {
 
         result = conn->active_handler_->setup_handler(conn);
         if (result != COMPLETE) {
-            if (conn->status_ == BAD_REQUEST) {
-                return PARSE_ERROR;
-            }
-            if (conn->status_ == NOT_FOUND) {
-                return PARSE_NOT_FOUND;
-            }
-            if (conn->status_ == FORBIDDEN) {
-                return PARSE_FORBIDDEN;
-            }
             return PARSE_INTERNAL_ERROR;
         }
 
