@@ -22,18 +22,29 @@ INVALID_CONFS=(
 PASS=0
 FAIL=0
 
+TMP_ERR=tmp_webserv_stderr.log
+
+echo "=== Testing INVALID configs (should FAIL) ==="
 for conf in "${INVALID_CONFS[@]}"; do
   echo "Testing $conf..."
-  ./webserv config/invalid_conf/$conf > /dev/null 2>&1
-  if [ $? -ne 0 ]; then
-    echo "PASS: $conf (server failed to start as expected)"
+  ./webserv config/invalid_conf/$conf > /dev/null 2> "$TMP_ERR"
+  if grep -q '\[FATAL\]\|\[ERROR\]' "$TMP_ERR"; then
+    echo "PASS: $conf (fatal/error detected as expected)"
+    echo "---- Fatal/Error Output ----"
+    grep '\[FATAL\]\|\[ERROR\]' "$TMP_ERR"
+    echo "----------------------------"
     PASS=$((PASS+1))
   else
-    echo "FAIL: $conf (server started, but should have failed)"
+    echo "FAIL: $conf (no fatal/error detected, should have failed)"
+    echo "---- Output ----"
+    cat "$TMP_ERR"
+    echo "----------------"
     FAIL=$((FAIL+1))
   fi
   echo
 done
+
+rm -f "$TMP_ERR"
 
 echo "Summary: $PASS passed, $FAIL failed."
 exit $FAIL 
