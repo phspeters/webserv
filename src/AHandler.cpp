@@ -4,31 +4,28 @@ std::string AHandler::parse_absolute_path(Connection* conn) {
     log(LOG_TRACE, "AHandler::parse_absolute_path called for client_fd %d",
         conn->client_fd_);
 
-    const Location* location = conn->location_match_;
-    std::string root_path = location->root_;
+    const Location* request_location = conn->location_match_;
+    std::string request_root = request_location->root_;
     const std::string& request_path = conn->request_data_->path_;
+    const std::string& location_path = request_location->path_;
 
-    if (!root_path.empty() && root_path[0] == '/') {
-        root_path = root_path.substr(1);
+    if (request_root[0] == '/') {
+        request_root = request_root.substr(1);
     }
-
-    // Filesystem Path = <root_path> + <request_uri>
-
-    // To prevent issues like "path//file", we normalize the paths before joining.
-    // 1. Remove trailing slash from root_path, if it exists.
-    if (!root_path.empty() && root_path[root_path.length() - 1] == '/') {
-        root_path.erase(root_path.length() - 1);
+    if (!request_root.empty() &&
+        request_root[request_root.length() - 1] == '/') {
+        request_root.erase(request_root.length() - 1);
     }
-
-    // 2. The request_path already includes the leading slash.
-    std::string absolute_path = root_path + request_path;
+    std::string relative_path;
+    if (request_path.length() >= location_path.length()) {
+        relative_path = request_path.substr(location_path.length());
+    }
+    std::string absolute_path = request_root + "/" + relative_path;
 
     log(LOG_DEBUG,
-        "parse_absolute_path: Location path: %s, Request root: %s, Request "
-        "path: %s, Absolute "
+        "parse_absolute_path: Request root: %s, Request path: %s, Absolute "
         "path: %s",
-        location->path_.c_str(), root_path.c_str(), request_path.c_str(),
-        absolute_path.c_str());
+        request_root.c_str(), request_path.c_str(), absolute_path.c_str());
 
     return absolute_path;
 }
