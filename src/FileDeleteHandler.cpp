@@ -128,7 +128,7 @@ bool FileDeleteHandler::delete_file(Connection* conn,
         conn->client_fd_, file_path.c_str());
 
     // Attempt to delete the file
-    if (unlink(file_path.c_str()) != 0) {
+    if (std::remove(file_path.c_str()) != 0) {
         if (errno == EACCES || errno == EPERM) {
             log(LOG_ERROR,
                 "FileDeleteHandler: Permission denied deleting file: %s",

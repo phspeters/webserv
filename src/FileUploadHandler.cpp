@@ -337,7 +337,7 @@ bool FileUploadHandler::copy_temp_to_final_file(const std::string& temp_path,
     }
 
     // Remove the temp file after successful copy
-    if (unlink(temp_path.c_str()) != 0) {
+    if (std::remove(temp_path.c_str()) != 0) {
         log(LOG_ERROR, "Failed to remove temp file '%s': %s", temp_path.c_str(),
             strerror(errno));
         // Not a fatal error, so do not return false
