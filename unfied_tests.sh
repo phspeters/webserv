@@ -33,19 +33,43 @@ check_status() {
   fi
 }
 
+# Function to run a test and check its status code
+# Usage: run_test "Test Name" "Expected Status" "URL" [curl_options]
+run_test() {
+    local test_name="$1"
+    local expected_status="$2"
+    local url="$3"
+    shift 3
+    local curl_args=("$@")
+
+    echo -e "\n--- ${test_name} ---"
+    
+    # Use -s for silent, -o to discard body, -w to get status code
+    actual_status=$(curl -s -o /dev/null -w "%{http_code}" "${url}" "${curl_args[@]}")
+
+    if [[ "$actual_status" == "$expected_status" ]]; then
+        echo -e "[${GREEN}PASS${NC}] Expected ${expected_status}, Got ${actual_status}"
+    else
+        echo -e "[${RED}FAIL${NC}] Expected ${expected_status}, Got ${actual_status}"
+    fi
+}
+
 echo "Starting Unified WebServer Tests..."
 echo "Make sure your server is running with unified_server.conf!"
 
 # =================== SETUP REQUIRED DIRECTORIES ===================
 print_header "0. Creating Required Directories"
+sudo mkdir -p /var/www
 sudo mkdir -p /var/www/example.com
+sudo mkdir -p /var/www/YoupiBanane
 sudo mkdir -p /var/www/uploads
 sudo mkdir -p /var/www/files
-sudo mkdir -p /var/www/YoupiBanane
 sudo mkdir -p /var/www/cgi-bin
 sudo mkdir -p /var/www/empty
 sudo mkdir -p /var/www/errors
-sudo mkdir -p /var/www
+sudo mkdir -p /var/www/autoindex
+sudo mkdir -p /var/www/blog
+sudo mkdir -p /var/www/forbidden
 
 # Create some static files for testing
 sudo bash -c 'echo "body { color: blue; }" > /var/www/style.css'
@@ -92,6 +116,27 @@ sudo chmod +x /var/www/cgi-bin/shell-cgi.sh
 sudo bash -c 'echo "<h1>404 Not Found</h1>" > /var/www/errors/404_custom.html'
 sudo bash -c 'echo "<h1>500 Internal Server Error</h1>" > /var/www/errors/500_custom.html'
 
+# Setup for DELETE tests
+echo "Setting up environment for DELETE tests..."
+
+# Create directories for DELETE tests
+DELETE_TEST_DIR="/var/www/delete"
+sudo rm -rf "$DELETE_TEST_DIR"
+sudo mkdir -p "$DELETE_TEST_DIR/a_directory"
+sudo mkdir -p "$DELETE_TEST_DIR/no_parent_write_perms"
+
+# Create files for DELETE tests
+sudo bash -c 'echo "This file should be deleted." > '"$DELETE_TEST_DIR/deletable_file.txt"
+sudo bash -c 'echo "This file is read-only." > '"$DELETE_TEST_DIR/protected_file.txt"
+sudo bash -c 'echo "This file cannot be deleted." > '"$DELETE_TEST_DIR/no_parent_write_perms/unreachable.txt"
+
+# Set special permissions for DELETE tests
+sudo chmod 444 "$DELETE_TEST_DIR/protected_file.txt" # Read-only file
+sudo chmod 555 "$DELETE_TEST_DIR/no_parent_write_perms" # Parent directory is not writable
+
+# Assumes a location like '/delete/' is configured to allow DELETE method.
+DELETE_URL="${SERVER_URL}/delete"
+
 # =================== BASIC SERVER TESTS ===================
 print_header "1. Basic Server Reachability"
 print_test "Main server root"
@@ -109,33 +154,90 @@ print_test "localhost hostname"
 curl -s -D - "$SERVER_URL/" -o /dev/null
 
 # =================== STATIC FILES ===================
-print_header "3. Static File Serving"
-print_test "CSS file"
-curl -s -D - "$SERVER_URL/style.css" -o /dev/null
-print_test "JS file"
-curl -s -D - "$SERVER_URL/script.js" -o /dev/null
-print_test "Image file"
-curl -s -D - "$SERVER_URL/cutecat.png" -o /dev/null
-print_test "File with spaces"
-curl -s -D - "$SERVER_URL/my%20file.txt" -o /dev/null
+print_header "3. Checking Static Files"
+run_test "Main page (/index.html)" "200" "${SERVER_URL}/index.html"
+run_test "Root path (/)" "200" "${SERVER_URL}/"
+run_test "CSS file" "200" "${SERVER_URL}/style.css"
+run_test "JavaScript file" "200" "${SERVER_URL}/script.js"
+run_test "Shell file" "200" "${SERVER_URL}/script.sh"
+run_test "Python file" "200" "${SERVER_URL}/script.py"
+run_test "PHP file" "200" "${SERVER_URL}/script.php"
+run_test "Image file" "200" "${SERVER_URL}/cutecat.png"
+run_test "File with spaces in name" "200" "${SERVER_URL}/my%20file.txt"
+run_test "Gif file" "200" "${SERVER_URL}/blog/op.gif"
 
-# =================== AUTOINDEX & INDEX ===================
-print_header "4. Directory Listings & Index"
-print_test "Autoindex on"
-curl -s -D - "$SERVER_URL/example.com/autoindex_on/" -o /dev/null
-print_test "Autoindex off"
-curl -s -D - "$SERVER_URL/example.com/autoindex_off_no_index/" -o /dev/null
-print_test "Directory with index.html"
-curl -s -D - "$SERVER_URL/example.com/" -o /dev/null
+# =================== 404 WRONG URLS ===================
+print_header "4. Checking 404 Error Handling"
+run_test "Non-existent HTML page" "404" "${SERVER_URL}/nonexistent-page.html"
+run_test "Non-existent directory" "404" "${SERVER_URL}/nonexistent-directory/"
+run_test "Non-existent asset" "404" "${SERVER_URL}/nonexistent.css"
 
-# =================== ERROR PAGES ===================
-print_header "5. Error Pages"
-print_test "404 error"
-curl -s -D - "$SERVER_URL/nonexistent-page.html" -o /dev/null
-print_test "403 error (protected file)"
-curl -s -D - "$SERVER_URL/protected-file.txt" -o /dev/null
-print_test "500 error (broken CGI)"
-curl -s -D - "$SERVER_URL/cgi-bin/nonexistent.py" -o /dev/null
+# =================== 403 FORBIDDEN ACCESS ===================
+print_header "5. Checking 403 Forbidden"
+# This test requires a file like 'no_read_permissions.txt' to exist in the
+# web root with its read permissions removed (e.g., using 'chmod 000').
+run_test "File with no read permissions" "403" "${SERVER_URL}/no_read_permissions.txt"
+# Note: Based on your conf, /forbidden is a directory with no index and autoindex off
+run_test "Directory with autoindex off and no index" "403" "${SERVER_URL}/forbidden/"
+
+# =================== AUTO INDEX ===================
+print_header "6. Checking Autoindex Directory Handling"
+# Note: Based on your conf, /autoindex is the correct path for this test
+run_test "Directory with autoindex on" "200" "${SERVER_URL}/autoindex/"
+run_test "Directory with an index file" "200" "${SERVER_URL}/"
+
+# =================== REDIRECTS ===================
+print_header "7. Checking Redirects"
+# Note: this will not follow redirect. We check the initial status
+run_test "Configured redirect - no follow redirect" "301" "${SERVER_URL}/redirect/" 
+run_test "Directory without trailing slash (should redirect) - no follow redirect" "301" "${SERVER_URL}/autoindex"
+# Note: -L tells curl to follow redirects. We check the final status.
+run_test "Configured redirect - follow redirect" "200" "${SERVER_URL}/redirect/" -L
+run_test "Directory without trailing slash (should redirect) - follow redirect" "200" "${SERVER_URL}/autoindex" -L
+
+# =================== CONTENT TYPES ===================
+print_header "8. Checking Content Types"
+# This section remains manual as it checks header content, not just status
+echo -e "\n--- HTML content type ---"
+curl -s -D - "${SERVER_URL}/index.html" -o /dev/null | grep -i "content-type"
+
+echo -e "\n--- CSS content type ---"
+curl -s -D - "${SERVER_URL}/style.css" -o /dev/null | grep -i "content-type"
+
+echo -e "\n--- JS content type ---"
+curl -s -D - "${SERVER_URL}/script.js" -o /dev/null | grep -i "content-type"
+
+echo -e "\n--- SH content type ---"
+curl -s -D - "${SERVER_URL}/script.sh" -o /dev/null | grep -i "content-type"
+
+echo -e "\n--- PY content type ---"
+curl -s -D - "${SERVER_URL}/script.py" -o /dev/null | grep -i "content-type"
+
+echo -e "\n--- PHP content type ---"
+curl -s -D - "${SERVER_URL}/script.php" -o /dev/null | grep -i "content-type"
+
+echo -e "\n--- PNG content type ---"
+curl -s -D - "${SERVER_URL}/cutecat.png" -o /dev/null | grep -i "content-type"
+
+echo -e "\n--- GIF content type ---"
+curl -s -D - "${SERVER_URL}/blog/op.gif" -o /dev/null | grep -i "content-type"
+
+# =================== EDGE CASES ===================
+print_header "9. Testing Edge Cases"
+LONG_URL="${SERVER_URL}/$(head -c 4000 < /dev/zero | tr '\0' 'a').html"
+run_test "Very long URL" "414" "${LONG_URL}" # Expect 414 URI Too Long, or 404 if handled
+run_test "URL with special characters" "200" "${SERVER_URL}/files/cat-css/cat.html"
+run_test "Multiple slashes (should normalize to /)" "200" "${SERVER_URL}///"
+
+# =================== FILE DELETION (DELETE) ===================
+print_header "7. File Deletion (DELETE)"
+run_test "Successful file deletion" "204" "${DELETE_URL}/deletable_file.txt" -X DELETE
+run_test "Delete a read-only file (should succeed)" "204" "${DELETE_URL}/protected_file.txt" -X DELETE
+run_test "Delete a non-existent file" "404" "${DELETE_URL}/non_existent_file.txt" -X DELETE
+run_test "Attempt to delete a directory" "403" "${DELETE_URL}/a_directory/" -X DELETE
+run_test "Delete file in a non-writable directory" "403" "${DELETE_URL}/no_parent_write_perms/unreachable.txt" -X DELETE
+run_test "Path traversal delete attempt" "404" "${DELETE_URL}/../../../../etc/passwd" -X DELETE
+run_test "Method not allowed on DELETE location (GET)" "405" "${DELETE_URL}/" -X GET
 
 # =================== UPLOADS ===================
 print_header "6. File Uploads"
@@ -233,39 +335,10 @@ curl -s -D - "$SERVER_URL/cgi-bin/shell-cgi.sh" -o /dev/null
 print_test "CGI with params"
 curl -s -D - "$SERVER_URL/cgi-bin/python-cgi.py?param1=value1&param2=value2" -o /dev/null
 
-# =================== REDIRECTS ===================
-print_header "9. Redirects"
-print_test "Redirect test"
-curl -s -D - -L "$SERVER_URL/redirect/" -o /dev/null
-print_test "Directory without trailing slash"
-curl -s -D - -L "$SERVER_URL/example.com" -o /dev/null
-
-# =================== CONTENT TYPES ===================
-print_header "10. Content Types"
-print_test "HTML content type"
-curl -s -D - "$SERVER_URL/index.html" -o /dev/null | grep -i "content-type"
-print_test "CSS content type"
-curl -s -D - "$SERVER_URL/style.css" -o /dev/null | grep -i "content-type"
-print_test "JS content type"
-curl -s -D - "$SERVER_URL/script.js" -o /dev/null | grep -i "content-type"
-print_test "PNG content type"
-curl -s -D - "$SERVER_URL/cutecat.png" -o /dev/null | grep -i "content-type"
-
-# =================== EDGE CASES ===================
-print_header "11. Edge Cases"
-print_test "Very long URL"
-LONG_URL="$SERVER_URL/$(head -c 100 < /dev/zero | tr '\0' 'a').html"
-curl -s -D - "$LONG_URL" -o /dev/null
-print_test "Special characters in URL"
-curl -s -D - "$SERVER_URL/files/cat-css/cat.html" -o /dev/null
-print_test "Empty path"
-curl -s -D - "$SERVER_URL" -o /dev/null
-print_test "Multiple slashes"
-curl -s -D - "$SERVER_URL///" -o /dev/null
-
 # =================== CLEANUP ===================
 rm -f /tmp/test.txt /tmp/test.zip /tmp/noext "/tmp/${LONGNAME}.txt" "/tmp/a@b#c$.txt" /tmp/dotfile /tmp/path_traversal.txt /tmp/hugefile /tmp/emptyfile "/tmp/${LONGNAME2}.txt"
 
 echo -e "\n=========================================="
 echo -e "All Unified Tests Completed!"
 echo -e "==========================================" 
+
