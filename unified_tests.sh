@@ -59,19 +59,6 @@ run_test() {
 echo "Starting Unified WebServer Tests..."
 echo "Make sure your server is running with unified_server.conf!"
 
-# =================== SETUP ENVIRONMENT ===================
-
-echo "Before running ensure the delete files were created"
-# # For DELETE tests
-# rm -rf "$TEST_ROOT"
-# echo "<h1>Index Page</h1>" > "$TEST_ROOT/index.html"
-# export DELETE_TEST_DIR="/var/www/delete"
-# touch "$DELETE_TEST_DIR/deletable_file.txt"
-# touch "$DELETE_TEST_DIR/protected_file.txt"
-# touch "$DELETE_TEST_DIR/deletable_no_write_read_file.txt"
-# chmod 000 "$DELETE_TEST_DIR/deletable_no_write_read_file.txt" # Read-only file
-# chmod 444 "$DELETE_TEST_DIR/protected_file.txt" # Read-only file
-
 # =================== BASIC SERVER TESTS ===================
 print_header "1. Basic Server Reachability"
 print_test "Main server root"
