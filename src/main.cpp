@@ -8,7 +8,7 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    std::string config_file = "config/server.conf";
+    std::string config_file = "config/unified_server.conf";
     if (argc == 2) {
         config_file = argv[1];
     }

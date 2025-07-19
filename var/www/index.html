@@ -102,13 +102,13 @@
             </form>
         </div>
         <div class="test-case">
-            <h3>Test Max Body Size (413 Payload Too Large)</h3>
-            <p>Attempts to send a large text block to test `client_max_body_size`.</p>
+            <h3>Test File Upload media type (415 Unsupported Media Type)</h3>
+            <p>Attempts to send a text to file upload.</p>
             <form action="/uploads/" method="POST">
                 <label for="large-text">Large Text Data:</label>
                 <textarea id="large-text" name="large_text" rows="8"></textarea>
                 <input type="submit" value="Test Max Body Size">
-                <p class="note">Paste a large amount of text (e.g., >1MB) into the box above before submitting.</p>
+                <p class="note">Paste text into the box above before submitting.</p>
             </form>
         </div>
     </div>
