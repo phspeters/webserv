@@ -2,12 +2,17 @@
 
 int main(int argc, char* argv[]) {
     // Ensure the configuration file is provided as a command-line argument
-    if (argc != 2) {
+
+    if (argc > 2) {
         std::cerr << "Usage: " << argv[0] << " <server.conf>" << std::endl;
         return EXIT_FAILURE;
     }
 
-    std::string config_file = argv[1];
+    std::string config_file = "config/server.conf";
+    if (argc == 2) {
+        config_file = argv[1];
+    }
+
     WebServer web_server;
 
     // Parse configuration file

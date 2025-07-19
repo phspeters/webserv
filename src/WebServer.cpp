@@ -211,20 +211,21 @@ void WebServer::event_loop() {
             }
 
             if (event_flags & (EPOLLERR | EPOLLHUP)) {
-                log(LOG_ERROR, "Epoll error or hangup on fd %d (type: %d)",
-                    ctx->fd_, ctx->type_);
-
                 if (ctx->type_ == FD_LISTENER) {
                     remove_listener_context(ctx);
                 } else if (ctx->type_ == FD_CLIENT_SOCKET) {
                     close_client_connection(ctx->conn_);
                 } else if (event_flags & EPOLLERR) {
                     close_client_connection(ctx->conn_);
+                } else {
+                    log(LOG_DEBUG,
+                        "Fd %d (type: %d) has been closed by the owner",
+                        ctx->fd_, ctx->type_);
                 }
             }
         }
     }
-    log(LOG_INFO, "event_loop: Server event loop terminated");
+    log(LOG_DEBUG, "event_loop: Server event loop terminated");
 }
 
 void WebServer::close_client_connection(Connection* conn) {
@@ -347,6 +348,12 @@ int WebServer::create_listener_socket(const std::string& host, int port) {
                        sizeof(opt)) < 0) {
             close(listener_fd);
             continue;  // Try next address
+        }
+
+        if (setsockopt(listener_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+            log(LOG_ERROR, "setsockopt(SO_REUSEPORT) failed for %s:%d: %s", host.c_str(), port, strerror(errno));
+            close(listener_fd);
+            continue;
         }
 
         if (bind(listener_fd, current->ai_addr, current->ai_addrlen) < 0) {
