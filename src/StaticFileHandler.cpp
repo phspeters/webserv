@@ -79,7 +79,7 @@ Result StaticFileHandler::handle(Connection* conn) {
 
     set_response_headers(conn, file_info,
                          conn->static_file_context_->absolute_path_);
-    log(LOG_INFO,
+    log(LOG_DEBUG,
         "StaticFileHandler: File prepared to be served for client_fd %d",
         conn->client_fd_);
     return COMPLETE;
@@ -198,7 +198,7 @@ Result StaticFileHandler::prepare_file_response(
 
     conn->static_file_context_->file_fd_ = fd;
 
-    log(LOG_INFO,
+    log(LOG_DEBUG,
         "StaticFileHandler: File prepared to be read for client_fd %d",
         conn->client_fd_);
     return COMPLETE;

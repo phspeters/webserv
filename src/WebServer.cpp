@@ -167,7 +167,7 @@ void WebServer::event_loop() {
     while (ready_) {
         int timed_out = cleanup_timed_out_connections();
         if (timed_out > 0) {
-            log(LOG_INFO, "Closed '%d' timed out connections.", timed_out);
+            log(LOG_DEBUG, "Closed '%d' timed out connections.", timed_out);
         }
 
         int ready_events = epoll_wait(epoll_fd_, events, MAX_EPOLL_EVENTS,
@@ -183,7 +183,7 @@ void WebServer::event_loop() {
         }
 
         if (ready_events > 0) {
-            log(LOG_INFO, "event_loop: Processing %d ready events",
+            log(LOG_DEBUG, "event_loop: Processing %d ready events",
                 ready_events);
         }
 
@@ -239,7 +239,7 @@ void WebServer::close_client_connection(Connection* conn) {
 
     if (it != active_connections_.end()) {
         delete it->second;
-        log(LOG_INFO, "Closed connection for client (fd: %d)", fd);
+        log(LOG_INFO, "Closed connection for client %d", fd);
         active_connections_.erase(it);
     } else {
         log(LOG_FATAL, "Connection not found for socket '%d'", fd);
@@ -253,7 +253,7 @@ bool WebServer::read_from_client_socket(Connection* conn) {
     ssize_t bytes_read = conn->read_buffer_.read_from(conn->client_fd_);
 
     if (bytes_read == 0) {
-        log(LOG_WARNING, "Client disconnected (fd: %d)", conn->client_fd_);
+        log(LOG_INFO, "Client %d disconnected", conn->client_fd_);
         return false;
     }
 
@@ -271,7 +271,7 @@ bool WebServer::read_from_client_socket(Connection* conn) {
 
     conn->last_activity_ = time(NULL);
 
-    log(LOG_INFO, "Read %zd bytes from socket (fd: %d)", bytes_read,
+    log(LOG_DEBUG, "Read %zd bytes from socket (fd: %d)", bytes_read,
         conn->client_fd_);
 
     log_buffer(LOG_TRACE, conn->read_buffer_, "READ BUFFER");
@@ -350,8 +350,10 @@ int WebServer::create_listener_socket(const std::string& host, int port) {
             continue;  // Try next address
         }
 
-        if (setsockopt(listener_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
-            log(LOG_ERROR, "setsockopt(SO_REUSEPORT) failed for %s:%d: %s", host.c_str(), port, strerror(errno));
+        if (setsockopt(listener_fd, SOL_SOCKET, SO_REUSEPORT, &opt,
+                       sizeof(opt)) < 0) {
+            log(LOG_ERROR, "setsockopt(SO_REUSEPORT) failed for %s:%d: %s",
+                host.c_str(), port, strerror(errno));
             close(listener_fd);
             continue;
         }
@@ -378,7 +380,7 @@ int WebServer::create_listener_socket(const std::string& host, int port) {
         return -1;
     }
 
-    log(LOG_INFO, "Successfully created listener socket for %s:%d on fd %d",
+    log(LOG_DEBUG, "Successfully created listener socket for %s:%d on fd %d",
         host.c_str(), port, listener_fd);
     return listener_fd;
 }
@@ -391,8 +393,8 @@ int WebServer::cleanup_timed_out_connections() {
     while (it != active_connections_.end()) {
         Connection* conn = it->second;
         if ((current_time - conn->last_activity_) > http_limits::TIMEOUT) {
-            log(LOG_WARNING,
-                "Connection (fd: %d) timed out after %ld seconds, closing",
+            log(LOG_INFO,
+                "Connection %d timed out after %ld seconds, closing",
                 conn->client_fd_, http_limits::TIMEOUT);
 
             std::map<int, Connection*>::iterator to_erase = it;
@@ -426,7 +428,7 @@ bool WebServer::add_listener_context(int listener_fd) {
         }
 
         listener_contexts_.push_back(ctx);
-        log(LOG_INFO, "Listener socket '%d' added successfully", ctx->fd_);
+        log(LOG_DEBUG, "Listener socket '%d' added successfully", ctx->fd_);
         return true;
     } catch (const std::exception& e) {
         log(LOG_ERROR,
@@ -458,7 +460,7 @@ bool WebServer::remove_listener_context(IOContext* ctx) {
             ctx->fd_);
     }
 
-    log(LOG_INFO, "Listener socket '%d' removed and cleaned up successfully",
+    log(LOG_DEBUG, "Listener socket '%d' removed and cleaned up successfully",
         ctx->fd_);
     delete ctx;
 
@@ -492,7 +494,7 @@ bool WebServer::setup_signal_handlers() {
 void WebServer::signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         get_instance()->shutdown();
-        log(LOG_INFO, "Received shutdown signal. Exiting...");
+        log(LOG_DEBUG, "Received shutdown signal. Exiting...");
     } else if (signal == SIGPIPE) {
         // Ignore SIGPIPE to prevent crashes on broken pipes
         log(LOG_DEBUG, "Received SIGPIPE, ignoring");
@@ -526,7 +528,7 @@ void WebServer::accept_new_connection(int listener_fd) {
         return;
     }
 
-    log(LOG_INFO,
+    log(LOG_DEBUG,
         "Accepted new connection on listener socket '%d' for client %d",
         listener_fd, client_fd);
 }
@@ -563,7 +565,7 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
     }
 
     Connection* conn = ctx->conn_;
-    log(LOG_INFO, "New %s event for client %d", event_to_string(event_flags),
+    log(LOG_DEBUG, "New %s event for client %d", event_to_string(event_flags),
         conn->client_fd_);
 
     if (event_flags & EPOLLIN) {
@@ -610,8 +612,12 @@ void WebServer::handle_client_socket_event(IOContext* ctx,
             }
         }
 
-        log(LOG_INFO, "Response ready for client %d, starting write phase",
-            conn->client_fd_);
+        std::ostringstream status;
+        status << conn->response_data_->status_code_;
+        log(LOG_INFO, "Response ready for client %d <%s %s %s>",
+            conn->client_fd_, status.str().c_str(),
+            conn->response_data_->status_message_.c_str(),
+            conn->response_data_->version_.c_str());
         start_response_writing(conn);
     }
 
@@ -709,7 +715,7 @@ ParseStatus WebServer::handle_request_parsing(Connection* conn) {
                 break;
 
             case PARSER_COMPLETE:
-                log(LOG_INFO, "Request parsing complete for fd %d.",
+                log(LOG_DEBUG, "Request parsing complete for fd %d.",
                     conn->client_fd_);
                 return PARSE_SUCCESS;
 
@@ -740,6 +746,10 @@ ParseStatus WebServer::process_request(Connection* conn) {
         conn->client_fd_);
 
     if (conn->conn_state_ == CONN_READING_REQUEST) {
+        log(LOG_INFO, "Request received for client %d <%s %s %s>",
+            conn->client_fd_, conn->request_data_->method_.c_str(),
+            conn->request_data_->uri_.c_str(),
+            conn->request_data_->version_.c_str());
         log_request(LOG_TRACE, conn);
 
         ParseStatus status = request_processor_.validate_version(conn);
