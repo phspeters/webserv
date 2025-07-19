@@ -668,13 +668,6 @@ ParseStatus RequestParser::parse_content_body(Connection* conn) {
         "parse_content_body: buff_readable=%zu, bytes_to_transfer=%zu",
         buff_readable, bytes_to_transfer);
 
-    if (bytes_to_transfer == 0) {
-        log(LOG_DEBUG,
-            "No bytes to transfer: buff_empty=%d, body_remaining=%zu",
-            buff.readable_bytes() == 0, body_remaining_bytes);
-        return PARSE_SUCCESS;
-    }
-
     size_t unloaded_bytes =
         buff.unload_to(req->body_buffer_, body_remaining_bytes);
     body_remaining_bytes -= unloaded_bytes;

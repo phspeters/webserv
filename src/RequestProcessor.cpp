@@ -202,8 +202,10 @@ bool RequestProcessor::process_directory_redirect(Connection* conn,
 
     // Check if the path is actually a directory. If not, do nothing.
     struct stat path_stat;
-    if (stat(absolute_path.c_str(), &path_stat) != 0 || !S_ISDIR(path_stat.st_mode)) {
-        return false; // Not a directory, so the main handler will treat it as a file.
+    if (stat(absolute_path.c_str(), &path_stat) != 0 ||
+        !S_ISDIR(path_stat.st_mode)) {
+        return false;  // Not a directory, so the main handler will treat it as
+                       // a file.
     }
 
     // Check if the request URI is missing a trailing slash.
@@ -211,7 +213,7 @@ bool RequestProcessor::process_directory_redirect(Connection* conn,
     bool path_ends_with_slash = !path.empty() && path[path.length() - 1] == '/';
 
     if (path_ends_with_slash) {
-        return false; // Has a slash, no redirect needed.
+        return false;  // Has a slash, no redirect needed.
     }
 
     // If URI doesn't end with slash, redirect to add the slash.
@@ -221,9 +223,11 @@ bool RequestProcessor::process_directory_redirect(Connection* conn,
         redirect_url += "?" + query;
     }
 
-    log(LOG_DEBUG, "RequestProcessor::process_directory_redirect: redirecting to %s for client_fd %d",
+    log(LOG_DEBUG,
+        "RequestProcessor::process_directory_redirect: redirecting to %s for "
+        "client_fd %d",
         redirect_url.c_str(), conn->client_fd_);
-    
+
     conn->response_data_->status_code_ = 301;
     conn->response_data_->set_header("Location", redirect_url);
 

@@ -32,7 +32,7 @@
 
 #define CRLF "\r\n"  // Carriage return + line feed
 #define DEFAULT_CHUNK_SIZE 4096
-#define ACTIVE_LOG_LEVEL LOG_DEBUG
+#define ACTIVE_LOG_LEVEL LOG_INFO
 
 namespace http_limits {
 const time_t TIMEOUT = 30;                    // Timeout in seconds

@@ -767,12 +767,12 @@ ParseStatus WebServer::process_request(Connection* conn) {
             return PARSE_SUCCESS;
         }
 
-        status = request_processor_.validate_body_handling(conn);
+        status = request_processor_.validate_method_location_access(conn);
         if (status != PARSE_SUCCESS) {
             return status;
         }
 
-        status = request_processor_.validate_method_location_access(conn);
+        status = request_processor_.validate_body_handling(conn);
         if (status != PARSE_SUCCESS) {
             return status;
         }
